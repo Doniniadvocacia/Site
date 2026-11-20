@@ -1,0 +1,9 @@
+---
+layout: base.njk
+---
+<article class="artigo">
+  <p class="artigo-data">{{ date | dataBR }}</p>
+  <h1>{{ title }}</h1>
+  {% if description %}<p class="artigo-resumo">{{ description }}</p>{% endif %}
+  {{ content | safe }}
+</article>

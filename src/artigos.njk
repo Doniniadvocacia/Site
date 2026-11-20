@@ -1,0 +1,18 @@
+---
+layout: base.njk
+title: Artigos
+permalink: /artigos/
+eleventyExcludeFromCollections: true
+---
+<section class="lista-artigos">
+  <h1>Artigos</h1>
+  {% for a in collections.artigos %}
+  <article>
+    <p class="artigo-data">{{ a.date | dataBR }}</p>
+    <h2><a href="{{ a.url }}">{{ a.data.title }}</a></h2>
+    <p>{{ a.data.description }}</p>
+  </article>
+  {% else %}
+  <p>Nenhum artigo publicado ainda.</p>
+  {% endfor %}
+</section>

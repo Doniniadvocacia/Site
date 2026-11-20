@@ -1,0 +1,13 @@
+{
+  "name": "site-donini-advocacia",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "eleventy",
+    "dev": "eleventy --serve",
+    "exportar-wix": "node scripts/exportar-wix.mjs"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.0.0"
+  }
+}

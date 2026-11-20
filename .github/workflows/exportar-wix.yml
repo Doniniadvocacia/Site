@@ -1,0 +1,32 @@
+name: Exportar do Wix (uma vez)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  exportar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Exportar artigos e imagens
+        env:
+          WIX_API_KEY: ${{ secrets.WIX_API_KEY }}
+        run: node scripts/exportar-wix.mjs
+      - name: Abrir pull request com o conteúdo exportado
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b exportacao-wix
+          git add src/artigos src/assets/img src/_redirects
+          git commit -m "Exporta artigos e imagens do Wix"
+          git push -u origin exportacao-wix
+          gh pr create --title "Artigos e imagens exportados do Wix" --body "Exportação automática pelo workflow Exportar do Wix."
