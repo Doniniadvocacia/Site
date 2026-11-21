@@ -76,7 +76,8 @@ section.grade-areas { border-bottom: 0; }
 .grade-artigos h3 a { text-decoration: none; }
 .grade-artigos h3 a:hover { text-decoration: underline; }
 
-.clientes .logos { display: flex; flex-wrap: wrap; gap: 2rem 3rem; align-items: center; margin-top: 1rem; }
+.clientes { text-align: center; }
+.clientes .logos { display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem 3.5rem; align-items: center; margin: 1.5rem auto 0; }
 .clientes .logos img { height: 64px; width: auto; filter: brightness(0); opacity: .55; }
 
 .chamada-contato { background: var(--vinho); color: #fff; padding: 2.5rem 2rem !important; margin-top: 2rem; }
