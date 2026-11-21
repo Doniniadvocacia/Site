@@ -3,7 +3,85 @@ layout: base.njk
 permalink: /
 ---
 <section class="hero">
+  <p class="rotulo">Eduardo Donini Advocacia</p>
   <h1>Consultoria jurídica estratégica e personalizada para proteger seus interesses</h1>
-  <p><a class="botao" href="/contato/">Agende uma conversa</a></p>
+  <p class="hero-sub">Conhecimento jurídico especializado, visão de negócios e métodos modernos de trabalho.</p>
+  <p class="botoes">
+    <a class="botao" href="/contato/">Agende uma conversa</a>
+    <a class="botao botao-claro" href="/areas-de-atuacao/">Áreas de atuação</a>
+  </p>
 </section>
-<!-- Página inicial provisória: o conteúdo completo entra na Fase 2. -->
+
+<section class="perfil">
+  <p class="rotulo">Advogado responsável</p>
+  <h2>Eduardo Donini <span class="oab">{{ site.oab }}</span></h2>
+  <p>Formado pela PUCRS, Eduardo Donini atua na advocacia estratégica e na resolução de conflitos de forma técnica e objetiva. Atua principalmente nas áreas de direito empresarial e civil, com ênfase em contratos, responsabilidade civil, recuperação de créditos e assessoria jurídica para pequenas e médias empresas.</p>
+  <p>Sua atuação combina prevenção de litígios, estruturação jurídica de relações comerciais e atuação contenciosa precisa quando o conflito se mostra inevitável. Com um modelo predominantemente digital, alia agilidade, organização e acompanhamento próximo dos casos, sem abrir mão da técnica, da ética e da comunicação transparente.</p>
+</section>
+
+<section class="escritorio">
+  <p class="rotulo">O escritório</p>
+  <h2>Uma advocacia boutique, sob medida</h2>
+  <p>Somos um escritório boutique, estruturado para oferecer atuação especializada, personalizada e estrategicamente orientada. Nosso trabalho parte de uma premissa objetiva: compreender com precisão a realidade de cada cliente para desenvolver respostas jurídicas claras, eficientes e alinhadas aos seus objetivos.</p>
+  <p>Cada demanda é analisada de forma individualizada, considerando não apenas os aspectos legais, mas também os impactos econômicos, operacionais e estratégicos de cada decisão. A advocacia é exercida como instrumento de gestão e proteção, e não apenas como resposta a problemas já instalados.</p>
+  <p>Nossa estrutura enxuta e operação predominantemente digital permitem agilidade e acompanhamento próximo, sem comprometer o rigor técnico.</p>
+</section>
+
+<section class="valores">
+  <div class="tres-colunas">
+    <div>
+      <h3>Missão</h3>
+      <p>Oferecer soluções jurídicas claras, eficientes e personalizadas, alinhadas à realidade de cada cliente, transformando o conhecimento jurídico em instrumento prático de segurança e de decisões conscientes.</p>
+    </div>
+    <div>
+      <h3>Visão</h3>
+      <p>Prevenir conflitos, mitigar riscos e resolver demandas com precisão e responsabilidade, usando o Direito como ferramenta de organização e desenvolvimento das relações e dos negócios.</p>
+    </div>
+    <div>
+      <h3>Valores</h3>
+      <p>Comunicação clara, práticas responsáveis e relação próxima com clientes e comunidade, sempre pautada pela ética e pelo compromisso com soluções jurídicas seguras e equilibradas.</p>
+    </div>
+  </div>
+</section>
+
+<section class="home-areas">
+  <p class="rotulo">Áreas de atuação</p>
+  <h2>Onde atuamos</h2>
+  <div class="grade-areas">
+    {% for a in areas %}
+    <a class="cartao-area" href="/areas/{{ a.slug }}/">
+      <h3>{{ a.titulo }}</h3>
+      <p>{{ a.resumo }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+{% if collections.artigos.length %}
+<section class="home-artigos">
+  <p class="rotulo">Artigos</p>
+  <h2>Publicações recentes</h2>
+  <div class="grade-artigos">
+    {% for a in collections.artigos | head(3) %}
+    <article>
+      <p class="artigo-data">{{ a.date | dataBR }}</p>
+      <h3><a href="{{ a.url }}">{{ a.data.title }}</a></h3>
+    </article>
+    {% endfor %}
+  </div>
+  <p><a href="/artigos/">Ver todos os artigos →</a></p>
+</section>
+{% endif %}
+
+<section class="clientes">
+  <p class="rotulo">Alguns de nossos clientes</p>
+  <div class="logos">
+    <img src="/assets/img/wix/cliente-matutando.png" alt="Matutando" loading="lazy">
+    <img src="/assets/img/wix/cliente-meu-pudim-boutique.png" alt="Meu Pudim Boutique" loading="lazy">
+    <img src="/assets/img/wix/cliente-refugio-pedra-branca.png" alt="Refúgio Pedra Branca" loading="lazy">
+    <img src="/assets/img/wix/cliente-nutri-camila-borella.png" alt="Nutri Camila Borella" loading="lazy">
+    <img src="/assets/img/wix/cliente-belo-destino.png" alt="Belo Destino" loading="lazy">
+  </div>
+</section>
+
+{% include "chamada-contato.njk" %}

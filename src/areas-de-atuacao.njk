@@ -1,0 +1,38 @@
+---
+layout: base.njk
+title: Áreas de atuação
+description: Direito Empresarial, Contratos Empresariais, Civil, Securitário, do Consumidor, Médico e Família e Sucessões.
+permalink: /areas-de-atuacao/
+---
+<section class="pagina-topo">
+  <p class="rotulo">Áreas de atuação</p>
+  <h1>Atuação estratégica pensada de acordo com a sua necessidade</h1>
+  <p>O escritório atua de forma multidisciplinar, com foco na prevenção de riscos, na organização das relações jurídicas e na solução eficiente de conflitos, tanto em demandas consultivas quanto contenciosas.</p>
+</section>
+
+<section class="grade-areas">
+  {% for a in areas %}
+  <a class="cartao-area" href="/areas/{{ a.slug }}/">
+    <h2>{{ a.titulo }}</h2>
+    <p>{{ a.resumo }}</p>
+  </a>
+  {% endfor %}
+</section>
+
+<section id="como-atuamos" class="como-atuamos">
+  <h2>Como atuamos</h2>
+  <div class="tres-colunas">
+    <div>
+      <h3>Consultoria e prevenção de litígios</h3>
+      <p>Identificamos com antecedência os riscos jurídicos que podem gerar conflitos: análise e revisão de contratos, orientação em decisões empresariais e definição clara de direitos e obrigações. Usado de forma preventiva, o Direito se torna ferramenta de planejamento e previsibilidade.</p>
+    </div>
+    <div>
+      <h3>Acordos e atuação extrajudicial</h3>
+      <p>Na fase pré-judicial, buscamos a solução por meio de negociação alinhada à estratégia do cliente, inclusive na recuperação de créditos inadimplidos, para que os valores retornem ao caixa sem a necessidade de um processo.</p>
+    </div>
+    <div>
+      <h3>Contencioso</h3>
+      <p>Quando o conflito é inevitável, conduzimos o processo com técnica e acompanhamento próximo, apoiados em sistemas e indicadores de gestão processual.</p>
+    </div>
+  </div>
+</section>

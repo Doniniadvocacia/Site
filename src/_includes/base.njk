@@ -6,28 +6,34 @@
   <title>{% if title %}{{ title }} | {% endif %}{{ site.nome }}</title>
   <meta name="description" content="{{ description or site.descricao }}">
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
+  <meta property="og:type" content="website">
   <meta property="og:title" content="{{ title or site.nome }}">
   <meta property="og:description" content="{{ description or site.descricao }}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:locale" content="pt_BR">
   <link rel="stylesheet" href="/assets/css/site.css">
+  {% if page.url == "/" %}
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"LegalService","name":"{{ site.nome }}","url":"{{ site.url }}","email":"{{ site.email }}","areaServed":"BR","sameAs":["{{ site.instagram }}","{{ site.linkedin }}"]}
+  </script>
+  {% endif %}
 </head>
 <body>
   <header class="topo">
-    <a class="marca" href="/">{{ site.nome }}</a>
-    <nav>
-      <a href="/areas-de-atuacao/">Áreas de atuação</a>
-      <a href="/artigos/">Artigos</a>
-      <a href="/contato/">Contato</a>
+    <a class="marca" href="/">Eduardo Donini<span>Advocacia</span></a>
+    <nav aria-label="Principal">
+      <a href="/areas-de-atuacao/"{% if "/area" in page.url %} aria-current="page"{% endif %}>Áreas de atuação</a>
+      <a href="/artigos/"{% if "/artigos" in page.url %} aria-current="page"{% endif %}>Artigos</a>
+      <a href="/contato/"{% if page.url == "/contato/" %} aria-current="page"{% endif %}>Contato</a>
     </nav>
   </header>
   <main>
     {{ content | safe }}
   </main>
   <footer class="rodape">
-    <p>{{ site.nome }} · {{ site.oab }}</p>
+    <p class="rodape-marca">{{ site.nome }} · {{ site.oab }}</p>
     <p><a href="mailto:{{ site.email }}">{{ site.email }}</a></p>
-    <p><a href="/politica-de-privacidade/">Política de privacidade</a></p>
+    <p><a href="{{ site.instagram }}">Instagram</a> · <a href="{{ site.linkedin }}">LinkedIn</a> · <a href="/politica-de-privacidade/">Política de privacidade</a></p>
   </footer>
 </body>
 </html>

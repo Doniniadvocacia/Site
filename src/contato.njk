@@ -1,0 +1,33 @@
+---
+layout: base.njk
+title: Contato
+description: Canal direto para contato com o escritório Eduardo Donini Advocacia.
+permalink: /contato/
+---
+<section class="pagina-topo">
+  <p class="rotulo">Contato</p>
+  <h1>Vamos conversar</h1>
+  <p>Aqui você encontra um canal direto com o escritório. Envie sua mensagem, esclareça dúvidas ou apresente sua demanda jurídica. As informações são analisadas com atenção, permitindo uma compreensão inicial do caso e a indicação da forma mais adequada de atendimento.</p>
+</section>
+
+<section class="canais">
+  <div class="canal">
+    <h2>E-mail</h2>
+    <p><a href="mailto:{{ site.email }}?subject=Contato%20pelo%20site">{{ site.email }}</a></p>
+  </div>
+  {% if site.whatsapp %}
+  <div class="canal">
+    <h2>WhatsApp</h2>
+    <p><a href="https://wa.me/{{ site.whatsapp }}">Enviar mensagem</a></p>
+  </div>
+  {% endif %}
+  <div class="canal">
+    <h2>Redes</h2>
+    <p><a href="{{ site.instagram }}">Instagram</a> · <a href="{{ site.linkedin }}">LinkedIn</a></p>
+  </div>
+</section>
+
+<!-- O formulário de contato entra aqui quando a forma de envio for decidida
+     (Pages Function própria ou serviço externo). -->
+
+<p class="aviso-lgpd">Os dados enviados são usados apenas para responder ao seu contato. Veja a <a href="/politica-de-privacidade/">política de privacidade</a>.</p>

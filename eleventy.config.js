@@ -7,6 +7,8 @@ export default function (eleventyConfig) {
     api.getFilteredByGlob("src/artigos/*.md").sort((a, b) => b.date - a.date)
   );
 
+  eleventyConfig.addFilter("head", (arr, n) => (arr || []).slice(0, n));
+
   eleventyConfig.addFilter("dataBR", (d) =>
     new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })
   );
