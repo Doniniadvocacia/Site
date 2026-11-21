@@ -37,8 +37,8 @@ main > section:last-child { border-bottom: 0; }
 
 /* Botões: discretos, caixa alta espaçada, borda fina */
 .botoes { display: flex; flex-wrap: wrap; gap: .9rem; }
-.botao { display: inline-block; font: 500 .78rem/1 var(--sans); letter-spacing: .16em; text-transform: uppercase;
-  padding: 1rem 1.8rem; border: 1px solid var(--vinho); border-radius: 0; text-decoration: none;
+.botao { display: inline-block; font: 500 .72rem/1 var(--sans); letter-spacing: .15em; text-transform: uppercase;
+  padding: .75rem 1.4rem; border: 1px solid var(--vinho); border-radius: 6px; text-decoration: none;
   background: var(--vinho); color: #fff; transition: background .2s, color .2s, border-color .2s; }
 .botao:hover { background: #4f0807; border-color: #4f0807; }
 .botao-claro { background: transparent; color: var(--vinho); border-color: rgba(102,11,10,.45); }
