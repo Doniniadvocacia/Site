@@ -29,9 +29,8 @@ main > section:last-child { border-bottom: 0; }
 /* Cabeçalho */
 .topo { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; justify-content: space-between; align-items: center;
   max-width: var(--largura); margin: 0 auto; padding: 1.1rem 1.25rem; border-bottom: 1px solid var(--bege); }
-.marca { font-family: var(--serifa); font-weight: bold; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--vinho); text-decoration: none; font-size: 1.05rem; }
-.marca span { display: block; font-weight: normal; font-size: .7rem; letter-spacing: .3em; color: var(--bronze); }
+.marca { display: block; line-height: 0; }
+.marca img { height: 52px; width: auto; }
 .topo nav { display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; }
 .topo nav a { color: var(--texto); text-decoration: none; padding: .2rem 0; border-bottom: 2px solid transparent; }
 .topo nav a:hover, .topo nav a[aria-current] { color: var(--vinho); border-bottom-color: var(--vinho); }
@@ -105,6 +104,7 @@ section.grade-areas { border-bottom: 0; }
 .rodape-marca { font-family: var(--serifa); color: var(--vinho); }
 
 @media (max-width: 600px) {
+  .marca img { height: 40px; }
   body { font-size: 16px; }
   .hero { padding: 3rem 0 2.5rem; }
   .chamada-contato, .como-atuamos { padding: 2rem 1.25rem !important; }
