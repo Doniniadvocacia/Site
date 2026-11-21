@@ -2,7 +2,7 @@
   // Configuração do Cloudflare (Workers com arquivos estáticos).
   // O site é gerado pelo Eleventy em ./_site e publicado como está.
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "site-donini-advocacia",
+  "name": "site",
   "compatibility_date": "2026-11-16",
   "assets": {
     "directory": "./_site",
