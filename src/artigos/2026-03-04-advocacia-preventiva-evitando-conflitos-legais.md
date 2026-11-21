@@ -1,13 +1,13 @@
 ---
 title: "Advocacia Preventiva: Evitando Conflitos Legais"
 date: 2026-03-04
-description: "A advocacia preventiva é uma abordagem essencial para qualquer pessoa ou empresa que deseja evitar conflitos legais. Em um mundo onde as disputas judiciais podem ser longas e dispendiosas, a prevenção se torna uma estratégia valiosa. Neste post, vamos explorar o que é a advocacia preventiva, como ela funciona e quais são os benefícios de adotá-la. O que é Advocacia Preventiva? A advocacia preventiva é um conjunto de práticas jurídicas que visa evitar a ocorrência de litígios. Em vez de..."
+description: "A advocacia preventiva é uma abordagem essencial para qualquer pessoa ou empresa que deseja evitar conflitos legais."
 slugWix: "advocacia-preventiva-evitando-conflitos-legais"
 ---
 
 A advocacia preventiva é uma abordagem essencial para qualquer pessoa ou empresa que deseja evitar conflitos legais. Em um mundo onde as disputas judiciais podem ser longas e dispendiosas, a prevenção se torna uma estratégia valiosa. Neste post, vamos explorar o que é a advocacia preventiva, como ela funciona e quais são os benefícios de adotá-la.
 
-![Close-up view of a legal document with a pen](/assets/img/artigos/1570ce_3f00f318ccc64f62b48702af8434fdab.png)
+![Close-up view of a legal document with a pen](/assets/img/artigos/1570ce_3f00f318ccc64f62b48702af8434fdab.webp)
 
 ## O que é Advocacia Preventiva?
 

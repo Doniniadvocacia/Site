@@ -67,7 +67,7 @@ section.grade-areas { border-bottom: 0; }
 .grade-artigos h3 a:hover { text-decoration: underline; }
 
 .clientes .logos { display: flex; flex-wrap: wrap; gap: 2rem 3rem; align-items: center; margin-top: 1rem; }
-.clientes .logos img { height: 64px; width: auto; filter: grayscale(1); opacity: .8; }
+.clientes .logos img { height: 64px; width: auto; filter: brightness(0); opacity: .55; }
 
 .chamada-contato { background: var(--vinho); color: #fff; padding: 2.5rem 2rem !important; margin-top: 2rem; }
 .chamada-contato h2 { color: #fff; }

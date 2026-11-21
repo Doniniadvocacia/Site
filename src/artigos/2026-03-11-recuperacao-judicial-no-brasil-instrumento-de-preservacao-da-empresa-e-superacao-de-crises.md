@@ -1,7 +1,7 @@
 ---
 title: "Recuperação Judicial no Brasil: Instrumento de Preservação da Empresa e Superação de Crises"
 date: 2026-03-11
-description: "A atividade empresarial está naturalmente sujeita a oscilações econômicas, crises financeiras e desafios de gestão. Em determinados momentos, tais dificuldades podem comprometer a capacidade da empresa de honrar suas obrigações, colocando em risco não apenas o empreendimento, mas também empregos, fornecedores e toda a cadeia econômica envolvida. Nesse cenário, o ordenamento jurídico brasileiro oferece um importante mecanismo de reestruturação: a recuperação judicial, prevista na Lei nº..."
+description: "A atividade empresarial está naturalmente sujeita a oscilações econômicas, crises financeiras e desafios de gestão."
 slugWix: "recuperação-judicial-no-brasil-instrumento-de-preservação-da-empresa-e-superação-de-crises"
 ---
 
@@ -45,7 +45,7 @@ O plano deve conter medidas concretas destinadas à reorganização da empresa, 
 
 Os credores são convocados para deliberar sobre o plano em assembleia geral de credores, onde poderão aprová-lo, rejeitá-lo ou sugerir modificações.
 
-![](/assets/img/artigos/1570ce_fd268fc80c0b479686e2f96ce834f0f5.jpeg)
+![](/assets/img/artigos/1570ce_fd268fc80c0b479686e2f96ce834f0f5.webp)
 
 Caso o plano seja aprovado e homologado pelo juiz, a empresa passa a cumprir as obrigações estabelecidas, permanecendo sob fiscalização judicial durante o período de recuperação.
 

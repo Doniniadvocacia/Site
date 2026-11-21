@@ -1,13 +1,13 @@
 ---
 title: "Direitos do Consumidor: Proteções Legais Essenciais"
 date: 2026-03-04
-description: "O mundo do consumo é repleto de desafios e oportunidades. À medida que as transações comerciais se tornam mais complexas, a proteção dos direitos do consumidor se torna cada vez mais crucial. Neste post, vamos explorar as proteções legais essenciais que garantem que os consumidores sejam tratados de maneira justa e equitativa. O que são os Direitos do Consumidor? Os direitos do consumidor são um conjunto de normas e leis que visam proteger os consumidores em suas relações de consumo. Esses..."
+description: "O mundo do consumo é repleto de desafios e oportunidades."
 slugWix: "direitos-do-consumidor-proteções-legais-essenciais"
 ---
 
 O mundo do consumo é repleto de desafios e oportunidades. À medida que as transações comerciais se tornam mais complexas, a proteção dos direitos do consumidor se torna cada vez mais crucial. Neste post, vamos explorar as proteções legais essenciais que garantem que os consumidores sejam tratados de maneira justa e equitativa. 
 
-![Close-up view of a consumer rights pamphlet on a wooden table](/assets/img/artigos/1570ce_0a51b2d125b34d228ea40381f67bd471.png)
+![Close-up view of a consumer rights pamphlet on a wooden table](/assets/img/artigos/1570ce_0a51b2d125b34d228ea40381f67bd471.webp)
 
 ## O que são os Direitos do Consumidor?
 

@@ -4,6 +4,9 @@ layout: base.njk
 <article class="artigo">
   <p class="artigo-data">{{ date | dataBR }}</p>
   <h1>{{ title }}</h1>
-  {% if description %}<p class="artigo-resumo">{{ description }}</p>{% endif %}
+  {% set inicio = content | striptags | trim %}
+  {% if description and inicio.indexOf(description.slice(0, 25)) != 0 %}<p class="artigo-resumo">{{ description }}</p>{% endif %}
   {{ content | safe }}
+  <p class="artigo-voltar"><a href="/artigos/">← Todos os artigos</a></p>
 </article>
+{% include "chamada-contato.njk" %}

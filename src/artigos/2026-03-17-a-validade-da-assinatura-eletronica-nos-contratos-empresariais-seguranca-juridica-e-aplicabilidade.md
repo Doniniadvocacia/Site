@@ -1,11 +1,11 @@
 ---
 title: "A Validade da Assinatura Eletrônica nos Contratos Empresariais: Segurança Jurídica e Aplicabilidade Prática"
 date: 2026-03-17
-description: "A evolução tecnológica tem impactado profundamente a forma como os contratos empresariais são celebrados, sendo a assinatura eletrônica uma das principais ferramentas utilizadas para conferir agilidade e eficiência às relações negociais. Nesse contexto, surge a necessidade de análise quanto à validade jurídica desses instrumentos, especialmente diante da crescente utilização de plataformas digitais para formalização de negócios. No ordenamento jurídico brasileiro, a assinatura eletrônica..."
+description: "A evolução tecnológica tem impactado profundamente a forma como os contratos empresariais são celebrados, sendo a assinatura eletrônica uma das principais ferramentas utilizadas para conferir agilidade e eficiência às relações negociais."
 slugWix: "a-validade-da-assinatura-eletrônica-nos-contratos-empresariais-segurança-jurídica-e-aplicabilidade"
 ---
 
-![](/assets/img/artigos/1570ce_b4f0a9ab5128438ba6698f03a6624235.png)
+![](/assets/img/artigos/1570ce_b4f0a9ab5128438ba6698f03a6624235.webp)
 
 A evolução tecnológica tem impactado profundamente a forma como os contratos empresariais são celebrados, sendo a assinatura eletrônica uma das principais ferramentas utilizadas para conferir agilidade e eficiência às relações negociais. Nesse contexto, surge a necessidade de análise quanto à validade jurídica desses instrumentos, especialmente diante da crescente utilização de plataformas digitais para formalização de negócios.
 
@@ -13,7 +13,7 @@ No ordenamento jurídico brasileiro, a assinatura eletrônica encontra respaldo 
 
 Entretanto, é importante destacar que a legislação brasileira não restringe a validade dos contratos eletrônicos exclusivamente à utilização de certificado digital. O próprio §2º do artigo 10 da Medida Provisória nº 2.200-2/2001 reconhece a validade de outros meios de comprovação da autoria e integridade de documentos eletrônicos, desde que admitidos pelas partes ou aceitos pela pessoa a quem for oposto o documento. Isso abre espaço para a utilização de assinaturas eletrônicas simples e avançadas, como aquelas realizadas por meio de login e senha, biometria ou autenticação via e-mail.
 
-![](/assets/img/artigos/1570ce_bf2f2576c1674c9fb3a2a6a4a61d45bf.png)
+![](/assets/img/artigos/1570ce_bf2f2576c1674c9fb3a2a6a4a61d45bf.webp)
 
 A Lei nº 14.063/2020 veio reforçar essa diferenciação ao classificar as assinaturas eletrônicas em três categorias: simples, avançada e qualificada, sendo esta última aquela que utiliza certificado digital no padrão ICP-Brasil. A escolha do tipo de assinatura deve observar o grau de risco da operação e a necessidade de segurança jurídica, sendo recomendável a utilização de assinaturas mais robustas em contratos de maior complexidade ou valor econômico.
 

@@ -1,11 +1,11 @@
 ---
 title: "Tempo Perdido, Dano Reconhecido - A Evolução da Responsabilidade no Direito do Consumidor"
 date: 2026-03-06
-description: "A vida moderna funciona com um recurso que ninguém consegue recuperar: tempo. Quando uma empresa cria obstáculos desnecessários para resolver um problema que ela própria causou, o consumidor não perde apenas dinheiro ou tranquilidade. Ele perde tempo produtivo. E é exatamente desse ponto que surge uma das teorias mais interessantes do direito do consumidor contemporâneo: o desvio produtivo do consumidor. A ideia é simples. O consumidor, ao contratar um serviço ou adquirir um produto, espera..."
+description: "A vida moderna funciona com um recurso que ninguém consegue recuperar: tempo."
 slugWix: "tempo-perdido-dano-reconhecido-a-evolução-da-responsabilidade-no-direito-do-consumidor"
 ---
 
-![](/assets/img/artigos/1570ce_a2b1282688af40278a2f160b800ac08c.png)
+![](/assets/img/artigos/1570ce_a2b1282688af40278a2f160b800ac08c.webp)
 
 A vida moderna funciona com um recurso que ninguém consegue recuperar: tempo. Quando uma empresa cria obstáculos desnecessários para resolver um problema que ela própria causou, o consumidor não perde apenas dinheiro ou tranquilidade. Ele perde tempo produtivo. E é exatamente desse ponto que surge uma das teorias mais interessantes do direito do consumidor contemporâneo: o desvio produtivo do consumidor.
 

@@ -1,11 +1,11 @@
 ---
 title: "Planejamento Sucessório no Direito Brasileiro: Instrumento Jurídico para Proteção Patrimonial e Segurança Familiar"
 date: 2026-03-13
-description: "O planejamento sucessório tem ganhado cada vez mais relevância no cenário jurídico brasileiro, especialmente diante da crescente preocupação das famílias com a preservação do patrimônio e a organização da sucessão hereditária. Trata-se de um conjunto de medidas jurídicas adotadas em vida pelo titular do patrimônio com o objetivo de disciplinar a futura transmissão de bens, evitando conflitos familiares, reduzindo custos e garantindo maior segurança jurídica aos herdeiros. No ordenamento..."
+description: "O planejamento sucessório tem ganhado cada vez mais relevância no cenário jurídico brasileiro, especialmente diante da crescente preocupação das famílias com a preservação do patrimônio e a organização da sucessão hereditária."
 slugWix: "planejamento-sucessório-no-direito-brasileiro-instrumento-jurídico-para-proteção-patrimonial-e-segu"
 ---
 
-![](/assets/img/artigos/1570ce_478b075b049348b5b7c39bc60fe94496.png)
+![](/assets/img/artigos/1570ce_478b075b049348b5b7c39bc60fe94496.webp)
 
 O planejamento sucessório tem ganhado cada vez mais relevância no cenário jurídico brasileiro, especialmente diante da crescente preocupação das famílias com a preservação do patrimônio e a organização da sucessão hereditária. Trata-se de um conjunto de medidas jurídicas adotadas em vida pelo titular do patrimônio com o objetivo de disciplinar a futura transmissão de bens, evitando conflitos familiares, reduzindo custos e garantindo maior segurança jurídica aos herdeiros.
 
