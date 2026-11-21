@@ -12,7 +12,7 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--creme); color: var(--texto); font: 17px/1.65 var(--sans); }
+body { overflow-x: hidden; margin: 0; background: var(--creme); color: var(--texto); font: 17px/1.65 var(--sans); }
 a { color: var(--vinho); }
 img { max-width: 100%; height: auto; }
 h1, h2, h3 { font-family: var(--serifa); color: var(--vinho); line-height: 1.25; margin: 0 0 .6em; }
@@ -44,9 +44,19 @@ main > section:last-child { border-bottom: 0; }
 .botao-claro:hover { background: var(--vinho); color: #fff; }
 
 /* Home */
-.hero { padding: 4.5rem 0 4rem; border-left: 4px solid var(--vinho); padding-left: 1.5rem !important; }
-.hero h1 { max-width: 20ch; }
-.hero-sub { font-size: 1.1rem; color: var(--bronze); max-width: 50ch; }
+/* Primeira dobra: largura total com foto de fundo */
+.hero { position: relative; width: 100vw; margin-left: calc(50% - 50vw); padding: 7rem 0 6.5rem !important;
+  border-bottom: 0 !important; color: #f1efe9;
+  background: linear-gradient(90deg, rgba(20,12,10,.88) 0%, rgba(20,12,10,.7) 45%, rgba(20,12,10,.25) 100%),
+    url("/assets/img/hero-escritorio.webp") center / cover no-repeat; }
+.hero-conteudo { max-width: var(--largura); margin: 0 auto; padding: 0 1.25rem; }
+.hero-conteudo > * { max-width: 34rem; }
+.hero h1 { color: #fff; max-width: 20ch; text-shadow: 0 1px 12px rgba(0,0,0,.35); }
+.hero-sub { font-size: 1.15rem; color: #e6dccd; }
+.hero .botao { background: var(--vinho); border-color: var(--vinho); }
+.hero .botao:hover { background: #4f0807; }
+.hero .botao-claro { background: transparent; color: #fff; border-color: rgba(255,255,255,.8); }
+.hero .botao-claro:hover { background: #fff; color: var(--vinho); }
 .oab { font-family: var(--sans); font-size: .95rem; color: var(--bronze); font-weight: normal; margin-left: .5rem; }
 .perfil p, .escritorio p, .pagina-topo p, .texto-area p { max-width: 70ch; }
 .valores h3 { border-top: 2px solid var(--vinho); padding-top: .75rem; }
@@ -106,6 +116,8 @@ section.grade-areas { border-bottom: 0; }
 @media (max-width: 600px) {
   .marca img { height: 40px; }
   body { font-size: 16px; }
-  .hero { padding: 3rem 0 2.5rem; }
+  .hero { padding: 4.5rem 0 4rem !important;
+    background: linear-gradient(rgba(20,12,10,.78), rgba(20,12,10,.78)),
+      url("/assets/img/hero-escritorio-960.webp") center / cover no-repeat; }
   .chamada-contato, .como-atuamos { padding: 2rem 1.25rem !important; }
 }
