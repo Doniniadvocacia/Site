@@ -65,6 +65,12 @@ main > section:last-child { border-bottom: 0; }
   border-radius: 6px; box-shadow: 0 10px 30px rgba(43,37,34,.15); }
 .perfil-foto::after { content: ""; position: absolute; inset: 14px -14px -14px 14px; border: 1px solid var(--bege);
   border-radius: 6px; z-index: -1; }
+.escritorio { display: grid; grid-template-columns: 1fr minmax(280px, 400px); gap: 3rem; align-items: center; }
+.escritorio-foto { margin: 0; position: relative; }
+.escritorio-foto img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(43,37,34,.15); }
+.escritorio-foto::after { content: ""; position: absolute; inset: 14px 14px -14px -14px; border: 1px solid var(--bege);
+  border-radius: 6px; z-index: -1; }
 .perfil p, .escritorio p, .pagina-topo p, .texto-area p { max-width: 70ch; }
 .valores h3 { border-top: 2px solid var(--vinho); padding-top: .75rem; }
 
@@ -123,7 +129,7 @@ section.grade-areas { border-bottom: 0; }
 .rodape-marca { font-family: var(--serifa); color: var(--vinho); }
 
 @media (max-width: 760px) {
-  .perfil { grid-template-columns: 1fr; gap: 2rem; }
+  .perfil, .escritorio { grid-template-columns: 1fr; gap: 2rem; }
   .perfil-foto { max-width: 260px; }
 }
 @media (max-width: 600px) {
