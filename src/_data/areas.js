@@ -4,22 +4,13 @@ export default [
   {
     slug: "direito-empresarial",
     titulo: "Direito Empresarial",
-    resumo: "Estruturação societária, governança e condução de litígios empresariais, com foco em reduzir riscos e passivos.",
+    resumo: "Estruturação societária, contrato social, acordo de sócios, contratos comerciais e litígios empresariais.",
     texto: [
       "No Direito Empresarial, a atuação parte dos objetivos da empresa. Na consultoria, analisamos o modelo de negócio e indicamos a estrutura societária mais adequada. Em empresas já consolidadas, revisamos fluxos internos para reduzir riscos e alinhar as práticas de governança ao mercado em que atuam.",
+      "Contratos bem redigidos previnem a maior parte dos conflitos entre sócios e parceiros comerciais. O escritório elabora e revisa contratos sociais, acordos de sócios e contratos comerciais, definindo com clareza direitos, obrigações, regras de saída e mecanismos de solução de impasses, inclusive na formalização por meio eletrônico.",
       "No contencioso, o processo judicial representa um passivo que afeta decisões e investimentos da empresa. Por isso, buscamos reduzir o tempo de tramitação, para que as provisões feitas possam ser revertidas de forma mais ágil.",
     ],
-    temas: ["Estruturação e reorganização societária", "Governança e compliance", "Recuperação de créditos", "Contencioso empresarial", "Recuperação judicial e extrajudicial"],
-  },
-  {
-    slug: "contratos-empresariais",
-    titulo: "Contratos Empresariais",
-    resumo: "Elaboração e revisão de contrato social, acordo de sócios e contratos comerciais.",
-    texto: [
-      "Contratos bem redigidos previnem a maior parte dos conflitos entre sócios e parceiros comerciais. O escritório elabora e revisa contratos sociais, acordos de sócios e contratos comerciais, definindo com clareza direitos, obrigações, regras de saída e mecanismos de solução de impasses.",
-      "Também acompanhamos negociações e a formalização de contratos por meio eletrônico, com atenção à validade jurídica de cada instrumento.",
-    ],
-    temas: ["Contrato social e alterações", "Acordo de sócios (quotistas e acionistas)", "Contratos comerciais e de prestação de serviços", "Assinatura eletrônica de contratos", "Revisão de riscos contratuais"],
+    temas: ["Estruturação e reorganização societária", "Contrato social e alterações", "Acordo de sócios (quotistas e acionistas)", "Contratos comerciais e de prestação de serviços", "Governança e compliance", "Recuperação de créditos", "Contencioso empresarial", "Recuperação judicial e extrajudicial"],
   },
   {
     slug: "direito-civil",
