@@ -135,8 +135,8 @@ section.grade-areas { border-bottom: 0; }
   .chamada-contato, .como-atuamos { padding: 2rem 1.25rem !important; }
 }
 
-/* Texto corrido justificado, com hifenização para evitar espaços grandes */
+/* Texto corrido justificado, sem hifenização */
 .perfil-texto p, .escritorio p, .valores p, .pagina-topo p, .texto-area p,
 .como-atuamos p, .artigo p, .artigo li, .chamada-contato p {
-  text-align: justify; hyphens: auto; -webkit-hyphens: auto;
+  text-align: justify; hyphens: manual; -webkit-hyphens: manual; overflow-wrap: normal; word-break: normal;
 }
