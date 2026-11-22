@@ -59,6 +59,12 @@ main > section:last-child { border-bottom: 0; }
 .hero .botao-claro { background: transparent; color: #e6dccd; border-color: rgba(230,220,205,.35); }
 .hero .botao-claro:hover { background: transparent; color: #fff; border-color: rgba(230,220,205,.8); }
 .oab { font-family: var(--sans); font-size: .95rem; color: var(--bronze); font-weight: normal; margin-left: .5rem; }
+.perfil { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 3rem; align-items: center; }
+.perfil-foto { margin: 0; position: relative; }
+.perfil-foto img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; object-position: center 20%;
+  border-radius: 6px; box-shadow: 0 10px 30px rgba(43,37,34,.15); }
+.perfil-foto::after { content: ""; position: absolute; inset: 14px -14px -14px 14px; border: 1px solid var(--bege);
+  border-radius: 6px; z-index: -1; }
 .perfil p, .escritorio p, .pagina-topo p, .texto-area p { max-width: 70ch; }
 .valores h3 { border-top: 2px solid var(--vinho); padding-top: .75rem; }
 
@@ -116,6 +122,10 @@ section.grade-areas { border-bottom: 0; }
 .rodape p { margin: .3rem 0; }
 .rodape-marca { font-family: var(--serifa); color: var(--vinho); }
 
+@media (max-width: 760px) {
+  .perfil { grid-template-columns: 1fr; gap: 2rem; }
+  .perfil-foto { max-width: 260px; }
+}
 @media (max-width: 600px) {
   .marca img { height: 40px; }
   body { font-size: 16px; }
