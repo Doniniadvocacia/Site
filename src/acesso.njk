@@ -1,0 +1,22 @@
+---
+layout: base.njk
+title: Área restrita
+description: Acesso ao sistema de gestão processual do escritório.
+permalink: /acesso/
+noindex: true
+eleventyExcludeFromCollections: true
+---
+<section class="acesso">
+  <div class="acesso-cartao">
+    <svg class="acesso-icone" aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <p class="rotulo">Área restrita</p>
+    <h1>Sistema de gestão processual</h1>
+    <p>Acesso exclusivo para a equipe do escritório e usuários autorizados. A autenticação é feita no próprio sistema, em ambiente seguro.</p>
+    {% if site.sistemaUrl %}
+    <p><a class="botao" href="{{ site.sistemaUrl }}" rel="noopener">Entrar no sistema</a></p>
+    {% else %}
+    <p class="acesso-aviso">O endereço de acesso ao sistema ainda não foi configurado.</p>
+    {% endif %}
+    <p class="acesso-rodape">Problemas de acesso? Escreva para <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</p>
+  </div>
+</section>

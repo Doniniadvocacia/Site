@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if title %}{{ title }} | {% endif %}{{ site.nome }}</title>
   <meta name="description" content="{{ description or site.descricao }}">
+  {% if noindex %}<meta name="robots" content="noindex">{% endif %}
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
   <meta property="og:type" content="website">
   <meta property="og:title" content="{{ title or site.nome }}">
@@ -25,6 +26,10 @@
       <a href="/areas-de-atuacao/"{% if "/area" in page.url %} aria-current="page"{% endif %}>Áreas de atuação</a>
       <a href="/artigos/"{% if "/artigos" in page.url %} aria-current="page"{% endif %}>Artigos</a>
       <a href="/contato/"{% if page.url == "/contato/" %} aria-current="page"{% endif %}>Contato</a>
+      <a class="nav-acesso" href="/acesso/"{% if page.url == "/acesso/" %} aria-current="page"{% endif %}>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        Área restrita
+      </a>
     </nav>
   </header>
   <main>
