@@ -134,3 +134,9 @@ section.grade-areas { border-bottom: 0; }
       url("/assets/img/hero-escritorio-960.webp") center / cover no-repeat; }
   .chamada-contato, .como-atuamos { padding: 2rem 1.25rem !important; }
 }
+
+/* Texto corrido justificado, com hifenização para evitar espaços grandes */
+.perfil-texto p, .escritorio p, .valores p, .pagina-topo p, .texto-area p,
+.como-atuamos p, .artigo p, .artigo li, .chamada-contato p {
+  text-align: justify; hyphens: auto; -webkit-hyphens: auto;
+}
