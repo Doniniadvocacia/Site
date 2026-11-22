@@ -47,7 +47,7 @@ main > section:last-child { border-bottom: 0; }
 /* Primeira dobra: largura total com foto de fundo */
 .hero { position: relative; width: 100vw; margin-left: calc(50% - 50vw); padding: 7rem 0 6.5rem !important;
   border-bottom: 0 !important; color: #f1efe9;
-  background: linear-gradient(90deg, rgba(20,12,10,.88) 0%, rgba(20,12,10,.7) 45%, rgba(20,12,10,.25) 100%),
+  background: linear-gradient(90deg, rgba(20,12,10,.68) 0%, rgba(20,12,10,.42) 45%, rgba(20,12,10,.05) 100%),
     url("/assets/img/hero-escritorio.webp") center / cover no-repeat; }
 .hero-conteudo { max-width: var(--largura); margin: 0 auto; padding: 0 1.25rem; }
 .hero-conteudo > * { max-width: 34rem; }
@@ -120,7 +120,7 @@ section.grade-areas { border-bottom: 0; }
   .marca img { height: 40px; }
   body { font-size: 16px; }
   .hero { padding: 4.5rem 0 4rem !important;
-    background: linear-gradient(rgba(20,12,10,.78), rgba(20,12,10,.78)),
+    background: linear-gradient(rgba(20,12,10,.55), rgba(20,12,10,.55)),
       url("/assets/img/hero-escritorio-960.webp") center / cover no-repeat; }
   .chamada-contato, .como-atuamos { padding: 2rem 1.25rem !important; }
 }
