@@ -60,7 +60,8 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
         <a href="/sistema/agenda">Agenda</a>
         ${sessao.perfil === "admin" ? html`<a href="/sistema/configuracoes">Configurações</a>` : ""}
         <form class="busca-menu" method="get" action="/sistema/busca" role="search">
-          <input name="q" placeholder="Buscar processo, parte, pasta..." aria-label="Buscar processo, parte ou pasta">
+          <input name="q" placeholder="Buscar processo, parte, pasta..." aria-label="Buscar processo, parte ou pasta" required>
+          <button type="submit" aria-label="Buscar" title="Buscar">⌕</button>
         </form>
         <a href="/sistema/conta/senha" class="menu-usuario">${sessao.nome}</a>
         <form method="post" action="/sistema/sair" class="form-sair">

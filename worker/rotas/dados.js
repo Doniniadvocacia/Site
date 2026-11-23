@@ -127,35 +127,73 @@ export async function painel(req, env, sessao) {
   }));
 }
 
+// Busca tolerante: ignora acentos e maiúsculas, aceita várias palavras em qualquer ordem
+// e compara números de processo só pelos dígitos. O volume do escritório permite filtrar em memória.
+const normalizar = (v) => String(v ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const digitos = (v) => String(v ?? "").replace(/\D/g, "");
+
+function criarFiltro(q) {
+  const palavras = normalizar(q).split(/\s+/).filter(Boolean);
+  return (...campos) => {
+    const texto = normalizar(campos.join(" "));
+    const nums = digitos(campos.join(" "));
+    // cada palavra precisa aparecer no texto; números (3+ dígitos) também valem sem pontuação
+    return palavras.every((p) => texto.includes(p) || (digitos(p).length >= 3 && nums.includes(digitos(p))));
+  };
+}
+
 export async function busca(req, env, sessao) {
   const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
-  const termo = `%${q}%`;
-  const [{ results: procs }, { results: clis }] = q ? await Promise.all([
-    env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.situacao, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
-      WHERE p.numero LIKE ?1 OR REPLACE(REPLACE(REPLACE(p.numero, '.', ''), '-', ''), ' ', '') LIKE ?2 OR p.pasta LIKE ?1 OR p.parte_contraria LIKE ?1 OR c.nome LIKE ?1
-      ORDER BY p.pasta LIMIT 50`).bind(termo, `%${q.replace(/\D/g, "") || q}%`).all(),
-    env.DB.prepare("SELECT id, nome, cidade, estado FROM clientes WHERE nome LIKE ? ORDER BY nome LIMIT 50").bind(termo).all(),
-  ]) : [{ results: [] }, { results: [] }];
+  let procs = [], clis = [], przs = [], pubs = [];
+  if (q) {
+    const bate = criarFiltro(q);
+    const [a, b, c, d] = await Promise.all([
+      env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.situacao, p.tipo_acao, p.comarca, p.advogado_responsavel, c.nome AS cliente
+        FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id ORDER BY CAST(p.pasta AS INTEGER), p.pasta`).all(),
+      env.DB.prepare("SELECT id, nome, cidade, estado, profissao FROM clientes ORDER BY nome").all(),
+      env.DB.prepare(`SELECT z.id, z.titulo, z.tipo, z.descricao, z.prazo_fatal, z.situacao, z.responsavel, pr.pasta, pr.numero, c.nome AS cliente
+        FROM prazos z LEFT JOIN processos pr ON pr.id = z.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id ORDER BY z.prazo_fatal DESC`).all(),
+      env.DB.prepare(`SELECT id, data_disponibilizacao, tribunal, tipo, numero_processo, texto, situacao FROM publicacoes ORDER BY data_disponibilizacao DESC LIMIT 2000`).all(),
+    ]);
+    procs = a.results.filter((p) => bate(p.pasta, p.numero, p.parte_contraria, p.cliente, p.tipo_acao, p.comarca, p.situacao, p.advogado_responsavel)).slice(0, 100);
+    clis = b.results.filter((c) => bate(c.nome, c.cidade, c.estado, c.profissao)).slice(0, 100);
+    przs = c.results.filter((z) => bate(z.titulo, z.tipo, z.descricao, z.responsavel, z.pasta, z.numero, z.cliente)).slice(0, 100);
+    pubs = d.results.filter((u) => bate(u.numero_processo, u.tribunal, u.tipo, u.texto)).slice(0, 50);
+  }
+  const trecho = (t) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > 120 ? x.slice(0, 120) + "…" : x; };
+  const total = procs.length + clis.length + przs.length + pubs.length;
   return resposta(pagina({
     titulo: "Busca", sessao,
-    corpo: html`<h1>Busca${q ? html`: “${q}”` : ""}</h1>
-      <section class="cartao"><h2>Processos (${String(procs.length)})</h2>
-        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><span><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a><br><small>${[p.cliente, p.parte_contraria].filter(Boolean).join(" × ")}</small></span><span>${p.situacao}</span></li>`)}</ul>` : html`<p>Nenhum processo encontrado.</p>`}
-      </section>
+    corpo: html`<h1>Busca</h1>
+      <form class="busca" method="get" action="/sistema/busca">
+        <input name="q" value="${q}" placeholder="Nome, número do processo, pasta, prazo..." aria-label="Buscar" autofocus>
+        <button type="submit">Buscar</button>
+      </form>
+      ${q ? html`<p class="dica">${String(total)} resultado(s) para “${q}”.</p>` : ""}
+      ${q ? html`
       <section class="cartao"><h2>Clientes (${String(clis.length)})</h2>
-        ${clis.length ? html`<ul class="lista-simples">${clis.map((c) => html`<li><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a><span>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</span></li>`)}</ul>` : html`<p>Nenhum cliente encontrado.</p>`}
-      </section>`,
+        ${clis.length ? html`<ul class="lista-simples">${clis.map((c) => html`<li><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a><span>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</span></li>`)}</ul>` : html`<p class="vazio">Nenhum cliente encontrado.</p>`}
+      </section>
+      <section class="cartao"><h2>Processos (${String(procs.length)})</h2>
+        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><span><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a><br><small>${[p.cliente, p.parte_contraria].filter(Boolean).join(" × ")}${p.tipo_acao ? ` · ${p.tipo_acao}` : ""}</small></span><span>${p.situacao}</span></li>`)}</ul>` : html`<p class="vazio">Nenhum processo encontrado.</p>`}
+      </section>
+      <section class="cartao"><h2>Prazos (${String(przs.length)})</h2>
+        ${przs.length ? html`<ul class="lista-simples">${przs.map((z) => html`<li><span><a href="/sistema/prazos/${String(z.id)}">${z.titulo}</a><br><small>${[z.pasta && `Pasta ${z.pasta}`, z.cliente].filter(Boolean).join(" · ")}</small></span><span>${dataBR(z.prazo_fatal)} ${urgencia(z.prazo_fatal, z.situacao)} ${z.situacao !== "aberto" ? z.situacao : ""}</span></li>`)}</ul>` : html`<p class="vazio">Nenhum prazo encontrado.</p>`}
+      </section>
+      ${pubs.length ? html`<section class="cartao"><h2>Intimações (${String(pubs.length)})</h2><ul class="lista-simples">${pubs.map((u) => html`<li><span><a href="/sistema/publicacoes/${String(u.id)}">${dataBR(u.data_disponibilizacao)} · ${u.tribunal || ""} · ${u.numero_processo || ""}</a><br><small>${trecho(u.texto)}</small></span><span>${u.situacao === "pendente" ? "para triagem" : ""}</span></li>`)}</ul></section>` : ""}` : ""}`,
   }));
 }
 
 export async function clientes(req, env, sessao, id) {
   if (!id) {
     const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
-    const { results } = await env.DB.prepare(
+    const { results: todos } = await env.DB.prepare(
       `SELECT c.id, c.nome, c.tipo, c.cidade, c.estado, COUNT(p.id) AS processos
          FROM clientes c LEFT JOIN processos p ON p.cliente_id = c.id
-        WHERE c.nome LIKE ? GROUP BY c.id ORDER BY c.nome COLLATE NOCASE LIMIT 500`
-    ).bind(`%${q}%`).all();
+        GROUP BY c.id ORDER BY c.nome COLLATE NOCASE`
+    ).all();
+    const bate = criarFiltro(q);
+    const results = q ? todos.filter((c) => bate(c.nome, c.cidade, c.estado, c.tipo)) : todos;
     return resposta(pagina({
       titulo: "Clientes", sessao,
       corpo: html`
@@ -199,16 +237,17 @@ export async function processos(req, env, sessao, id) {
     const sp = new URL(req.url).searchParams;
     const q = (sp.get("q") || "").trim().slice(0, 100);
     const situacao = (sp.get("situacao") || "").slice(0, 100);
-    let sql = `SELECT p.id, p.pasta, p.numero, p.tipo_acao, p.situacao, p.fase, p.comarca, p.uf, c.nome AS cliente
-                 FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
-                WHERE (p.numero LIKE ?1 OR p.pasta LIKE ?1 OR c.nome LIKE ?1 OR p.parte_contraria LIKE ?1)`;
-    const args = [`%${q}%`];
+    let sql = `SELECT p.id, p.pasta, p.numero, p.tipo_acao, p.situacao, p.fase, p.comarca, p.uf, p.parte_contraria, c.nome AS cliente
+                 FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE 1 = 1`;
+    const args = [];
     if (situacao) {
-      sql += situacao === "Sem situação" ? " AND COALESCE(p.situacao, '') = ''" : " AND p.situacao = ?2";
+      sql += situacao === "Sem situação" ? " AND COALESCE(p.situacao, '') = ''" : " AND p.situacao = ?1";
       if (situacao !== "Sem situação") args.push(situacao);
     }
-    sql += " ORDER BY CAST(p.pasta AS INTEGER), p.pasta LIMIT 500";
-    const { results } = await env.DB.prepare(sql).bind(...args).all();
+    sql += " ORDER BY CAST(p.pasta AS INTEGER), p.pasta";
+    const { results: todos } = await env.DB.prepare(sql).bind(...args).all();
+    const bate = criarFiltro(q);
+    const results = q ? todos.filter((p) => bate(p.numero, p.pasta, p.cliente, p.parte_contraria, p.tipo_acao, p.comarca)) : todos;
     return resposta(pagina({
       titulo: "Processos", sessao,
       corpo: html`

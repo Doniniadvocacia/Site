@@ -159,7 +159,10 @@ fieldset.calculo label { display: grid; gap: .3rem; font-size: .85rem; color: va
 
 /* ===== Componentes do Diligo original, no visual atual ===== */
 .conteudo { max-width: 1200px; }
-.menu .busca-menu { margin: 0 0 0 auto; }
+.menu .busca-menu { margin: 0 0 0 auto; display: flex; position: relative; }
+.menu .busca-menu button { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #b9c2d0; font-size: 1.15rem; padding: .1rem .5rem; line-height: 1; }
+.menu .busca-menu button:hover { color: #fff; background: none; }
+.menu .busca-menu input:focus + button { color: var(--navy); }
 .menu .busca-menu input { width: 240px; padding: .4rem .7rem; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: #fff; font-size: .85rem; }
 .menu .busca-menu input::placeholder { color: #b9c2d0; }
 .menu .busca-menu input:focus { background: #fff; color: var(--texto); outline: 2px solid var(--dourado); }
