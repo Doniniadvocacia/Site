@@ -114,3 +114,34 @@ fieldset.calculo label { display: grid; gap: .3rem; font-size: .85rem; color: va
 .cartao-link strong { font: 1.05rem var(--serifa); color: var(--navy); }
 .cartao-link span { font-size: .85rem; color: var(--suave); }
 .cartao-link:hover { border-color: var(--navy); }
+
+/* Calendário mensal da agenda */
+.cal-navegacao { display: flex; align-items: center; gap: .9rem; margin: .5rem 0 1rem; }
+.cal-navegacao strong { font: 1.25rem var(--serifa); color: var(--navy); min-width: 210px; text-align: center; }
+.cal-navegacao a { text-decoration: none; font-size: 1.4rem; line-height: 1; padding: .2rem .6rem; border: 1px solid var(--linha); border-radius: 6px; background: var(--branco); color: var(--navy); }
+.cal-navegacao a.cal-hoje { font-size: .85rem; padding: .45rem .8rem; }
+.cal-rolagem { overflow-x: auto; }
+.calendario { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); border-top: 1px solid #c9c9c9; border-left: 1px solid #c9c9c9; background: var(--branco); min-width: 910px; }
+.cal-semana { font: 600 .75rem var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--suave); text-align: center; padding: .5rem; border-right: 1px solid #c9c9c9; border-bottom: 1px solid #c9c9c9; background: #f7f5f0; }
+.dia { min-height: 110px; border-right: 1px solid #c9c9c9; border-bottom: 1px solid #c9c9c9; padding: .3rem .35rem .45rem; display: flex; flex-direction: column; gap: .3rem; }
+.dia.nao-util { background: #f6dcdc; }
+.dia.hoje { background: #dde9f1; }
+.dia.fora { opacity: .45; }
+.dia-topo { display: flex; justify-content: flex-end; align-items: flex-start; gap: .3rem; min-height: 1.6rem; }
+.dia-num { font: 600 1.15rem/1 var(--sans); color: var(--navy); text-decoration: none; padding: .15rem .1rem; }
+.feriado-nome { flex: 1; font: 600 .78rem/1.15 var(--sans); color: #111; text-align: center; }
+.dia-itens { display: flex; flex-direction: column; gap: .3rem; }
+.etiqueta { display: block; color: #fff; font: 600 .74rem/1.25 var(--sans); padding: .28rem .55rem; border-radius: 7px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+.etiqueta:hover { filter: brightness(1.1); }
+.etiqueta.feito { background: #6b0f0f; color: #b9a5a5; }
+.ver-mais { align-self: flex-start; font: 600 .74rem var(--sans); color: var(--navy); background: #eef1f6; border: 1px solid #d5dbe5; border-radius: 999px; padding: .2rem .7rem; text-decoration: none; }
+.legenda { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; margin-top: 1rem; font-size: .8rem; color: var(--suave); }
+.legenda i { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; margin-right: .35rem; vertical-align: -1px; }
+.legenda i.feito-amostra { background: #6b0f0f; }
+.lista-etiquetas { display: grid; gap: .4rem; max-width: 560px; }
+.lista-etiquetas .etiqueta { font-size: .9rem; padding: .5rem .8rem; white-space: normal; }
+.cor-0 { background: #c8102e; } .cor-1 { background: #f07c1b; } .cor-2 { background: #2e7d32; } .cor-3 { background: #c48fc7; }
+.cor-4 { background: #e60fd0; } .cor-5 { background: #e3b505; color: #1f2733 !important; } .cor-6 { background: #1f6fb2; }
+.cor-7 { background: #8a5a2b; } .cor-8 { background: #ef4b4b; } .cor-9 { background: #0f8b8d; } .cor-compromisso { background: #1f3a5f; }
+.etiqueta.feito { background: #6b0f0f !important; color: #b9a5a5 !important; }
