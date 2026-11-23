@@ -136,30 +136,26 @@ function criarFiltro(q) {
   const palavras = normalizar(q).split(/\s+/).filter(Boolean);
   return (...campos) => {
     const texto = normalizar(campos.join(" "));
-    const nums = digitos(campos.join(" "));
+    const nums = campos.map((c) => digitos(c ?? "")).filter(Boolean);
     // cada palavra precisa aparecer no texto; números (3+ dígitos) também valem sem pontuação
-    return palavras.every((p) => texto.includes(p) || (digitos(p).length >= 3 && nums.includes(digitos(p))));
+    return palavras.every((p) => texto.includes(p) || (digitos(p).length >= 3 && nums.some((n) => n.includes(digitos(p)))));
   };
 }
 
-async function buscarTudo(env, q, limite = { procs: 100, clis: 100, przs: 100, pubs: 50 }) {
-  let procs = [], clis = [], przs = [], pubs = [];
+// Busca geral: apenas processos e clientes, por nome das partes, número do processo e pasta.
+async function buscarTudo(env, q, limite = { procs: 100, clis: 100 }) {
+  let procs = [], clis = [];
   if (q) {
     const bate = criarFiltro(q);
-    const [a, b, c, d] = await Promise.all([
-      env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.situacao, p.tipo_acao, p.comarca, p.advogado_responsavel, c.nome AS cliente
+    const [a, b] = await Promise.all([
+      env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.situacao, p.tipo_acao, c.nome AS cliente
         FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id ORDER BY CAST(p.pasta AS INTEGER), p.pasta`).all(),
-      env.DB.prepare("SELECT id, nome, cidade, estado, profissao FROM clientes ORDER BY nome").all(),
-      env.DB.prepare(`SELECT z.id, z.titulo, z.tipo, z.descricao, z.prazo_fatal, z.situacao, z.responsavel, pr.pasta, pr.numero, c.nome AS cliente
-        FROM prazos z LEFT JOIN processos pr ON pr.id = z.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id ORDER BY z.prazo_fatal DESC`).all(),
-      env.DB.prepare(`SELECT id, data_disponibilizacao, tribunal, tipo, numero_processo, texto, situacao FROM publicacoes ORDER BY data_disponibilizacao DESC LIMIT 2000`).all(),
+      env.DB.prepare("SELECT id, nome, cidade, estado FROM clientes ORDER BY nome").all(),
     ]);
-    procs = a.results.filter((p) => bate(p.pasta, p.numero, p.parte_contraria, p.cliente, p.tipo_acao, p.comarca, p.situacao, p.advogado_responsavel)).slice(0, limite.procs);
-    clis = b.results.filter((c) => bate(c.nome, c.cidade, c.estado, c.profissao)).slice(0, limite.clis);
-    przs = c.results.filter((z) => bate(z.titulo, z.tipo, z.descricao, z.responsavel, z.pasta, z.numero, z.cliente)).slice(0, limite.przs);
-    pubs = d.results.filter((u) => bate(u.numero_processo, u.tribunal, u.tipo, u.texto)).slice(0, limite.pubs);
+    procs = a.results.filter((p) => bate(p.pasta, p.numero, p.cliente, p.parte_contraria)).slice(0, limite.procs);
+    clis = b.results.filter((c) => bate(c.nome)).slice(0, limite.clis);
   }
-  return { procs, clis, przs, pubs };
+  return { procs, clis };
 }
 
 // Sugestões para a barra de busca (JSON), conforme o usuário digita.
@@ -167,26 +163,23 @@ export async function buscaSugestoes(req, env) {
   const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
   const json = (corpo) => new Response(JSON.stringify(corpo), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
   if (q.length < 2) return json({ itens: [] });
-  const { procs, clis, przs, pubs } = await buscarTudo(env, q, { procs: 6, clis: 5, przs: 5, pubs: 3 });
+  const { procs, clis } = await buscarTudo(env, q, { procs: 8, clis: 6 });
   const itens = [
     ...clis.map((c) => ({ grupo: "Clientes", titulo: c.nome, detalhe: [c.cidade, c.estado].filter(Boolean).join(" / "), url: `/sistema/clientes/${c.id}` })),
     ...procs.map((p) => ({ grupo: "Processos", titulo: `${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}`, detalhe: [p.cliente, p.parte_contraria].filter(Boolean).join(" × "), url: `/sistema/processos/${p.id}` })),
-    ...przs.map((z) => ({ grupo: "Prazos", titulo: z.titulo, detalhe: [z.prazo_fatal && dataBR(z.prazo_fatal), z.pasta && `Pasta ${z.pasta}`, z.situacao !== "aberto" ? z.situacao : ""].filter(Boolean).join(" · "), url: `/sistema/prazos/${z.id}` })),
-    ...pubs.map((u) => ({ grupo: "Intimações", titulo: `${dataBR(u.data_disponibilizacao)} · ${u.tribunal || ""}`, detalhe: u.numero_processo || "", url: `/sistema/publicacoes/${u.id}` })),
   ];
   return json({ itens });
 }
 
 export async function busca(req, env, sessao) {
   const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
-  const { procs, clis, przs, pubs } = await buscarTudo(env, q);
-  const trecho = (t) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > 120 ? x.slice(0, 120) + "…" : x; };
-  const total = procs.length + clis.length + przs.length + pubs.length;
+  const { procs, clis } = await buscarTudo(env, q);
+  const total = procs.length + clis.length;
   return resposta(pagina({
     titulo: "Busca", sessao,
     corpo: html`<h1>Busca</h1>
       <form class="busca" method="get" action="/sistema/busca">
-        <input name="q" value="${q}" placeholder="Nome, número do processo, pasta, prazo..." aria-label="Buscar" autofocus>
+        <input name="q" value="${q}" placeholder="Nome da parte, número do processo ou pasta" aria-label="Buscar" autofocus>
         <button type="submit">Buscar</button>
       </form>
       ${q ? html`<p class="dica">${String(total)} resultado(s) para “${q}”.</p>` : ""}
@@ -197,10 +190,7 @@ export async function busca(req, env, sessao) {
       <section class="cartao"><h2>Processos (${String(procs.length)})</h2>
         ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><span><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a><br><small>${[p.cliente, p.parte_contraria].filter(Boolean).join(" × ")}${p.tipo_acao ? ` · ${p.tipo_acao}` : ""}</small></span><span>${p.situacao}</span></li>`)}</ul>` : html`<p class="vazio">Nenhum processo encontrado.</p>`}
       </section>
-      <section class="cartao"><h2>Prazos (${String(przs.length)})</h2>
-        ${przs.length ? html`<ul class="lista-simples">${przs.map((z) => html`<li><span><a href="/sistema/prazos/${String(z.id)}">${z.titulo}</a><br><small>${[z.pasta && `Pasta ${z.pasta}`, z.cliente].filter(Boolean).join(" · ")}</small></span><span>${dataBR(z.prazo_fatal)} ${urgencia(z.prazo_fatal, z.situacao)} ${z.situacao !== "aberto" ? z.situacao : ""}</span></li>`)}</ul>` : html`<p class="vazio">Nenhum prazo encontrado.</p>`}
-      </section>
-      ${pubs.length ? html`<section class="cartao"><h2>Intimações (${String(pubs.length)})</h2><ul class="lista-simples">${pubs.map((u) => html`<li><span><a href="/sistema/publicacoes/${String(u.id)}">${dataBR(u.data_disponibilizacao)} · ${u.tribunal || ""} · ${u.numero_processo || ""}</a><br><small>${trecho(u.texto)}</small></span><span>${u.situacao === "pendente" ? "para triagem" : ""}</span></li>`)}</ul></section>` : ""}` : ""}`,
+      ` : ""}`,
   }));
 }
 
@@ -213,7 +203,7 @@ export async function clientes(req, env, sessao, id) {
         GROUP BY c.id ORDER BY c.nome COLLATE NOCASE`
     ).all();
     const bate = criarFiltro(q);
-    const results = q ? todos.filter((c) => bate(c.nome, c.cidade, c.estado, c.tipo)) : todos;
+    const results = q ? todos.filter((c) => bate(c.nome)) : todos;
     return resposta(pagina({
       titulo: "Clientes", sessao,
       corpo: html`
@@ -267,7 +257,7 @@ export async function processos(req, env, sessao, id) {
     sql += " ORDER BY CAST(p.pasta AS INTEGER), p.pasta";
     const { results: todos } = await env.DB.prepare(sql).bind(...args).all();
     const bate = criarFiltro(q);
-    const results = q ? todos.filter((p) => bate(p.numero, p.pasta, p.cliente, p.parte_contraria, p.tipo_acao, p.comarca)) : todos;
+    const results = q ? todos.filter((p) => bate(p.numero, p.pasta, p.cliente, p.parte_contraria)) : todos;
     return resposta(pagina({
       titulo: "Processos", sessao,
       corpo: html`
