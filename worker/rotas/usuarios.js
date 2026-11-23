@@ -9,11 +9,12 @@ const dataHora = (t) => (t ? new Date(t * 1000).toLocaleString("pt-BR", { timeZo
 
 async function tela(env, sessao, { erro, aviso, senhaGerada } = {}) {
   const { results } = await env.DB.prepare(
-    "SELECT id, nome, email, perfil, ativo, totp_ativo, bloqueado_ate, ultimo_acesso FROM usuarios WHERE perfil != 'cliente' ORDER BY nome"
+    "SELECT id, nome, email, perfil, ativo, totp_ativo, bloqueado_ate, ultimo_acesso, acesso_financeiro FROM usuarios WHERE perfil != 'cliente' ORDER BY nome"
   ).all();
   const linhas = results.map((u) => html`<tr class="${u.ativo ? "" : "inativo"}">
     <td>${u.nome}<br><small>${u.email}</small></td>
     <td>${PERFIS[u.perfil] || u.perfil}</td>
+    <td>${u.perfil === "admin" ? "Sim (admin)" : u.acesso_financeiro ? "Sim" : "Não"}</td>
     <td>${u.totp_ativo ? "Ativo" : "Pendente"}</td>
     <td>${u.ativo ? (u.bloqueado_ate > agora() ? "Bloqueado" : "Ativo") : "Desativado"}</td>
     <td>${dataHora(u.ultimo_acesso)}</td>
@@ -24,6 +25,7 @@ async function tela(env, sessao, { erro, aviso, senhaGerada } = {}) {
           <option value="senha">Gerar nova senha provisória</option>
           <option value="2fa">Refazer cadastro do 2FA</option>
           <option value="desbloquear">Desbloquear</option>
+          ${u.perfil === "admin" ? "" : html`<option value="${u.acesso_financeiro ? "financeiro_revogar" : "financeiro_conceder"}">${u.acesso_financeiro ? "Revogar acesso ao Financeiro" : "Conceder acesso ao Financeiro"}</option>`}
           <option value="${u.ativo ? "desativar" : "ativar"}">${u.ativo ? "Desativar" : "Reativar"}</option>
         </select>
         <button type="submit" class="botao-pequeno">Aplicar</button>
@@ -38,7 +40,7 @@ async function tela(env, sessao, { erro, aviso, senhaGerada } = {}) {
         <p class="dica">Ela aparece só agora. Entregue à pessoa por um canal seguro; no primeiro acesso ela define a própria senha e cadastra o 2FA.</p>
       </div>` : ""}
       <div class="tabela-rolagem"><table>
-        <thead><tr><th>Nome</th><th>Perfil</th><th>2FA</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead>
+        <thead><tr><th>Nome</th><th>Perfil</th><th>Financeiro</th><th>2FA</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
       </table></div>
       <section class="cartao">
@@ -52,6 +54,7 @@ async function tela(env, sessao, { erro, aviso, senhaGerada } = {}) {
             <option value="advogado">Advogado</option>
             <option value="admin">Administrador</option>
           </select></label>
+          <label class="opcao-linha"><input type="checkbox" name="financeiro" value="1"> Acesso ao Financeiro</label>
           <button type="submit">Criar usuário</button>
         </form>
       </section>`,
@@ -71,9 +74,10 @@ export async function usuarios(req, env, sessao, id) {
     const existe = await env.DB.prepare("SELECT id FROM usuarios WHERE email = ?").bind(email).first();
     if (existe) return tela(env, sessao, { erro: "Já existe um usuário com esse e-mail." });
     const senha = senhaProvisoria();
-    await env.DB.prepare("INSERT INTO usuarios (nome, email, senha_hash, perfil, trocar_senha, criado_em) VALUES (?, ?, ?, ?, 1, ?)")
-      .bind(nome, email, await hashSenha(senha), perfil, agora()).run();
-    await auditar(env, req, sessao.usuario_id, "usuario_criado", `${email} (${perfil})`);
+    const fin = f.get("financeiro") === "1" ? 1 : 0;
+    await env.DB.prepare("INSERT INTO usuarios (nome, email, senha_hash, perfil, trocar_senha, criado_em, acesso_financeiro) VALUES (?, ?, ?, ?, 1, ?, ?)")
+      .bind(nome, email, await hashSenha(senha), perfil, agora(), fin).run();
+    await auditar(env, req, sessao.usuario_id, "usuario_criado", `${email} (${perfil}${fin ? ", financeiro" : ""})`);
     return tela(env, sessao, { aviso: `Usuário ${nome} criado.`, senhaGerada: senha });
   }
 
@@ -92,6 +96,8 @@ export async function usuarios(req, env, sessao, id) {
     desbloquear: ["UPDATE usuarios SET falhas = 0, bloqueado_ate = 0 WHERE id = ?", "Usuário desbloqueado."],
     desativar: ["UPDATE usuarios SET ativo = 0 WHERE id = ?", "Usuário desativado."],
     ativar: ["UPDATE usuarios SET ativo = 1 WHERE id = ?", "Usuário reativado."],
+    financeiro_conceder: ["UPDATE usuarios SET acesso_financeiro = 1 WHERE id = ?", "acesso ao Financeiro concedido."],
+    financeiro_revogar: ["UPDATE usuarios SET acesso_financeiro = 0 WHERE id = ?", "acesso ao Financeiro revogado."],
   };
   if (!comandos[acao]) return tela(env, sessao, { erro: "Escolha uma ação." });
   await env.DB.prepare(comandos[acao][0]).bind(alvo.id).run();

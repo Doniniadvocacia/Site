@@ -1,16 +1,17 @@
-// Importação de Clientes e Processos do Wix (somente administradores).
+// Importação dos dados do Wix (somente administradores): cadastros, prazos, intimações, agenda, histórico e financeiro.
 // Os dados vão direto da API do Wix para o D1, cifrando os campos sensíveis no caminho.
 import { html, pagina, resposta, campoCsrf } from "../html.js";
 import { agora, cifrar, iguais } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { normalizarData } from "../calendario.js";
+import { normalizarData, hojeBR } from "../calendario.js";
+import { copiarAnexosWix, anexosDisponiveis, nomeSeguro } from "../anexos.js";
 
 const SITE_ID_PADRAO = "4ce0a7a8-3fa0-495f-a643-664a08144c36";
 
 async function lerColecao(env, colecao) {
   const itens = [];
   for (let offset = 0; ; offset += 1000) {
-    const r = await fetch("https://www.wixapis.com/wix-data/v2/items/query", {
+    const r = await fetch(`${env.WIX_API_BASE || "https://www.wixapis.com"}/wix-data/v2/items/query`, {
       method: "POST",
       headers: { Authorization: env.WIX_API_KEY, "wix-site-id": env.WIX_SITE_ID || SITE_ID_PADRAO, "Content-Type": "application/json" },
       body: JSON.stringify({ dataCollectionId: colecao, query: { paging: { limit: 1000, offset } } }),
@@ -33,20 +34,40 @@ const txt = (v) => {
 const juntar = (...partes) => partes.map(txt).filter(Boolean).join(", ") || null;
 
 export async function importar(req, env, sessao) {
-  const tela = (opts = {}) => resposta(pagina({
+  const contar = async () => {
+    const r = await env.DB.prepare(`SELECT SUM(chave IS NOT NULL) AS copiados, SUM(chave IS NULL AND origem_wix IS NOT NULL) AS pendentes,
+      SUM(chave IS NULL AND erro IS NOT NULL) AS falhas FROM anexos`).first();
+    return { copiados: r?.copiados || 0, pendentes: r?.pendentes || 0, falhas: r?.falhas || 0 };
+  };
+  let anexos = await contar();
+  const tela = async (opts = {}) => { anexos = await contar(); return telaBase(opts); };
+  const telaBase = (opts = {}) => resposta(pagina({
     titulo: "Importar do Wix", sessao, ...opts,
     corpo: html`
       <h1>Importar do Wix</h1>
       <section class="cartao">
-        <p>Copia clientes e processos (atualizando os já importados) e traz os prazos, intimações e compromissos que ainda não existem aqui. Prazos e compromissos editados neste sistema não são sobrescritos.</p>
-        <p class="dica">Documentos, contatos, endereços e observações são gravados cifrados. Pode ser repetido quantas vezes for preciso até a virada.</p>
-        ${env.WIX_API_KEY ? html`<form method="post">${campoCsrf(sessao)}<button type="submit">Importar agora</button></form>`
+        <p>Copia clientes e processos (atualizando os já importados) e traz prazos, intimações, compromissos, histórico e lançamentos financeiros que ainda não existem aqui. Registros criados ou editados neste sistema não são sobrescritos.</p>
+        <p class="dica">Documentos, contatos, endereços, dados bancários e observações são gravados cifrados. Pode ser repetido quantas vezes for preciso até a virada.</p>
+        ${env.WIX_API_KEY ? html`<form method="post">${campoCsrf(sessao)}<button type="submit" name="acao" value="importar">Importar agora</button></form>`
           : html`<p class="erro">O segredo WIX_API_KEY não está configurado no Cloudflare.</p>`}
+      </section>
+      <section class="cartao"><h2>Anexos do Wix</h2>
+        <p>${String(anexos.copiados)} copiado(s) · ${String(anexos.pendentes)} pendente(s)${anexos.falhas ? ` · ${anexos.falhas} com erro na última tentativa` : ""}.</p>
+        ${!anexosDisponiveis(env) ? html`<p class="erro">O R2 ainda não está ativado no Cloudflare; os anexos ficam registrados e serão copiados depois.</p>`
+          : anexos.pendentes ? html`<form method="post">${campoCsrf(sessao)}<button type="submit" name="acao" value="anexos">Copiar próximos anexos</button></form>
+            <p class="dica">Copia alguns arquivos por vez, já cifrados. Clique de novo até zerar os pendentes.</p>` : ""}
       </section>`,
   }));
   if (req.method === "GET") return tela();
   const f = await req.formData();
   if (!iguais(String(f.get("csrf") || ""), sessao.csrf)) return tela({ erro: "Sessão expirada. Tente novamente." });
+  if (f.get("acao") === "anexos") {
+    try {
+      const r = await copiarAnexosWix(env, 8);
+      await auditar(env, req, sessao.usuario_id, "anexos_wix", `${r.ok} copiados, ${r.falhas} falhas`);
+      return tela({ aviso: `${r.ok} anexo(s) copiado(s)${r.falhas ? `, ${r.falhas} com erro` : ""}. Restam ${r.pendentes}.` });
+    } catch (e) { return tela({ erro: `Falha ao copiar anexos: ${e.message}` }); }
+  }
 
   try {
     const t = agora();
@@ -59,7 +80,7 @@ export async function importar(req, env, sessao) {
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17)
          ON CONFLICT(wix_id) DO UPDATE SET nome=?2, tipo=?3, posicao=?4, genero=?5, estado_civil=?6, profissao=?7, cidade=?8, estado=?9,
            documento_enc=?10, data_nascimento_enc=?11, email_enc=?12, telefone_enc=?13, endereco_enc=?14, observacoes_enc=?15,
-           data_cadastro=?16, atualizado_em=?17`
+           data_cadastro=?16, atualizado_em=?17 WHERE clientes.editado_local = 0`
       ).bind(c._id, txt(c.nome) || txt(c.title) || "(sem nome)", txt(c.tipo), txt(c.posicao), txt(c.genero), txt(c.estadoCivil),
         txt(c.profissao), txt(c.cidade), txt(c.estado),
         await cifrar(env, txt(c.documento)), await cifrar(env, txt(c.dataNascimento)), await cifrar(env, txt(c.email)),
@@ -84,7 +105,8 @@ export async function importar(req, env, sessao) {
            competencia=?11, comarca=?12, vara=?13, uf=?14, posicao_cliente=?15, parte_contraria=?16, advogado_parte_contraria=?17,
            advogado_responsavel=?18, ajg_deferida=?19, valor_causa=?20, data_distribuicao=?21, data_cadastro=?22, resultado=?23, resultado_atual=?24,
            resultado_primeira=?25, data_decisao_primeira=?26, resultado_segunda=?27, data_decisao_segunda=?28, resultado_superior=?29,
-           data_decisao_superior=?30, data_decisao_final=?31, proximo_prazo=?32, contato_parte_contraria_enc=?33, observacoes_enc=?34, atualizado_em=?35`
+           data_decisao_superior=?30, data_decisao_final=?31, proximo_prazo=?32, contato_parte_contraria_enc=?33, observacoes_enc=?34, atualizado_em=?35
+         WHERE processos.editado_local = 0`
       ).bind(p._id, idCliente[ref] ?? null, txt(p.pasta), txt(p.numero), txt(p.title), txt(p.tipoAcao), txt(p.rito), txt(p.fase), txt(p.instancia),
         txt(p.situacao), txt(p.competencia), txt(p.comarca), txt(p.vara) || txt(p.nmeroVara), txt(p.uf), txt(p.posicaoCliente), txt(p.parteContraria),
         txt(p.advogadoParteContraria), txt(p.advogadoResponsavel), txt(p.ajgDeferida),
@@ -100,10 +122,10 @@ export async function importar(req, env, sessao) {
     // Prazos, intimações e agenda: só entram os que ainda não existem (edições feitas aqui são preservadas).
     const { results: mapaP } = await env.DB.prepare("SELECT id, wix_id, numero, pasta FROM processos").all();
     const dig = (v) => String(v || "").replace(/\D/g, "");
-    const porWix = new Map(mapaP.map((x) => [x.wix_id, x.id]));
+    const porWix = new Map(mapaP.filter((x) => x.wix_id).map((x) => [x.wix_id, x.id]));
     const porNumero = new Map(mapaP.filter((x) => x.numero).map((x) => [dig(x.numero), x.id]));
     const porPasta = new Map(mapaP.filter((x) => x.pasta).map((x) => [String(x.pasta).trim(), x.id]));
-    const acharProcesso = (ref, pasta) => porWix.get(ref) ?? porNumero.get(dig(ref)) ?? porPasta.get(String(pasta || "").trim()) ?? null;
+    const acharProcesso = (ref, pasta) => (ref && (porWix.get(ref) ?? porNumero.get(dig(ref)))) || (pasta && porPasta.get(String(pasta).trim())) || null;
     const novos = { prazos: 0, publicacoes: 0, agenda: 0 };
 
     const prazos = await lerColecao(env, "Prazos");
@@ -142,8 +164,63 @@ export async function importar(req, env, sessao) {
     });
     for (let i = 0; i < sag.length; i += 50) for (const r of await env.DB.batch(sag.slice(i, i + 50))) novos.agenda += r.meta.changes;
 
+    // Histórico e financeiro: só entram os que ainda não existem. Anexos ficam registrados para cópia posterior.
+    const hist = await lerColecao(env, "Historico");
+    const fin = await lerColecao(env, "Financeiro");
+    const regAnexos = [];
+    for (const [lista, campo, nomeCampo, ctx] of [[hist, "arquivoUrl", "arquivoNome", "historico"], [fin, "arquivo", "arquivoNome", "financeiro"]]) {
+      for (const x of lista) {
+        const origem = txt(x[campo]);
+        if (origem && origem.startsWith("wix:document://")) {
+          regAnexos.push(env.DB.prepare("INSERT INTO anexos (nome, contexto, origem_wix, criado_em) VALUES (?, ?, ?, ?) ON CONFLICT(origem_wix) DO NOTHING")
+            .bind(nomeSeguro(txt(x[nomeCampo]) || origem.split("/").pop()), ctx, origem, t));
+        }
+      }
+    }
+    for (let i = 0; i < regAnexos.length; i += 50) await env.DB.batch(regAnexos.slice(i, i + 50));
+    const { results: mapaA } = await env.DB.prepare("SELECT id, origem_wix FROM anexos WHERE origem_wix IS NOT NULL").all();
+    const idAnexo = new Map(mapaA.map((a) => [a.origem_wix, a.id]));
+    const norm = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const { results: nomesCli } = await env.DB.prepare("SELECT id, nome FROM clientes").all();
+    const porNome = new Map(nomesCli.map((c) => [norm(c.nome), c.id]));
+    const { results: cliDoProc } = await env.DB.prepare("SELECT id, cliente_id FROM processos").all();
+    const clienteDoProcesso = new Map(cliDoProc.map((x) => [x.id, x.cliente_id]));
+    novos.historico = 0; novos.financeiro = 0;
+    let semData = 0;
+
+    const sh = hist.filter((x) => txt(x.descricao)).map((x) => {
+      const pid = acharProcesso(txt(x.numeroProcesso), txt(x.pasta));
+      return env.DB.prepare(`INSERT INTO historico (wix_id, processo_id, cliente_id, data, descricao, anexo_id, criado_em)
+        VALUES (?,?,?,?,?,?,?) ON CONFLICT(wix_id) DO NOTHING`)
+        .bind(x._id, pid, porNome.get(norm(txt(x.cliente))) ?? clienteDoProcesso.get(pid) ?? null,
+          normalizarData(x.dataCadastro) || normalizarData(x._createdDate) || hojeBR(), txt(x.descricao), idAnexo.get(txt(x.arquivoUrl)) ?? null, t);
+    });
+    for (let i = 0; i < sh.length; i += 50) for (const r of await env.DB.batch(sh.slice(i, i + 50))) novos.historico += r.meta.changes;
+
+    const sf = [];
+    for (const x of fin) {
+      const venc = normalizarData(x.vencimento) || normalizarData(x.data) || normalizarData(x.dataPagamento);
+      const valor = Number(x.valor);
+      if (!venc || !Number.isFinite(valor)) { semData++; continue; }
+      const pid = acharProcesso(txt(x.numeroProcesso), txt(x.pasta));
+      const banco = [["Banco", x.banco], ["Agência", x.agencia], ["Conta", x.conta], ["Pix", x.chavePix], ["Conta de origem", x.contaOrigem]]
+        .filter(([, v]) => txt(v)).map(([k, v]) => `${k}: ${txt(v)}`).join("\n");
+      const parcelas = Number(txt(x.numeroParcelas)) || Number(txt(x.tipoRecorrencia)) || null;
+      sf.push(env.DB.prepare(`INSERT INTO financeiro (wix_id, tipo, categoria, descricao, processo_id, cliente_id, valor, vencimento, pago, data_pagamento,
+          forma_pagamento, condicao, grupo, parcela, parcelas, responsavel, pagante, favorecido, dados_bancarios_enc, observacoes_enc, anexo_id, criado_em, atualizado_em)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(wix_id) DO NOTHING`)
+        .bind(x._id, /desp/i.test(txt(x.tipo) || "") ? "despesa" : "receita", txt(x.categoria) || txt(x.origem),
+          txt(x.descricao) || txt(x.title) || txt(x.categoria) || "Lançamento", pid, porNome.get(norm(txt(x.cliente))) ?? clienteDoProcesso.get(pid) ?? null,
+          valor, venc, x.pago ? 1 : 0, x.pago ? normalizarData(x.dataPagamento) : null, txt(x.formaPagamento), txt(x.condicaoPagamento),
+          txt(x.grupoId), Number.isFinite(Number(x.numeroParcela)) && x.numeroParcela !== null ? Number(x.numeroParcela) : null, parcelas,
+          txt(x.advogadoResponsavel), txt(x.pagante), txt(x.favorecido), await cifrar(env, banco || null), await cifrar(env, txt(x.observacoes)),
+          idAnexo.get(txt(x.arquivo)) ?? null, t, t));
+    }
+    for (let i = 0; i < sf.length; i += 50) for (const r of await env.DB.batch(sf.slice(i, i + 50))) novos.financeiro += r.meta.changes;
+
     const resumo = `${clientes.length} clientes e ${processos.length} processos atualizados${semCliente ? ` (${semCliente} processo(s) sem cliente vinculado)` : ""}. ` +
-      `Novos: ${novos.prazos} de ${prazos.length} prazos, ${novos.publicacoes} de ${pubs.length} intimações, ${novos.agenda} de ${ags.length} compromissos.`;
+      `Novos: ${novos.prazos} de ${prazos.length} prazos, ${novos.publicacoes} de ${pubs.length} intimações, ${novos.agenda} de ${ags.length} compromissos, ` +
+      `${novos.historico} de ${hist.length} andamentos, ${novos.financeiro} de ${fin.length} lançamentos financeiros${semData ? ` (${semData} sem data ou valor, ignorados)` : ""}.`;
     await auditar(env, req, sessao.usuario_id, "importacao_wix", resumo);
     return tela({ aviso: resumo });
   } catch (e) {

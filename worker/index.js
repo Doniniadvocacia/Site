@@ -12,6 +12,10 @@ import { publicacoes } from "./rotas/publicacoes.js";
 import { agenda } from "./rotas/agenda.js";
 import { oabs, feriados } from "./rotas/configuracoes.js";
 import { capturarDjen } from "./djen.js";
+import { cadastroCliente, cadastroProcesso } from "./rotas/cadastro.js";
+import { adicionarHistorico, excluirHistorico } from "./rotas/historico.js";
+import { financeiro } from "./rotas/financeiro.js";
+import { servirAnexo } from "./anexos.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -37,6 +41,7 @@ async function status(env) {
     `DATA_KEY: ${ok(env.DATA_KEY)}${env.DATA_KEY ? (chaveValida(env.DATA_KEY) ? " (formato válido)" : " (FORMATO INVÁLIDO: precisa ser 32 bytes em base64)") : ""}`,
     `SETUP_TOKEN: ${ok(env.SETUP_TOKEN)}`,
     `WIX_API_KEY: ${ok(env.WIX_API_KEY)}`,
+    `R2 (anexos): ${ok(env.ARQUIVOS)}`,
     `Variáveis recebidas pelo sistema: ${Object.keys(env).filter((k) => /^[A-Z_]+$/.test(k)).sort().join(", ") || "nenhuma"}`,
   ];
   return new Response(linhas.join("\n") + "\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
@@ -80,6 +85,14 @@ async function sistema(req, env) {
   if (caminho === "/sistema/busca") return busca(req, env, sessao);
   if (caminho === "/sistema/busca/sugestoes") return buscaSugestoes(req, env);
   let m;
+  if (caminho === "/sistema/clientes/novo") return cadastroCliente(req, env, sessao, null);
+  if ((m = caminho.match(/^\/sistema\/clientes\/(\d+)\/editar$/))) return cadastroCliente(req, env, sessao, m[1]);
+  if (caminho === "/sistema/processos/novo") return cadastroProcesso(req, env, sessao, null);
+  if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/editar$/))) return cadastroProcesso(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/historico$/)) && metodo === "POST") return adicionarHistorico(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/historico\/(\d+)\/excluir$/)) && metodo === "POST") return excluirHistorico(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/baixar)?))?$/))) return financeiro(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/anexos\/(\d+)$/))) return servirAnexo(env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover))?))?$/))) return prazos(req, env, sessao, m[1]);

@@ -30,13 +30,14 @@ export async function lerSessao(env, req) {
   if (!token) return null;
   const s = await env.DB.prepare(
     `SELECT s.token_hash, s.etapa, s.csrf, s.expira_em, u.id AS usuario_id, u.nome, u.email, u.perfil,
-            u.totp_enc, u.totp_ativo, u.totp_ultimo, u.trocar_senha, u.ativo
+            u.totp_enc, u.totp_ativo, u.totp_ultimo, u.trocar_senha, u.ativo, u.acesso_financeiro
        FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ?`
   ).bind(await sha256(token)).first();
   if (!s || s.expira_em < agora() || !s.ativo) {
     if (s) await env.DB.prepare("DELETE FROM sessoes WHERE token_hash = ?").bind(s.token_hash).run();
     return null;
   }
+  s.financeiro = s.perfil === "admin" || s.acesso_financeiro === 1;
   return s;
 }
 

@@ -282,3 +282,53 @@ fieldset.calculo label { display: grid; gap: .3rem; font-size: .85rem; color: va
 @media (max-width: 640px) {
   .sugestoes { left: 0; right: 0; width: auto; max-width: none; }
 }
+
+/* Etapa 3: cadastro, histórico, financeiro */
+.botao-link.botao-secundario { background: var(--branco); color: var(--navy); border: 1px solid var(--navy); }
+.botao-link.botao-secundario:hover { background: #eef1f6; }
+.formulario fieldset { border: 1px solid var(--linha); border-radius: 6px; padding: .9rem 1rem 1rem; margin: 0; }
+.formulario fieldset legend { padding: 0 .4rem; font-size: .8rem; color: var(--dourado); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.tipo-lanc { display: flex; gap: 1.5rem; align-items: center; }
+.formulario label.opcao, .formulario label.opcao-linha { display: flex; flex-direction: row; align-items: center; gap: .45rem; color: var(--texto); font-size: .9rem; }
+.formulario label.opcao input, .formulario label.opcao-linha input { width: auto; margin: 0; }
+.form-excluir-lanc { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--linha); display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
+.form-historico { margin-bottom: 1.2rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--linha); }
+.linha-tempo { list-style: none; margin: 0; padding: 0; }
+.linha-tempo li { display: grid; grid-template-columns: 96px 1fr; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid #f0ece4; }
+.linha-tempo-data { font-weight: 600; color: var(--navy); font-size: .88rem; padding-top: .1rem; }
+.linha-tempo-texto p { margin: 0 0 .3rem; }
+.linha-tempo-texto .form-excluir { display: inline-flex; gap: .4rem; align-items: center; margin-left: .6rem; }
+.linha-tempo-texto .confirmar { display: inline-flex; align-items: center; gap: .25rem; font-size: .75rem; color: var(--suave); }
+.anexo { font-size: .85rem; white-space: nowrap; }
+.navegacao-mes { display: flex; align-items: center; gap: .8rem; margin: .4rem 0 1rem; }
+.navegacao-mes a { text-decoration: none; color: var(--navy); font-size: 1.3rem; padding: 0 .4rem; }
+.navegacao-mes a.hoje { font-size: .85rem; text-decoration: underline; }
+.navegacao-mes strong { font-family: var(--serif, Georgia, serif); font-size: 1.15rem; min-width: 11rem; text-align: center; }
+.resumo-financeiro { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem; }
+.cartao-resumo { background: var(--branco); border: 1px solid var(--linha); border-top: 3px solid var(--navy); border-radius: 8px; padding: 1rem 1.1rem; display: grid; gap: .2rem; }
+.cartao-resumo span { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
+.cartao-resumo strong { font-size: 1.35rem; color: var(--navy); }
+.cartao-resumo small { color: var(--suave); }
+.cartao-resumo.receita { border-top-color: var(--ok); }
+.cartao-resumo.despesa { border-top-color: var(--erro); }
+.cartao-resumo.alerta { border-top-color: var(--dourado); }
+.receita { color: var(--ok); }
+.despesa { color: var(--erro); }
+.cartao-resumo strong.receita { color: var(--ok); }
+.cartao-resumo strong.despesa { color: var(--erro); }
+.num { text-align: right; }
+.parcela { display: inline-block; background: #eef1f6; color: var(--navy); border-radius: 4px; padding: 0 .35rem; font-size: .72rem; font-weight: 600; }
+.selo-pago { background: #e5f2ea; color: var(--ok); }
+.abas .separador { flex: 0 0 1px; background: var(--linha); margin: .4rem .5rem; }
+.resumo-linha { margin: 0 0 .8rem; color: var(--suave); }
+@media (max-width: 640px) {
+  .linha-tempo li { grid-template-columns: 1fr; gap: .2rem; }
+}
+.grade-form > *, .grade-form fieldset > * { min-width: 0; }
+.formulario input, .formulario select, .formulario textarea { box-sizing: border-box; max-width: 100%; }
+.formulario input[type=checkbox], .formulario input[type=radio] { width: auto; }
+@media (max-width: 640px) {
+  .resumo-financeiro { grid-template-columns: 1fr 1fr; gap: .6rem; }
+  .cartao-resumo { padding: .8rem; }
+  .cartao-resumo strong { font-size: 1.1rem; }
+}

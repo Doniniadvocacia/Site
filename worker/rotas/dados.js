@@ -1,4 +1,4 @@
-// Painel, clientes e processos (consulta). Na etapa 1 os dados vêm do Wix e são só para leitura.
+// Painel, clientes e processos (consulta, fichas e busca). Cadastro e edição ficam em cadastro.js.
 import { html, pagina, resposta, dataBR, moeda } from "../html.js";
 import { decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
@@ -6,6 +6,8 @@ import { hojeBR, somarDias } from "../calendario.js";
 import { urgencia, rotuloProcesso } from "./comum.js";
 import { icone } from "../icones.js";
 import { campoCsrf } from "../html.js";
+import { cartaoHistorico, mensagemDaUrl } from "./historico.js";
+import { cartaoFinanceiro } from "./financeiro.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
@@ -207,7 +209,7 @@ export async function clientes(req, env, sessao, id) {
     return resposta(pagina({
       titulo: "Clientes", sessao,
       corpo: html`
-        <h1>Clientes</h1>
+        <div class="titulo-acoes"><h1>Clientes</h1><a class="botao-link" href="/sistema/clientes/novo">Novo cliente</a></div>
         <form class="busca" method="get"><input name="q" value="${q}" placeholder="Buscar por nome" aria-label="Buscar por nome"><button type="submit">Buscar</button></form>
         <div class="tabela-rolagem"><table>
           <thead><tr><th>Nome</th><th>Tipo</th><th>Cidade</th><th>Processos</th></tr></thead>
@@ -225,20 +227,22 @@ export async function clientes(req, env, sessao, id) {
   );
   const { results: procs } = await env.DB.prepare("SELECT id, pasta, numero, tipo_acao, situacao FROM processos WHERE cliente_id = ? ORDER BY pasta").bind(c.id).all();
   await auditar(env, req, sessao.usuario_id, "cliente_visualizado", `cliente ${c.id}`);
+  const fin = await cartaoFinanceiro(env, sessao, { clienteId: c.id });
   return resposta(pagina({
-    titulo: c.nome, sessao,
+    titulo: c.nome, sessao, ...mensagemDaUrl(req),
     corpo: html`
       <p class="trilha"><a href="/sistema/clientes">Clientes</a></p>
-      <h1>${c.nome}</h1>
+      <div class="titulo-acoes"><h1>${c.nome}</h1><a class="botao-link botao-secundario" href="/sistema/clientes/${String(c.id)}/editar">Editar</a></div>
       <section class="cartao"><dl class="ficha">
         ${campo("Tipo", c.tipo)}${campo("CPF/CNPJ", documento)}${campo("Nascimento", nascimento)}
         ${campo("E-mail", email)}${campo("Telefone", telefone)}${campo("Endereço", endereco)}
         ${campo("Cidade", [c.cidade, c.estado].filter(Boolean).join(" / "))}${campo("Profissão", c.profissao)}
         ${campo("Estado civil", c.estado_civil)}${campo("Posição", c.posicao)}${campo("Cadastro", dataBR(c.data_cadastro))}
       </dl>${observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : ""}</section>
-      <section class="cartao"><h2>Processos</h2>
+      <section class="cartao"><div class="titulo-acoes"><h2>Processos</h2><a class="botao-link" href="/sistema/processos/novo?cliente=${String(c.id)}">Novo processo</a></div>
         ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a> <span>${p.tipo_acao} ${p.situacao ? `· ${p.situacao}` : ""}</span></li>`)}</ul>` : html`<p>Nenhum processo vinculado.</p>`}
-      </section>`,
+      </section>
+      ${fin}`,
   }));
 }
 
@@ -261,7 +265,7 @@ export async function processos(req, env, sessao, id) {
     return resposta(pagina({
       titulo: "Processos", sessao,
       corpo: html`
-        <h1>Processos${situacao ? html` · ${situacao}` : ""}</h1>
+        <div class="titulo-acoes"><h1>Processos${situacao ? html` · ${situacao}` : ""}</h1><a class="botao-link" href="/sistema/processos/novo">Novo processo</a></div>
         <form class="busca" method="get">
           <input name="q" value="${q}" placeholder="Número, pasta, cliente ou parte contrária" aria-label="Buscar processos">
           ${situacao ? html`<input type="hidden" name="situacao" value="${situacao}">` : ""}
@@ -285,11 +289,12 @@ export async function processos(req, env, sessao, id) {
     env.DB.prepare("SELECT id, data_disponibilizacao, tipo, situacao FROM publicacoes WHERE processo_id = ? ORDER BY data_disponibilizacao DESC LIMIT 30").bind(p.id).all(),
     env.DB.prepare("SELECT id, titulo, data, hora FROM agenda WHERE processo_id = ? ORDER BY data DESC").bind(p.id).all(),
   ]);
+  const [hist, fin] = await Promise.all([cartaoHistorico(env, sessao, p.id), cartaoFinanceiro(env, sessao, { processoId: p.id })]);
   return resposta(pagina({
-    titulo: p.numero || `Pasta ${p.pasta}`, sessao,
+    titulo: p.numero || `Pasta ${p.pasta}`, sessao, ...mensagemDaUrl(req),
     corpo: html`
       <p class="trilha"><a href="/sistema/processos">Processos</a></p>
-      <h1>${p.numero || "Processo sem número"}</h1>
+      <div class="titulo-acoes"><h1>${p.numero || "Processo sem número"}</h1><a class="botao-link botao-secundario" href="/sistema/processos/${String(p.id)}/editar">Editar</a></div>
       <p class="subtitulo">${p.pasta ? `Pasta ${p.pasta}` : ""} ${p.cliente_id ? html`· <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : ""}</p>
       ${secao("", [campo("Tipo de ação", p.tipo_acao), campo("Rito", p.rito), campo("Fase", p.fase), campo("Instância", p.instancia),
         campo("Situação", p.situacao), campo("Competência", p.competencia), campo("Comarca", [p.comarca, p.uf].filter(Boolean).join(" / ")),
@@ -308,6 +313,8 @@ export async function processos(req, env, sessao, id) {
       <section class="cartao"><div class="titulo-acoes"><h2>Agenda</h2><a class="botao-link" href="/sistema/agenda/novo?processo=${String(p.id)}">Novo compromisso</a></div>
         ${ags.length ? html`<ul class="lista-simples">${ags.map((x) => html`<li><a href="/sistema/agenda/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.data)} ${x.hora || ""}</span></li>`)}</ul>` : html`<p>Nenhum compromisso.</p>`}</section>
       ${pubs.length ? html`<section class="cartao"><h2>Intimações</h2><ul class="lista-simples">${pubs.map((x) => html`<li><a href="/sistema/publicacoes/${String(x.id)}">${dataBR(x.data_disponibilizacao)} · ${x.tipo || "Intimação"}</a><span>${x.situacao === "pendente" ? "para triagem" : ""}</span></li>`)}</ul></section>` : ""}
+      ${hist}
+      ${fin}
 `,
   }));
 }

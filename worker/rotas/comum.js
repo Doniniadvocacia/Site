@@ -38,5 +38,13 @@ export function urgencia(fatal, situacao = "aberto") {
   return "";
 }
 
+// Valor em reais digitado como "15.000,50", "15000,50" ou "15000.50". Vazio → null; inválido → NaN.
+export function numeroBR(v) {
+  const s = String(v ?? "").replace(/R\$|\s/g, "").trim();
+  if (!s) return null;
+  const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+}
+
 export const rotuloProcesso = (p) => [p.pasta && `Pasta ${p.pasta}`, p.numero].filter(Boolean).join(" · ") || "—";
 export { dataBR };

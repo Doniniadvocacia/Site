@@ -95,6 +95,19 @@ export async function decifrar(env, valor) {
   return dec.decode(p);
 }
 
+// Arquivos: [iv de 12 bytes][conteúdo cifrado]. Mesmo DATA_KEY dos campos.
+export async function cifrarBytes(env, dados) {
+  const iv = aleatorio(12);
+  const c = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await chaveDados(env), dados));
+  const out = new Uint8Array(12 + c.length);
+  out.set(iv, 0); out.set(c, 12);
+  return out;
+}
+export async function decifrarBytes(env, dados) {
+  const b = new Uint8Array(dados);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(0, 12) }, await chaveDados(env), b.slice(12)));
+}
+
 // ---------- 2FA: TOTP (RFC 6238), compatível com Google/Microsoft Authenticator ----------
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
