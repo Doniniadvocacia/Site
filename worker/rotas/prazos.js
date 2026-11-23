@@ -3,7 +3,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
-import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao } from "./comum.js";
 
 const SITUACOES = [["aberto", "Aberto"], ["cumprido", "Cumprido"], ["cancelado", "Cancelado"]];
 const CONTAGENS = [["uteis", "Dias úteis"], ["corridos", "Dias corridos"]];
@@ -33,7 +33,7 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
     <label>Data de cumprimento<input type="date" name="data_cumprimento" value="${p.data_cumprimento || ""}"></label>
     <label>Audiência (data)<input type="date" name="data_audiencia" value="${p.data_audiencia || ""}"></label>
     <label>Audiência (hora)<input type="time" name="hora_audiencia" value="${p.hora_audiencia || ""}"></label>
-    <label class="largo">Descrição<textarea name="descricao" rows="3" maxlength="4000">${p.descricao || ""}</textarea></label>
+    <label class="largo">Descrição<textarea name="descricao" rows="${String(Math.min(16, Math.max(3, String(p.descricao || "").split("\n").length + 1)))}" maxlength="20000">${p.descricao || ""}</textarea></label>
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">${botaoSalvar}</button>${extraBotoes}</div>
     <datalist id="tipos-prazo"><option value="Manifestação"><option value="Contestação"><option value="Réplica"><option value="Recurso"><option value="Contrarrazões"><option value="Embargos de declaração"><option value="Audiência"><option value="Cumprimento de sentença"></datalist>
   </form>`;
@@ -50,7 +50,7 @@ export async function lerPrazo(env, f) {
     prazo_fatal: dataValida(txt(f, "prazo_fatal")), prazo_interno: dataValida(txt(f, "prazo_interno")),
     hora: txt(f, "hora", 10), situacao: ["aberto", "cumprido", "cancelado"].includes(f.get("situacao")) ? f.get("situacao") : "aberto",
     data_cumprimento: dataValida(txt(f, "data_cumprimento")), data_audiencia: dataValida(txt(f, "data_audiencia")),
-    hora_audiencia: txt(f, "hora_audiencia", 10), descricao: txt(f, "descricao", 4000),
+    hora_audiencia: txt(f, "hora_audiencia", 10), descricao: txt(f, "descricao", 20000),
   };
   let calculo = null;
   const querCalcular = f.get("acao") === "calcular" || (!p.prazo_fatal && p.data_inicio && p.dias);
@@ -162,7 +162,13 @@ export async function prazos(req, env, sessao, id) {
 
   if (req.method === "GET") {
     const sp = new URL(req.url).searchParams;
-    return tela(existente || { processo_id: Number(sp.get("processo")) || null, situacao: "aberto", contagem: "uteis" }, sp.get("salvo") ? { aviso: "Prazo salvo." } : {});
+    let base = existente || { processo_id: Number(sp.get("processo")) || null, situacao: "aberto", contagem: "uteis" };
+    // Prazos antigos gerados de intimação, ainda sem descrição: sugere o teor da intimação.
+    if (existente && !existente.descricao && existente.publicacao_id) {
+      const pub = await env.DB.prepare("SELECT * FROM publicacoes WHERE id = ?").bind(existente.publicacao_id).first();
+      if (pub) base = { ...existente, descricao: descricaoDaIntimacao(pub) };
+    }
+    return tela(base, sp.get("salvo") ? { aviso: "Prazo salvo." } : {});
   }
   const { f, ok } = await csrfOk(req, sessao);
   if (!ok) return tela(existente || {}, { erro: "Sessão expirada. Tente novamente." });

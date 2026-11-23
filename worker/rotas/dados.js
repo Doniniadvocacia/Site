@@ -1,5 +1,5 @@
 // Painel, clientes e processos (consulta, fichas e busca). Cadastro e edição ficam em cadastro.js.
-import { html, pagina, resposta, dataBR, moeda } from "../html.js";
+import { html, pagina, resposta, dataBR, moeda, textoDeHtml } from "../html.js";
 import { decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR, somarDias } from "../calendario.js";
@@ -61,7 +61,7 @@ export async function painel(req, env, sessao) {
   const fases = ordenar(ativosFase.results, ORDEM_FASES);
   const res = ordenar(resultados.results.filter((r) => r.rotulo), ORDEM_RESULTADOS);
   const status = (d) => (d < hoje ? html`<span class="atraso">PRAZO EM ATRASO</span>` : d === hoje ? html`<span class="atraso">HOJE</span>` : html`<span>${dataBR(d)}</span>`);
-  const resumoTexto = (t) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > 140 ? x.slice(0, 140) + "…" : x; };
+  const resumoTexto = (t) => { const x = textoDeHtml(t).replace(/\s+/g, " ").trim(); return x.length > 140 ? x.slice(0, 140) + "…" : x; };
 
   return resposta(pagina({
     titulo: "Visão geral", sessao,

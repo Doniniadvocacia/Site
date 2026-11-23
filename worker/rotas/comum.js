@@ -1,5 +1,5 @@
 // Utilidades compartilhadas pelas telas da etapa 2.
-import { html, seguro, h, dataBR } from "../html.js";
+import { html, seguro, h, dataBR, textoDeHtml } from "../html.js";
 import { iguais } from "../seguranca.js";
 import { hojeBR, somarDias } from "../calendario.js";
 
@@ -48,3 +48,10 @@ export function numeroBR(v) {
 
 export const rotuloProcesso = (p) => [p.pasta && `Pasta ${p.pasta}`, p.numero].filter(Boolean).join(" · ") || "—";
 export { dataBR };
+
+// Descrição padrão de um prazo criado a partir de uma intimação: identificação + teor em texto simples.
+export function descricaoDaIntimacao(pub) {
+  const origem = [pub.tipo || "Intimação", pub.tribunal, pub.data_disponibilizacao && `disponibilizada em ${dataBR(pub.data_disponibilizacao)}`].filter(Boolean).join(" · ");
+  const teor = textoDeHtml(pub.texto);
+  return `${origem}${pub.numero_processo ? `\nProcesso ${pub.numero_processo}` : ""}${teor ? `\n\n${teor}` : ""}`.slice(0, 20000);
+}

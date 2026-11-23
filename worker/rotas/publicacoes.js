@@ -2,7 +2,7 @@
 import { html, pagina, resposta, redirecionar, campoCsrf, textoDeHtml } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { opcoes, listasApoio, csrfOk, rotuloProcesso, dataBR } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, rotuloProcesso, dataBR, descricaoDaIntimacao } from "./comum.js";
 import { formularioPrazo, lerPrazo, gravarPrazo } from "./prazos.js";
 
 const SITUACAO = { pendente: "Pendente", com_prazo: "Prazo criado", sem_prazo: "Sem prazo", importada: "Importada do Wix" };
@@ -63,7 +63,7 @@ export async function publicacoes(req, env, sessao, id) {
         ${!pub.processo_id ? html`<p class="alerta-texto">O número do processo não foi encontrado no cadastro. Escolha o processo abaixo, se ele existir.</p>` : ""}
         ${formularioPrazo({
           sessao, apoio, calculo, acao: `/sistema/publicacoes/${String(pub.id)}`,
-          p: p || { processo_id: pub.processo_id, data_inicio: pub.data_publicacao, contagem: "uteis", antecedencia: 2, situacao: "aberto", titulo: "", tipo: "Manifestação" },
+          p: p || { processo_id: pub.processo_id, data_inicio: pub.data_publicacao, contagem: "uteis", antecedencia: 2, situacao: "aberto", titulo: "", tipo: "Manifestação", descricao: descricaoDaIntimacao(pub) },
           botaoSalvar: "Criar prazo",
           extraBotoes: pub.situacao === "pendente" ? html`<button type="submit" name="acao" value="sem_prazo" class="botao-secundario" formnovalidate>Não gera prazo (arquivar)</button>` : "",
         })}
@@ -84,6 +84,7 @@ export async function publicacoes(req, env, sessao, id) {
   const { p, calculo } = await lerPrazo(env, f);
   if (f.get("acao") === "calcular") return tela(p, calculo ? { calculo } : { erro: "Para calcular, informe a data da publicação e o número de dias." });
   if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: "Informe o título e o prazo (dias) ou a data fatal." });
+  if (!p.descricao) p.descricao = descricaoDaIntimacao(pub);
   const prazoId = await gravarPrazo(env, p, { usuarioId: sessao.usuario_id, publicacaoId: pub.id });
   await env.DB.prepare("UPDATE publicacoes SET situacao = 'com_prazo', triada_por = ?, triada_em = ?, processo_id = COALESCE(?, processo_id) WHERE id = ?")
     .bind(sessao.usuario_id, t, p.processo_id, pub.id).run();
