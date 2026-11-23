@@ -62,13 +62,21 @@ export function validarSenha(senha) {
 // ---------- Criptografia de campos: AES-256-GCM ----------
 // A chave fica no segredo DATA_KEY (32 bytes em base64), nunca no código nem no banco.
 const chaves = new Map();
+// Aceita a chave com espaços ou aspas em volta (comum ao copiar do console do navegador).
+export function normalizarChave(v) {
+  return String(v || "").trim().replace(/^['"`]+|['"`]+$/g, "").trim();
+}
+export function chaveValida(v) {
+  try { return deB64(normalizarChave(v)).length === 32; } catch { return false; }
+}
 async function chaveDados(env) {
-  if (!env.DATA_KEY) throw new Error("Segredo DATA_KEY não configurado.");
-  if (chaves.has(env.DATA_KEY)) return chaves.get(env.DATA_KEY);
-  const bruta = deB64(env.DATA_KEY);
+  const texto = normalizarChave(env.DATA_KEY);
+  if (!texto) throw new Error("Segredo DATA_KEY não configurado.");
+  if (chaves.has(texto)) return chaves.get(texto);
+  const bruta = deB64(texto);
   if (bruta.length !== 32) throw new Error("DATA_KEY deve ter 32 bytes em base64.");
   const chave = await crypto.subtle.importKey("raw", bruta, "AES-GCM", false, ["encrypt", "decrypt"]);
-  chaves.set(env.DATA_KEY, chave);
+  chaves.set(texto, chave);
   return chave;
 }
 

@@ -2,6 +2,7 @@
 // tudo em /sistema passa por aqui, com autenticação obrigatória.
 import { html, pagina, resposta, redirecionar } from "./html.js";
 import { lerSessao } from "./sessao.js";
+import { chaveValida } from "./seguranca.js";
 import { configurar, entrar, doisFatores, sair, trocarSenha } from "./rotas/acesso.js";
 import { usuarios } from "./rotas/usuarios.js";
 import { painel, clientes, processos } from "./rotas/dados.js";
@@ -58,12 +59,14 @@ export default {
     if (pathname === "/sistema/status") {
       // Diagnóstico da configuração: mostra apenas se cada item existe, nunca o valor.
       let tabelas = false;
-      try { tabelas = !!(await env.DB?.prepare("SELECT 1 FROM usuarios LIMIT 1").all()); } catch {}
+      let usuarios = "?";
+      try { const r = await env.DB.prepare("SELECT COUNT(*) AS n, SUM(totp_ativo) AS a FROM usuarios").first(); tabelas = true; usuarios = `${r.n} (com 2FA ativo: ${r.a || 0})`; } catch {}
       const ok = (v) => (v ? "sim" : "NÃO");
       const linhas = [
         `Banco D1 ligado: ${ok(env.DB)}`,
         `Tabelas criadas: ${ok(tabelas)}`,
-        `DATA_KEY: ${ok(env.DATA_KEY)}`,
+        `Usuários cadastrados: ${usuarios}`,
+        `DATA_KEY: ${ok(env.DATA_KEY)}${env.DATA_KEY ? (chaveValida(env.DATA_KEY) ? " (formato válido)" : " (FORMATO INVÁLIDO: precisa ser 32 bytes em base64)") : ""}`,
         `SETUP_TOKEN: ${ok(env.SETUP_TOKEN)}`,
         `WIX_API_KEY: ${ok(env.WIX_API_KEY)}`,
         `Variáveis recebidas pelo sistema: ${Object.keys(env).filter((k) => /^[A-Z_]+$/.test(k)).sort().join(", ") || "nenhuma"}`,
