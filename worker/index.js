@@ -55,6 +55,21 @@ async function sistema(req, env) {
 export default {
   async fetch(req, env) {
     const { pathname } = new URL(req.url);
+    if (pathname === "/sistema/status") {
+      // Diagnóstico da configuração: mostra apenas se cada item existe, nunca o valor.
+      let tabelas = false;
+      try { tabelas = !!(await env.DB?.prepare("SELECT 1 FROM usuarios LIMIT 1").all()); } catch {}
+      const ok = (v) => (v ? "sim" : "NÃO");
+      const linhas = [
+        `Banco D1 ligado: ${ok(env.DB)}`,
+        `Tabelas criadas: ${ok(tabelas)}`,
+        `DATA_KEY: ${ok(env.DATA_KEY)}`,
+        `SETUP_TOKEN: ${ok(env.SETUP_TOKEN)}`,
+        `WIX_API_KEY: ${ok(env.WIX_API_KEY)}`,
+        `Variáveis recebidas pelo sistema: ${Object.keys(env).filter((k) => /^[A-Z_]+$/.test(k)).sort().join(", ") || "nenhuma"}`,
+      ];
+      return new Response(linhas.join("\n") + "\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+    }
     if (pathname === "/sistema" || pathname.startsWith("/sistema/")) {
       if (!env.DB) return new Response("Banco de dados não configurado.", { status: 503 });
       try {
