@@ -23,9 +23,9 @@ function corDoTipo(tipo) {
 
 async function itensDoPeriodo(env, inicio, fim) {
   const [{ results: prz }, { results: ags }, { results: locais }] = await Promise.all([
-    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, p.prazo_fatal AS data, p.hora, p.situacao, pr.pasta FROM prazos p
-      LEFT JOIN processos pr ON pr.id = p.processo_id WHERE p.prazo_fatal BETWEEN ? AND ? AND p.situacao != 'cancelado'
-      ORDER BY p.prazo_fatal, p.situacao, p.hora`).bind(inicio, fim).all(),
+    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, COALESCE(p.prazo_interno, p.prazo_fatal) AS data, p.prazo_fatal, p.hora, p.situacao, pr.pasta FROM prazos p
+      LEFT JOIN processos pr ON pr.id = p.processo_id WHERE COALESCE(p.prazo_interno, p.prazo_fatal) BETWEEN ? AND ? AND p.situacao != 'cancelado'
+      ORDER BY 4, p.situacao, p.hora`).bind(inicio, fim).all(),
     env.DB.prepare(`SELECT a.id, a.titulo, a.tipo, a.data, a.hora, a.situacao, pr.pasta FROM agenda a
       LEFT JOIN processos pr ON pr.id = a.processo_id WHERE a.data BETWEEN ? AND ? AND a.situacao != 'cancelado' ORDER BY a.data, a.hora`).bind(inicio, fim).all(),
     env.DB.prepare("SELECT data, descricao FROM feriados WHERE data BETWEEN ? AND ?").bind(inicio, fim).all(),
@@ -33,7 +33,7 @@ async function itensDoPeriodo(env, inicio, fim) {
   const porDia = new Map();
   const add = (d, it) => { if (!porDia.has(d)) porDia.set(d, []); porDia.get(d).push(it); };
   for (const a of ags) add(a.data, { ...a, href: `/sistema/agenda/${a.id}`, cor: "cor-compromisso", feito: a.situacao === "realizado", compromisso: true });
-  for (const p of prz) add(p.data, { ...p, href: `/sistema/prazos/${p.id}`, cor: corDoTipo(p.tipo), feito: p.situacao === "cumprido" });
+  for (const p of prz) add(p.data, { ...p, href: `/sistema/prazos/${p.id}`, cor: corDoTipo(p.tipo), feito: p.situacao === "cumprido", prazo: true });
   const feriados = new Map(locais.map((f) => [f.data, f.descricao]));
   for (const ano of new Set([inicio.slice(0, 4), fim.slice(0, 4)])) for (const [d, n] of feriadosNacionais(Number(ano))) if (!feriados.has(d)) feriados.set(d, n);
   return { porDia, feriados, tipos: [...new Set(prz.map((p) => p.tipo).filter(Boolean))].sort() };
@@ -41,7 +41,13 @@ async function itensDoPeriodo(env, inicio, fim) {
 
 const etiqueta = (it) => {
   const rotulo = `${it.hora ? it.hora + " " : ""}${it.pasta ? it.pasta + " - " : ""}${it.titulo}`;
-  return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}" href="${it.href}" title="${rotulo}${it.feito ? " (cumprido)" : ""}">${rotulo}</a>`;
+  if (!it.prazo) return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}" href="${it.href}" title="${rotulo}">${rotulo}</a>`;
+  const fatal = it.prazo_fatal ? it.prazo_fatal.split("-").reverse().join("/") : "";
+  const noFatal = it.data === it.prazo_fatal;
+  const movel = !it.feito && !!it.prazo_fatal;
+  return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}" href="${it.href}"
+    title="${rotulo} · Prazo fatal: ${fatal}${it.feito ? " (cumprido)" : movel ? " · arraste para reprogramar" : ""}"
+    ${movel ? seguro(`draggable="true" data-prazo="${it.id}" data-fatal="${it.prazo_fatal}"`) : ""}>${rotulo}</a>`;
 };
 
 async function calendarioMensal(req, env, sessao) {
@@ -66,7 +72,7 @@ async function calendarioMensal(req, env, sessao) {
     const itens = porDia.get(d) || [];
     const feriado = feriados.get(d);
     const classes = ["dia", d.slice(0, 7) !== mes ? "fora" : "", dow === 0 || dow === 6 || feriado ? "nao-util" : "", d === hoje ? "hoje" : ""].filter(Boolean).join(" ");
-    celulas.push(html`<div class="${classes}">
+    celulas.push(html`<div class="${classes}" data-data="${d}">
       <div class="dia-topo">${feriado ? html`<span class="feriado-nome">${feriado}</span>` : ""}<a class="dia-num" href="/sistema/agenda/dia/${d}">${String(Number(d.slice(8)))}</a></div>
       <div class="dia-itens">${itens.slice(0, MAX_POR_DIA).map(etiqueta)}
         ${itens.length > MAX_POR_DIA ? html`<a class="ver-mais" href="/sistema/agenda/dia/${d}">ver mais ${String(itens.length - MAX_POR_DIA)}...</a>` : ""}</div>
@@ -83,7 +89,9 @@ async function calendarioMensal(req, env, sessao) {
         <a href="/sistema/agenda?mes=${mesSeg}" aria-label="Próximo mês">›</a>
         ${mes !== hoje.slice(0, 7) ? html`<a class="cal-hoje" href="/sistema/agenda">Hoje</a>` : ""}
       </div>
-      <div class="cal-rolagem"><div class="calendario">
+      <p class="dica">Arraste um prazo para reprogramar a data de trabalho (prazo interno). O prazo fatal não muda e a etiqueta não pode ir para depois dele. Etiquetas com borda branca estão no próprio dia do prazo fatal.</p>
+      <div class="aviso-flutuante" id="aviso-agenda" role="status" hidden></div>
+      <div class="cal-rolagem"><div class="calendario" data-csrf="${sessao.csrf}">
         ${SEMANA.map((s) => html`<div class="cal-semana">${s}</div>`)}
         ${celulas}
       </div></div>
@@ -91,7 +99,8 @@ async function calendarioMensal(req, env, sessao) {
         <span><i class="cor-compromisso"></i>Compromisso</span>
         ${tipos.map((t) => html`<span><i class="${corDoTipo(t)}"></i>${t}</span>`)}
         <span><i class="feito-amostra"></i>Cumprido</span>
-      </div>`,
+      </div>
+      <script src="/assets/js/agenda.js" defer></script>`,
   }));
 }
 

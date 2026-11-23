@@ -116,6 +116,24 @@ export async function prazos(req, env, sessao, id) {
     }));
   }
 
+  // ---------- Mover data de trabalho (arrastar no calendário) ----------
+  if (id && id.endsWith("/mover") && req.method === "POST") {
+    const json = (corpo, status = 200) => new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    const { f, ok } = await csrfOk(req, sessao);
+    if (!ok) return json({ ok: false, mensagem: "Sessão expirada. Recarregue a página." }, 403);
+    const pid = Number(id.split("/")[0]);
+    const nova = dataValida(txt(f, "data"));
+    const pz = await env.DB.prepare("SELECT id, titulo, prazo_fatal, prazo_interno, situacao FROM prazos WHERE id = ?").bind(pid).first();
+    if (!pz || !nova) return json({ ok: false, mensagem: "Prazo ou data inválidos." }, 400);
+    if (pz.situacao !== "aberto") return json({ ok: false, mensagem: "Só prazos abertos podem ser reprogramados." }, 409);
+    if (!pz.prazo_fatal || nova > pz.prazo_fatal) {
+      return json({ ok: false, mensagem: `Não é possível passar do prazo fatal (${pz.prazo_fatal.split("-").reverse().join("/")}).` }, 409);
+    }
+    await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, atualizado_em = ? WHERE id = ?").bind(nova, agora(), pid).run();
+    await auditar(env, req, sessao.usuario_id, "prazo_reprogramado", `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}`);
+    return json({ ok: true, mensagem: `"${pz.titulo}" reprogramado para ${nova.split("-").reverse().join("/")}.`, noFatal: nova === pz.prazo_fatal });
+  }
+
   // ---------- Cumprir (ação rápida da lista) ----------
   if (id && id.endsWith("/cumprir") && req.method === "POST") {
     const { ok } = await csrfOk(req, sessao);

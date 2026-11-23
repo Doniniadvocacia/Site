@@ -2,6 +2,7 @@ export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/assets");
   eleventyConfig.addPassthroughCopy("src/_redirects");
   eleventyConfig.addPassthroughCopy("src/robots.txt");
+  eleventyConfig.addPassthroughCopy("src/favicon.ico");
 
   eleventyConfig.addCollection("artigos", (api) =>
     api.getFilteredByGlob("src/artigos/*.md").sort((a, b) => b.date - a.date)

@@ -79,7 +79,7 @@ async function sistema(req, env) {
   let m;
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
-  if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/cumprir)?))?$/))) return prazos(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover))?))?$/))) return prazos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/agenda(?:\/(novo|\d+|dia\/\d{4}-\d{2}-\d{2}))?$/))) return agenda(req, env, sessao, m[1]);
 

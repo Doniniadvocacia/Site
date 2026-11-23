@@ -21,7 +21,7 @@ export function html(partes, ...valores) {
 const CABECALHOS = {
   "Content-Type": "text/html; charset=utf-8",
   "Cache-Control": "no-store",
-  "Content-Security-Policy": "default-src 'none'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
@@ -74,6 +74,8 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
   <meta name="robots" content="noindex, nofollow">
   <title>${titulo} · Diligo</title>
   <link rel="stylesheet" href="/assets/css/sistema.css">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/assets/img/icone-180.png">
 </head>
 <body class="${sessao ? "logado" : "publico"}">
   <header class="topo-sistema">
