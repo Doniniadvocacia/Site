@@ -39,7 +39,7 @@ export async function configurar(req, env) {
   if (await haUsuarios(env)) return redirecionar("/sistema/entrar");
   if (req.method === "GET") return resposta(telaConfigurar());
   const f = await req.formData();
-  if (!env.SETUP_TOKEN || !iguais(String(f.get("token") || ""), env.SETUP_TOKEN)) {
+  if (!env.SETUP_TOKEN || !iguais(String(f.get("token") || "").trim(), String(env.SETUP_TOKEN).trim())) {
     await auditar(env, req, null, "configuracao_negada");
     return resposta(telaConfigurar("Código de configuração inválido."), 403);
   }
