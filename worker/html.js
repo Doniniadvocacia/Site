@@ -47,37 +47,28 @@ export function redirecionar(destino, extras = {}) {
   return new Response(null, { status: 303, headers });
 }
 
-// Página com cabeçalho do Diligo (usuário autenticado) ou só a marca (login, 2FA).
-// Os ícones são importados de forma tardia para evitar dependência circular.
-import { icone } from "./icones.js";
-
+// Página com menu (usuário autenticado) ou sem menu (login, 2FA).
 export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null }) {
-  const nav = (href, rotulo, ic, extra = "") => html`<a href="${href}" class="nav-icone" title="${rotulo}" aria-label="${rotulo}">${ic}${extra}</a>`;
   const pend = sessao?.pendentes || 0;
-  const cabecalho = sessao
-    ? html`<header class="cabecalho">
-        <a class="marca-diligo" href="/sistema/">Diligo<span>Gestão Jurídica</span></a>
-        <form class="busca-topo" method="get" action="/sistema/busca" role="search">
+  const menu = sessao
+    ? html`<nav class="menu">
+        <a href="/sistema/">Painel</a>
+        <a href="/sistema/clientes">Clientes</a>
+        <a href="/sistema/processos">Processos</a>
+        <a href="/sistema/prazos">Prazos</a>
+        <a href="/sistema/publicacoes">Intimações${pend ? html` <span class="selo-menu">${String(pend)}</span>` : ""}</a>
+        <a href="/sistema/agenda">Agenda</a>
+        ${sessao.perfil === "admin" ? html`<a href="/sistema/configuracoes">Configurações</a>` : ""}
+        <form class="busca-menu" method="get" action="/sistema/busca" role="search">
           <input name="q" placeholder="Buscar processo, parte, pasta..." aria-label="Buscar processo, parte ou pasta">
         </form>
-        <nav class="icones-topo" aria-label="Menu">
-          ${nav("/sistema/", "Visão geral", icone.casa())}
-          ${nav("/sistema/processos", "Processos", icone.documento())}
-          ${nav("/sistema/clientes", "Clientes", icone.pessoas())}
-          ${nav("/sistema/prazos", "Prazos", icone.relogio())}
-          ${nav("/sistema/agenda", "Agenda", icone.calendario())}
-          ${nav("/sistema/publicacoes", "Intimações", icone.envelope(), html`<span class="selo-contador${pend ? "" : " zerado"}">${String(pend)}</span>`)}
-          ${sessao.perfil === "admin" ? nav("/sistema/configuracoes", "Configurações", icone.engrenagem()) : ""}
-          <span class="usuario-topo">
-            <a href="/sistema/conta/senha" title="Minha senha">${sessao.nome.split(" ")[0]}</a>
-            <form method="post" action="/sistema/sair" class="form-sair">
-              <input type="hidden" name="csrf" value="${sessao.csrf}">
-              <button type="submit" title="Sair" aria-label="Sair">${icone.sair(22)}</button>
-            </form>
-          </span>
-        </nav>
-      </header>`
-    : html`<header class="cabecalho cabecalho-simples"><span class="marca-diligo">Diligo<span>Gestão Jurídica</span></span></header>`;
+        <a href="/sistema/conta/senha" class="menu-usuario">${sessao.nome}</a>
+        <form method="post" action="/sistema/sair" class="form-sair">
+          <input type="hidden" name="csrf" value="${sessao.csrf}">
+          <button type="submit">Sair</button>
+        </form>
+      </nav>`
+    : "";
   return html`<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -89,14 +80,15 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
   <link rel="icon" href="/favicon.ico" sizes="any">
 </head>
 <body class="${sessao ? "logado" : "publico"}">
-  <div class="moldura">
-    ${cabecalho}
-    <main class="conteudo">
-      ${aviso ? html`<p class="aviso">${aviso}</p>` : ""}
-      ${erro ? html`<p class="erro" role="alert">${erro}</p>` : ""}
-      ${corpo}
-    </main>
-  </div>
+  <header class="topo-sistema">
+    <a class="marca-sistema" href="/sistema/">Diligo<span>Eduardo Donini Advocacia</span></a>
+    ${menu}
+  </header>
+  <main class="conteudo">
+    ${aviso ? html`<p class="aviso">${aviso}</p>` : ""}
+    ${erro ? html`<p class="erro" role="alert">${erro}</p>` : ""}
+    ${corpo}
+  </main>
 </body>
 </html>`;
 }
