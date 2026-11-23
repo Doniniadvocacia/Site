@@ -5,7 +5,8 @@
   "scripts": {
     "build": "eleventy",
     "dev": "eleventy --serve",
-    "exportar-wix": "node scripts/exportar-wix.mjs"
+    "exportar-wix": "node scripts/exportar-wix.mjs",
+    "implantar": "node scripts/implantar.mjs"
   },
   "devDependencies": {
     "@11ty/eleventy": "^3.0.0",
