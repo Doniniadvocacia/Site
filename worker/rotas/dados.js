@@ -142,8 +142,7 @@ function criarFiltro(q) {
   };
 }
 
-export async function busca(req, env, sessao) {
-  const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
+async function buscarTudo(env, q, limite = { procs: 100, clis: 100, przs: 100, pubs: 50 }) {
   let procs = [], clis = [], przs = [], pubs = [];
   if (q) {
     const bate = criarFiltro(q);
@@ -155,11 +154,32 @@ export async function busca(req, env, sessao) {
         FROM prazos z LEFT JOIN processos pr ON pr.id = z.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id ORDER BY z.prazo_fatal DESC`).all(),
       env.DB.prepare(`SELECT id, data_disponibilizacao, tribunal, tipo, numero_processo, texto, situacao FROM publicacoes ORDER BY data_disponibilizacao DESC LIMIT 2000`).all(),
     ]);
-    procs = a.results.filter((p) => bate(p.pasta, p.numero, p.parte_contraria, p.cliente, p.tipo_acao, p.comarca, p.situacao, p.advogado_responsavel)).slice(0, 100);
-    clis = b.results.filter((c) => bate(c.nome, c.cidade, c.estado, c.profissao)).slice(0, 100);
-    przs = c.results.filter((z) => bate(z.titulo, z.tipo, z.descricao, z.responsavel, z.pasta, z.numero, z.cliente)).slice(0, 100);
-    pubs = d.results.filter((u) => bate(u.numero_processo, u.tribunal, u.tipo, u.texto)).slice(0, 50);
+    procs = a.results.filter((p) => bate(p.pasta, p.numero, p.parte_contraria, p.cliente, p.tipo_acao, p.comarca, p.situacao, p.advogado_responsavel)).slice(0, limite.procs);
+    clis = b.results.filter((c) => bate(c.nome, c.cidade, c.estado, c.profissao)).slice(0, limite.clis);
+    przs = c.results.filter((z) => bate(z.titulo, z.tipo, z.descricao, z.responsavel, z.pasta, z.numero, z.cliente)).slice(0, limite.przs);
+    pubs = d.results.filter((u) => bate(u.numero_processo, u.tribunal, u.tipo, u.texto)).slice(0, limite.pubs);
   }
+  return { procs, clis, przs, pubs };
+}
+
+// Sugestões para a barra de busca (JSON), conforme o usuário digita.
+export async function buscaSugestoes(req, env) {
+  const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
+  const json = (corpo) => new Response(JSON.stringify(corpo), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+  if (q.length < 2) return json({ itens: [] });
+  const { procs, clis, przs, pubs } = await buscarTudo(env, q, { procs: 6, clis: 5, przs: 5, pubs: 3 });
+  const itens = [
+    ...clis.map((c) => ({ grupo: "Clientes", titulo: c.nome, detalhe: [c.cidade, c.estado].filter(Boolean).join(" / "), url: `/sistema/clientes/${c.id}` })),
+    ...procs.map((p) => ({ grupo: "Processos", titulo: `${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}`, detalhe: [p.cliente, p.parte_contraria].filter(Boolean).join(" × "), url: `/sistema/processos/${p.id}` })),
+    ...przs.map((z) => ({ grupo: "Prazos", titulo: z.titulo, detalhe: [z.prazo_fatal && dataBR(z.prazo_fatal), z.pasta && `Pasta ${z.pasta}`, z.situacao !== "aberto" ? z.situacao : ""].filter(Boolean).join(" · "), url: `/sistema/prazos/${z.id}` })),
+    ...pubs.map((u) => ({ grupo: "Intimações", titulo: `${dataBR(u.data_disponibilizacao)} · ${u.tribunal || ""}`, detalhe: u.numero_processo || "", url: `/sistema/publicacoes/${u.id}` })),
+  ];
+  return json({ itens });
+}
+
+export async function busca(req, env, sessao) {
+  const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
+  const { procs, clis, przs, pubs } = await buscarTudo(env, q);
   const trecho = (t) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > 120 ? x.slice(0, 120) + "…" : x; };
   const total = procs.length + clis.length + przs.length + pubs.length;
   return resposta(pagina({

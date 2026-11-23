@@ -5,7 +5,7 @@ import { lerSessao } from "./sessao.js";
 import { chaveValida } from "./seguranca.js";
 import { configurar, entrar, doisFatores, sair, trocarSenha } from "./rotas/acesso.js";
 import { usuarios } from "./rotas/usuarios.js";
-import { painel, clientes, processos, busca } from "./rotas/dados.js";
+import { painel, clientes, processos, busca, buscaSugestoes } from "./rotas/dados.js";
 import { importar } from "./rotas/importar.js";
 import { prazos } from "./rotas/prazos.js";
 import { publicacoes } from "./rotas/publicacoes.js";
@@ -78,6 +78,7 @@ async function sistema(req, env) {
 
   if (caminho === "/sistema") return painel(req, env, sessao);
   if (caminho === "/sistema/busca") return busca(req, env, sessao);
+  if (caminho === "/sistema/busca/sugestoes") return buscaSugestoes(req, env);
   let m;
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);

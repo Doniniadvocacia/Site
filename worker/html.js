@@ -60,8 +60,10 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
         <a href="/sistema/agenda">Agenda</a>
         ${sessao.perfil === "admin" ? html`<a href="/sistema/configuracoes">Configurações</a>` : ""}
         <form class="busca-menu" method="get" action="/sistema/busca" role="search">
-          <input name="q" placeholder="Buscar processo, parte, pasta..." aria-label="Buscar processo, parte ou pasta" required>
+          <input name="q" placeholder="Buscar processo, parte, pasta..." aria-label="Buscar processo, parte ou pasta" required
+            autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugestoes-busca">
           <button type="submit" aria-label="Buscar" title="Buscar">⌕</button>
+          <ul id="sugestoes-busca" class="sugestoes" role="listbox" aria-label="Sugestões de busca" hidden></ul>
         </form>
         <a href="/sistema/conta/senha" class="menu-usuario">${sessao.nome}</a>
         <form method="post" action="/sistema/sair" class="form-sair">
@@ -90,6 +92,7 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
     ${erro ? html`<p class="erro" role="alert">${erro}</p>` : ""}
     ${corpo}
   </main>
+  ${sessao ? html`<script src="/assets/js/busca.js" defer></script>` : ""}
 </body>
 </html>`;
 }
