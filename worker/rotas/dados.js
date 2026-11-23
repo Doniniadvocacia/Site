@@ -4,6 +4,8 @@ import { decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR, somarDias } from "../calendario.js";
 import { urgencia, rotuloProcesso } from "./comum.js";
+import { icone } from "../icones.js";
+import { campoCsrf } from "../html.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
@@ -14,39 +16,135 @@ const secao = (titulo, campos, extra = "") => {
   return html`<section class="cartao">${titulo ? html`<h2>${titulo}</h2>` : ""}${cheios.length ? html`<dl class="ficha">${cheios}</dl>` : ""}${extra}</section>`;
 };
 
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const INATIVO = "(LOWER(COALESCE(situacao, '')) LIKE '%arquiv%' OR LOWER(COALESCE(situacao, '')) LIKE '%encerr%' OR LOWER(COALESCE(situacao, '')) LIKE '%baixad%' OR LOWER(COALESCE(situacao, '')) LIKE '%finaliz%')";
+const ORDEM_FASES = ["Aguarda Citação", "Conhecimento", "Instrução", "Sentencial", "Recursal", "Cumprimento de Sentença", "Trânsito em Julgado"];
+const ORDEM_RESULTADOS = ["Procedente", "Parcialmente Procedente", "Improcedente", "Extinto s/ Resolução de Mérito"];
+
+function ordenar(lista, ordem) {
+  const pos = (v) => { const i = ordem.findIndex((o) => o.toLowerCase() === String(v).toLowerCase()); return i < 0 ? 99 : i; };
+  return [...lista].sort((a, b) => pos(a.rotulo) - pos(b.rotulo) || b.n - a.n);
+}
+const barras = (titulo, legenda, itens) => {
+  const max = Math.max(1, ...itens.map((i) => i.n));
+  return html`<section class="painel-cartao distribuicao">
+    <div class="painel-cartao-topo"><h2>${titulo}</h2><span>${legenda}</span></div>
+    ${itens.length ? html`<ul>${itens.map((i) => html`<li><span class="rotulo-barra">${i.rotulo}</span>
+      <span class="trilho"><span class="barra b${String(Math.round((i.n / max) * 20) * 5)}"></span></span><strong>${String(i.n)}</strong></li>`)}</ul>`
+      : html`<p class="vazio">Sem dados.</p>`}
+  </section>`;
+};
+
 export async function painel(req, env, sessao) {
-  const hoje = hojeBR(), semana = somarDias(hoje, 7);
-  const [vencidos, naSemana, pendentes, ultimaCaptura] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) AS n FROM prazos WHERE situacao = 'aberto' AND prazo_fatal < ?").bind(hoje).first(),
-    env.DB.prepare("SELECT COUNT(*) AS n FROM prazos WHERE situacao = 'aberto' AND prazo_fatal BETWEEN ? AND ?").bind(hoje, semana).first(),
-    env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first(),
-    env.DB.prepare("SELECT criado_em, erro FROM capturas ORDER BY id DESC LIMIT 1").first(),
+  const hoje = hojeBR();
+  const [proc, prz, ativosFase, resultados, audiencias, { results: proximos }] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN ${INATIVO} THEN 0 ELSE 1 END) AS ativos FROM processos`).first(),
+    env.DB.prepare(`SELECT SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) < ?1 THEN 1 ELSE 0 END) AS atrasados,
+        SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) = ?1 THEN 1 ELSE 0 END) AS hoje,
+        SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) > ?1 THEN 1 ELSE 0 END) AS futuros FROM prazos WHERE situacao = 'aberto'`).bind(hoje).first(),
+    env.DB.prepare(`SELECT COALESCE(NULLIF(TRIM(fase), ''), 'Sem fase') AS rotulo, COUNT(*) AS n FROM processos WHERE NOT ${INATIVO} GROUP BY 1`).all(),
+    env.DB.prepare(`SELECT COALESCE(NULLIF(TRIM(COALESCE(NULLIF(resultado_atual, ''), resultado)), ''), '') AS rotulo, COUNT(*) AS n FROM processos GROUP BY 1`).all(),
+    env.DB.prepare(`SELECT titulo, data, hora FROM (
+        SELECT titulo, data, hora FROM agenda WHERE situacao = 'agendado' AND data >= ?1 AND LOWER(COALESCE(tipo, '') || titulo) LIKE '%audi%'
+        UNION ALL SELECT titulo, data_audiencia AS data, hora_audiencia AS hora FROM prazos WHERE situacao = 'aberto' AND data_audiencia >= ?1)
+      ORDER BY data, hora LIMIT 3`).bind(hoje).all(),
+    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, p.descricao, p.prazo_fatal, COALESCE(p.prazo_interno, p.prazo_fatal) AS interno,
+        pr.id AS processo_id, pr.pasta, pr.numero, c.nome AS cliente
+      FROM prazos p LEFT JOIN processos pr ON pr.id = p.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id
+      WHERE p.situacao = 'aberto' ORDER BY interno, p.prazo_fatal LIMIT 25`).all(),
   ]);
-  const [{ results: proximos }, { results: compromissos }] = await Promise.all([
-    env.DB.prepare(`SELECT p.id, p.titulo, p.prazo_fatal, p.situacao, p.responsavel, pr.pasta, pr.numero, p.processo_id FROM prazos p
-      LEFT JOIN processos pr ON pr.id = p.processo_id WHERE p.situacao = 'aberto' AND p.prazo_fatal <= ? ORDER BY p.prazo_fatal LIMIT 15`).bind(semana).all(),
-    env.DB.prepare("SELECT id, titulo, data, hora, local FROM agenda WHERE situacao = 'agendado' AND data BETWEEN ? AND ? ORDER BY data, hora LIMIT 10").bind(hoje, somarDias(hoje, 14)).all(),
-  ]);
-  const ind = (href, n, rotulo, alerta) => html`<a class="indicador${alerta && n > 0 ? " indicador-alerta" : ""}" href="${href}"><strong>${String(n)}</strong><span>${rotulo}</span></a>`;
+  const total = proc.total || 0, ativos = proc.ativos || 0;
+  const pct = total ? Math.round((ativos / total) * 100) : 0;
+  const [, mes, dia] = hoje.split("-");
+  const fases = ordenar(ativosFase.results, ORDEM_FASES);
+  const res = ordenar(resultados.results.filter((r) => r.rotulo), ORDEM_RESULTADOS);
+  const status = (d) => (d < hoje ? html`<span class="atraso">PRAZO EM ATRASO</span>` : d === hoje ? html`<span class="atraso">HOJE</span>` : html`<span>${dataBR(d)}</span>`);
+  const resumoTexto = (t) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > 140 ? x.slice(0, 140) + "…" : x; };
+
   return resposta(pagina({
-    titulo: "Painel", sessao,
+    titulo: "Visão geral", sessao,
     corpo: html`
-      <h1>Olá, ${sessao.nome.split(" ")[0]}</h1>
-      <div class="indicadores">
-        ${ind("/sistema/prazos?visao=vencidos", vencidos.n, "prazos vencidos", true)}
-        ${ind("/sistema/prazos?visao=semana", naSemana.n, "prazos em 7 dias")}
-        ${ind("/sistema/publicacoes", pendentes.n, "intimações p/ triagem", true)}
+      <div class="titulo-painel">
+        <div><h1>Visão Geral</h1><p>Acompanhe a visão geral dos processos e clientes aqui!</p></div>
+        <div class="botoes-pilula"><a href="/sistema/prazos/novo">Novo Prazo</a><a href="/sistema/agenda/novo">Novo Compromisso</a></div>
       </div>
-      <div class="duas-colunas">
-        <section class="cartao"><h2>Prazos até ${dataBR(semana)}</h2>
-          ${proximos.length ? html`<ul class="lista-simples">${proximos.map((p) => html`<li><span><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a><br><small>${rotuloProcesso(p)}${p.responsavel ? ` · ${p.responsavel}` : ""}</small></span>
-            <span class="nowrap">${dataBR(p.prazo_fatal)} ${urgencia(p.prazo_fatal, p.situacao)}</span></li>`)}</ul>` : html`<p>Nenhum prazo nos próximos 7 dias.</p>`}
-        </section>
-        <section class="cartao"><h2>Agenda (14 dias)</h2>
-          ${compromissos.length ? html`<ul class="lista-simples">${compromissos.map((a) => html`<li><span><a href="/sistema/agenda/${String(a.id)}">${a.titulo}</a>${a.local ? html`<br><small>${a.local}</small>` : ""}</span><span class="nowrap">${dataBR(a.data)} ${a.hora || ""}</span></li>`)}</ul>` : html`<p>Nenhum compromisso agendado.</p>`}
-        </section>
+
+      <div class="destaques">
+        <div class="cartao-data"><span class="cartao-data-mes">${MESES[Number(mes) - 1]}</span><span class="cartao-data-dia">${String(Number(dia))}</span></div>
+        <a class="destaque verde" href="/sistema/processos">
+          <span class="marca-agua">${icone.balanca(130)}</span>
+          <h2>Processos</h2>
+          <div class="destaque-numero"><strong>${String(ativos)}</strong><span>Ativos</span></div>
+          <div class="destaque-rodape"><span>Percentual de Ativos</span><span>${String(pct)}%</span></div>
+        </a>
+        <a class="destaque azul" href="/sistema/prazos">
+          <span class="marca-agua">${icone.agenda(130)}</span>
+          <h2>Prazos</h2>
+          <dl class="destaque-lista">
+            <dt>${String(prz.atrasados || 0)}</dt><dd>Atrasados</dd>
+            <dt>${String(prz.hoje || 0)}</dt><dd>Hoje</dd>
+            <dt>${String(prz.futuros || 0)}</dt><dd>Futuros</dd>
+          </dl>
+        </a>
+        <a class="destaque vinho" href="/sistema/agenda">
+          <span class="marca-agua">${icone.alerta(130)}</span>
+          <h2>Proximas Audiências</h2>
+          ${audiencias.results.length ? html`<ul class="destaque-audiencias">${audiencias.results.map((a) => html`<li><strong>${dataBR(a.data)}${a.hora ? ` ${a.hora}` : ""}</strong> ${a.titulo}</li>`)}</ul>`
+            : html`<p class="destaque-vazio">Sem Audiências Agendadas</p>`}
+        </a>
       </div>
-      <p class="dica">${ultimaCaptura ? html`Última captura do DJEN em ${new Date(ultimaCaptura.criado_em * 1000).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}${ultimaCaptura.erro ? html` · <span class="alerta-texto">com erro</span>` : ""}.` : "A captura do DJEN ainda não rodou. Cadastre as OABs em Configurações."}</p>`,
+
+      <div class="distribuicoes">
+        ${barras("Distribuição por fase", "Processos Ativos", fases)}
+        ${barras("Distribuição por resultado", "Resultado da Ação", res)}
+      </div>
+
+      <details class="compromissos" open>
+        <summary>Proximos Compromissos</summary>
+        ${proximos.length ? proximos.map((p) => html`<article class="compromisso">
+          <div class="compromisso-acoes">
+            <a href="/sistema/prazos/${String(p.id)}" title="Editar prazo" aria-label="Editar prazo">${icone.lapis(26)}</a>
+          </div>
+          <div class="compromisso-dados">
+            <dl>
+              <div><dt>Pasta:</dt><dd>${p.pasta || "—"} ${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}" title="Abrir processo" class="icone-link">${icone.seta()}</a>` : ""}</dd></div>
+              <div><dt>Cliente:</dt><dd>${p.cliente || "—"}</dd></div>
+              <div><dt>Prazo:</dt><dd><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a></dd></div>
+            </dl>
+            <dl>
+              <div><dt>Número Processo:</dt><dd>${p.numero || "—"}</dd></div>
+              <div class="compromisso-descricao"><dt>${icone.folha(16)} Descrição:</dt><dd>${resumoTexto(p.descricao)}</dd></div>
+            </dl>
+            <dl class="compromisso-status">
+              <div><dt>Prazo Interno:</dt><dd>${status(p.interno)}</dd></div>
+              <div><dt>Prazo fatal:</dt><dd>${dataBR(p.prazo_fatal)} ${urgencia(p.prazo_fatal)}</dd></div>
+            </dl>
+          </div>
+          <form method="post" action="/sistema/prazos/${String(p.id)}/cumprir" class="compromisso-check">${campoCsrf(sessao)}
+            <button type="submit" title="Marcar como cumprido" aria-label="Marcar como cumprido"></button></form>
+        </article>`) : html`<p class="vazio">Nenhum prazo em aberto.</p>`}
+      </details>`,
+  }));
+}
+
+export async function busca(req, env, sessao) {
+  const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
+  const termo = `%${q}%`;
+  const [{ results: procs }, { results: clis }] = q ? await Promise.all([
+    env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.situacao, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
+      WHERE p.numero LIKE ?1 OR REPLACE(REPLACE(REPLACE(p.numero, '.', ''), '-', ''), ' ', '') LIKE ?2 OR p.pasta LIKE ?1 OR p.parte_contraria LIKE ?1 OR c.nome LIKE ?1
+      ORDER BY p.pasta LIMIT 50`).bind(termo, `%${q.replace(/\D/g, "") || q}%`).all(),
+    env.DB.prepare("SELECT id, nome, cidade, estado FROM clientes WHERE nome LIKE ? ORDER BY nome LIMIT 50").bind(termo).all(),
+  ]) : [{ results: [] }, { results: [] }];
+  return resposta(pagina({
+    titulo: "Busca", sessao,
+    corpo: html`<h1>Busca${q ? html`: “${q}”` : ""}</h1>
+      <section class="cartao"><h2>Processos (${String(procs.length)})</h2>
+        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><span><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a><br><small>${[p.cliente, p.parte_contraria].filter(Boolean).join(" × ")}</small></span><span>${p.situacao}</span></li>`)}</ul>` : html`<p>Nenhum processo encontrado.</p>`}
+      </section>
+      <section class="cartao"><h2>Clientes (${String(clis.length)})</h2>
+        ${clis.length ? html`<ul class="lista-simples">${clis.map((c) => html`<li><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a><span>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</span></li>`)}</ul>` : html`<p>Nenhum cliente encontrado.</p>`}
+      </section>`,
   }));
 }
 

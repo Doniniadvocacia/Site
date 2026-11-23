@@ -33,7 +33,7 @@ async function tela(env, sessao, { erro, aviso, senhaGerada } = {}) {
     titulo: "Usuários", sessao, erro, aviso,
     corpo: html`
       <h1>Usuários</h1>
-      ${senhaGerada ? html`<div class="destaque">
+      ${senhaGerada ? html`<div class="caixa-senha">
         <p><strong>Senha provisória:</strong> <code class="chave">${senhaGerada}</code></p>
         <p class="dica">Ela aparece só agora. Entregue à pessoa por um canal seguro; no primeiro acesso ela define a própria senha e cadastra o 2FA.</p>
       </div>` : ""}

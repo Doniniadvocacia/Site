@@ -5,7 +5,7 @@ import { lerSessao } from "./sessao.js";
 import { chaveValida } from "./seguranca.js";
 import { configurar, entrar, doisFatores, sair, trocarSenha } from "./rotas/acesso.js";
 import { usuarios } from "./rotas/usuarios.js";
-import { painel, clientes, processos } from "./rotas/dados.js";
+import { painel, clientes, processos, busca } from "./rotas/dados.js";
 import { importar } from "./rotas/importar.js";
 import { prazos } from "./rotas/prazos.js";
 import { publicacoes } from "./rotas/publicacoes.js";
@@ -74,8 +74,10 @@ async function sistema(req, env) {
   if (!EQUIPE.has(sessao.perfil)) return resposta(pagina({ titulo: "Acesso negado", corpo: html`<h1>Acesso negado</h1>` }), 403);
   if (caminho === "/sistema/conta/senha") return trocarSenha(req, env, sessao);
   if (sessao.trocar_senha) return redirecionar("/sistema/conta/senha");
+  sessao.pendentes = (await env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first())?.n || 0;
 
   if (caminho === "/sistema") return painel(req, env, sessao);
+  if (caminho === "/sistema/busca") return busca(req, env, sessao);
   let m;
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
