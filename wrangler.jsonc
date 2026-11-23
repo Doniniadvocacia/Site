@@ -1,12 +1,26 @@
 {
-  // Configuração do Cloudflare (Workers com arquivos estáticos).
-  // O site é gerado pelo Eleventy em ./_site e publicado como está.
+  // Configuração do Cloudflare: site estático (Eleventy, em ./_site) + sistema Diligo em /sistema.
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "site",
+  "main": "worker/index.js",
   "compatibility_date": "2026-11-16",
   "assets": {
     "directory": "./_site",
+    "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "html_handling": "auto-trailing-slash"
-  }
+    "html_handling": "auto-trailing-slash",
+    // Só /sistema passa pelo código; o resto do site continua servido direto como arquivos.
+    "run_worker_first": ["/sistema", "/sistema/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "diligo",
+      // Preencher com o ID do banco criado no painel do Cloudflare (Storage & Databases → D1).
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+  // Segredos (configurar no painel, nunca aqui): DATA_KEY, SETUP_TOKEN, WIX_API_KEY
 }

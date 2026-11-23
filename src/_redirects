@@ -3,15 +3,11 @@
 # URLs com acento aparecem também codificadas, que é como navegadores e o Google as pedem.
 
 /área-de-atuação                 /areas-de-atuacao/                   301
-/%C3%A1rea-de-atua%C3%A7%C3%A3o  /areas-de-atuacao/                   301
 /direito-civil                   /areas/direito-civil/                301
 /direito-empresarial             /areas/direito-empresarial/          301
 /direito-securitário             /areas/direito-securitario/          301
-/direito-securit%C3%A1rio        /areas/direito-securitario/          301
 /consultoria-jurídica            /areas-de-atuacao/#como-atuamos      301
-/consultoria-jur%C3%ADdica       /areas-de-atuacao/#como-atuamos      301
 /prevenção-de-litígios           /areas-de-atuacao/#como-atuamos      301
-/preven%C3%A7%C3%A3o-de-lit%C3%ADgios /areas-de-atuacao/#como-atuamos 301
 /acordos-e-extrajudicial         /areas-de-atuacao/#como-atuamos      301
 /contact-8                       /contato/                            301
 /blog                            /artigos/                            301
@@ -19,15 +15,6 @@
 /areas/contratos-empresariais/   /areas/direito-empresarial/          301
 
 # BEGIN ARTIGOS (gerado por scripts/exportar-wix.mjs)
-/post/tema-1-282-do-stj-os-limites-da-sub-roga%C3%A7%C3%A3o-da-seguradora-na-a%C3%A7%C3%A3o-regressiva /artigos/tema-1-282-do-stj-os-limites-da-sub-rogacao-da-seguradora-na-acao-regressiva/ 301
-/post/holding-familiar-stj-admite-s%C3%B3cio-relativamente-incapaz-mediante-autoriza%C3%A7%C3%A3o-judicial /artigos/holding-familiar-stj-admite-socio-relativamente-incapaz-mediante-autorizacao-judicial/ 301
-/post/a%C3%A7%C3%A3o-regressiva-de-seguradora-e-o-tema-1-282-do-stj-foro-competente-e-%C3%B4nus-da-prova-na-recupera%C3%A7%C3%A3o /artigos/acao-regressiva-de-seguradora-e-o-tema-1-282-do-stj-foro-competente-e-onus-da-prova-na-recuperacao/ 301
-/post/a-validade-da-assinatura-eletr%C3%B4nica-nos-contratos-empresariais-seguran%C3%A7a-jur%C3%ADdica-e-aplicabilidade /artigos/a-validade-da-assinatura-eletronica-nos-contratos-empresariais-seguranca-juridica-e-aplicabilidade/ 301
-/post/planejamento-sucess%C3%B3rio-no-direito-brasileiro-instrumento-jur%C3%ADdico-para-prote%C3%A7%C3%A3o-patrimonial-e-segu /artigos/planejamento-sucessorio-no-direito-brasileiro-instrumento-juridico-para-protecao-patrimonial-e-segu/ 301
-/post/recupera%C3%A7%C3%A3o-judicial-no-brasil-instrumento-de-preserva%C3%A7%C3%A3o-da-empresa-e-supera%C3%A7%C3%A3o-de-crises /artigos/recuperacao-judicial-no-brasil-instrumento-de-preservacao-da-empresa-e-superacao-de-crises/ 301
-/post/tempo-perdido-dano-reconhecido-a-evolu%C3%A7%C3%A3o-da-responsabilidade-no-direito-do-consumidor /artigos/tempo-perdido-dano-reconhecido-a-evolucao-da-responsabilidade-no-direito-do-consumidor/ 301
-/post/direitos-do-consumidor-prote%C3%A7%C3%B5es-legais-essenciais /artigos/direitos-do-consumidor-protecoes-legais-essenciais/ 301
-/post/como-enfrentar-processos-judiciais-com-efic%C3%A1cia /artigos/como-enfrentar-processos-judiciais-com-eficacia/ 301
 /post/advocacia-preventiva-evitando-conflitos-legais /artigos/advocacia-preventiva-evitando-conflitos-legais/ 301
 # END ARTIGOS
 
