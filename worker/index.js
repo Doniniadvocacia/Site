@@ -13,7 +13,7 @@ import { agenda } from "./rotas/agenda.js";
 import { oabs, feriados } from "./rotas/configuracoes.js";
 import { capturarDjen } from "./djen.js";
 import { cadastroCliente, cadastroProcesso } from "./rotas/cadastro.js";
-import { adicionarHistorico, excluirHistorico } from "./rotas/historico.js";
+import { adicionarHistorico, excluirHistorico, editarHistorico } from "./rotas/historico.js";
 import { financeiro } from "./rotas/financeiro.js";
 import { servirAnexo } from "./anexos.js";
 
@@ -90,6 +90,7 @@ async function sistema(req, env) {
   if (caminho === "/sistema/processos/novo") return cadastroProcesso(req, env, sessao, null);
   if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/editar$/))) return cadastroProcesso(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/historico$/)) && metodo === "POST") return adicionarHistorico(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/historico\/(\d+)$/))) return editarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)\/excluir$/)) && metodo === "POST") return excluirHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/baixar)?))?$/))) return financeiro(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/anexos\/(\d+)$/))) return servirAnexo(env, sessao, m[1]);

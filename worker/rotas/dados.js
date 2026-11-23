@@ -8,6 +8,7 @@ import { icone } from "../icones.js";
 import { campoCsrf } from "../html.js";
 import { cartaoHistorico, mensagemDaUrl } from "./historico.js";
 import { cartaoFinanceiro } from "./financeiro.js";
+import { fichaProcesso } from "./ficha-processo.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
@@ -280,41 +281,5 @@ export async function processos(req, env, sessao, id) {
         <p class="dica">${String(results.length)} processo(s).</p>`,
     }));
   }
-  const p = await env.DB.prepare("SELECT p.*, c.nome AS cliente_nome FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = ?").bind(Number(id)).first();
-  if (!p) return naoEncontrado(sessao);
-  const [contato, observacoes] = await Promise.all([decifrar(env, p.contato_parte_contraria_enc), decifrar(env, p.observacoes_enc)]);
-  await auditar(env, req, sessao.usuario_id, "processo_visualizado", `processo ${p.id}`);
-  const [{ results: prz }, { results: pubs }, { results: ags }] = await Promise.all([
-    env.DB.prepare("SELECT id, titulo, prazo_fatal, situacao FROM prazos WHERE processo_id = ? ORDER BY prazo_fatal DESC").bind(p.id).all(),
-    env.DB.prepare("SELECT id, data_disponibilizacao, tipo, situacao FROM publicacoes WHERE processo_id = ? ORDER BY data_disponibilizacao DESC LIMIT 30").bind(p.id).all(),
-    env.DB.prepare("SELECT id, titulo, data, hora FROM agenda WHERE processo_id = ? ORDER BY data DESC").bind(p.id).all(),
-  ]);
-  const [hist, fin] = await Promise.all([cartaoHistorico(env, sessao, p.id), cartaoFinanceiro(env, sessao, { processoId: p.id })]);
-  return resposta(pagina({
-    titulo: p.numero || `Pasta ${p.pasta}`, sessao, ...mensagemDaUrl(req),
-    corpo: html`
-      <p class="trilha"><a href="/sistema/processos">Processos</a></p>
-      <div class="titulo-acoes"><h1>${p.numero || "Processo sem número"}</h1><a class="botao-link botao-secundario" href="/sistema/processos/${String(p.id)}/editar">Editar</a></div>
-      <p class="subtitulo">${p.pasta ? `Pasta ${p.pasta}` : ""} ${p.cliente_id ? html`· <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : ""}</p>
-      ${secao("", [campo("Tipo de ação", p.tipo_acao), campo("Rito", p.rito), campo("Fase", p.fase), campo("Instância", p.instancia),
-        campo("Situação", p.situacao), campo("Competência", p.competencia), campo("Comarca", [p.comarca, p.uf].filter(Boolean).join(" / ")),
-        campo("Vara", p.vara), campo("Posição do cliente", p.posicao_cliente), campo("AJG deferida", p.ajg_deferida),
-        campo("Valor da causa", moeda(p.valor_causa)), campo("Distribuição", dataBR(p.data_distribuicao)),
-        campo("Advogado responsável", p.advogado_responsavel), campo("Próximo prazo", dataBR(p.proximo_prazo))])}
-      ${secao("Parte contrária", [campo("Nome", p.parte_contraria), campo("Advogado", p.advogado_parte_contraria), campo("Contato", contato)])}
-      ${secao("Resultados", [campo("Resultado", p.resultado), campo("Resultado atual", p.resultado_atual),
-        campo("1ª instância", [p.resultado_primeira, dataBR(p.data_decisao_primeira)].filter(Boolean).join(" · ")),
-        campo("2ª instância", [p.resultado_segunda, dataBR(p.data_decisao_segunda)].filter(Boolean).join(" · ")),
-        campo("Instância superior", [p.resultado_superior, dataBR(p.data_decisao_superior)].filter(Boolean).join(" · ")),
-        campo("Decisão final", dataBR(p.data_decisao_final))],
-        observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : "")}
-      <section class="cartao"><div class="titulo-acoes"><h2>Prazos</h2><a class="botao-link" href="/sistema/prazos/novo?processo=${String(p.id)}">Novo prazo</a></div>
-        ${prz.length ? html`<ul class="lista-simples">${prz.map((x) => html`<li><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.prazo_fatal)} ${urgencia(x.prazo_fatal, x.situacao)} ${x.situacao !== "aberto" ? x.situacao : ""}</span></li>`)}</ul>` : html`<p>Nenhum prazo.</p>`}</section>
-      <section class="cartao"><div class="titulo-acoes"><h2>Agenda</h2><a class="botao-link" href="/sistema/agenda/novo?processo=${String(p.id)}">Novo compromisso</a></div>
-        ${ags.length ? html`<ul class="lista-simples">${ags.map((x) => html`<li><a href="/sistema/agenda/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.data)} ${x.hora || ""}</span></li>`)}</ul>` : html`<p>Nenhum compromisso.</p>`}</section>
-      ${pubs.length ? html`<section class="cartao"><h2>Intimações</h2><ul class="lista-simples">${pubs.map((x) => html`<li><a href="/sistema/publicacoes/${String(x.id)}">${dataBR(x.data_disponibilizacao)} · ${x.tipo || "Intimação"}</a><span>${x.situacao === "pendente" ? "para triagem" : ""}</span></li>`)}</ul></section>` : ""}
-      ${hist}
-      ${fin}
-`,
-  }));
+  return fichaProcesso(req, env, sessao, id);
 }

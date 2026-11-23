@@ -1,0 +1,131 @@
+// Ficha do processo: mesmos blocos do Diligo no Wix (pasta, processo, outras informações, decisões,
+// observações, histórico, processos vinculados, agenda e financeiro), no visual atual.
+import { html, pagina, resposta, campoCsrf, dataBR, moeda, textoDeHtml } from "../html.js";
+import { decifrar } from "../seguranca.js";
+import { auditar } from "../sessao.js";
+import { urgencia, bloco } from "./comum.js";
+import { cartaoHistorico, mensagemDaUrl } from "./historico.js";
+import { cartaoFinanceiro } from "./financeiro.js";
+
+
+const campo = (rotulo, valor, { largo = false } = {}) =>
+  html`<div class="${largo ? "largo" : ""}"><dt>${rotulo}</dt><dd>${valor === null || valor === undefined || valor === "" ? html`<span class="vazio-campo">—</span>` : valor}</dd></div>`;
+const ficha = (...campos) => html`<dl class="ficha ficha-processo">${campos}</dl>`;
+
+// Pasta "0014A" pertence ao mesmo grupo de "0014".
+const basePasta = (p) => String(p || "").trim().replace(/[^0-9].*$/, "").replace(/^0+(?=\d)/, "");
+
+// Texto curto com "Mais" para expandir.
+function textoCurto(t, limite = 140) {
+  const x = textoDeHtml(t);
+  if (!x) return "";
+  if (x.length <= limite && x.split("\n").length <= 2) return html`<span class="pre">${x}</span>`;
+  const resumo = x.split("\n").slice(0, 2).join("\n").slice(0, limite).replace(/\s+\S*$/, "");
+  return html`<details class="mais"><summary><span class="pre">${resumo}…</span> <span class="ver-mais">Mais</span></summary><span class="pre">${x}</span></details>`;
+}
+
+export async function fichaProcesso(req, env, sessao, id) {
+  const p = await env.DB.prepare("SELECT p.*, c.nome AS cliente_nome FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = ?").bind(Number(id)).first();
+  if (!p) return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
+  const [contato, observacoes, telefone, email] = await Promise.all(
+    [p.contato_parte_contraria_enc, p.observacoes_enc, p.telefone_parte_contraria_enc, p.email_parte_contraria_enc].map((v) => decifrar(env, v)));
+  await auditar(env, req, sessao.usuario_id, "processo_visualizado", `processo ${p.id}`);
+
+  const base = basePasta(p.pasta);
+  const [{ results: prz }, { results: ags }, { results: pubs }, { results: vinculados }, hist, fin] = await Promise.all([
+    env.DB.prepare(`SELECT id, titulo, tipo, descricao, prazo_fatal, prazo_interno, situacao, data_cumprimento, responsavel FROM prazos
+      WHERE processo_id = ? ORDER BY CASE situacao WHEN 'aberto' THEN 0 ELSE 1 END, COALESCE(prazo_interno, prazo_fatal) DESC`).bind(p.id).all(),
+    env.DB.prepare("SELECT id, titulo, tipo, data, hora, local, situacao, observacoes FROM agenda WHERE processo_id = ? ORDER BY data DESC").bind(p.id).all(),
+    env.DB.prepare("SELECT id, data_disponibilizacao, tipo, tribunal, situacao, texto FROM publicacoes WHERE processo_id = ? ORDER BY data_disponibilizacao DESC LIMIT 30").bind(p.id).all(),
+    base ? env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.tipo_acao, p.situacao, p.fase, p.parte_contraria, c.nome AS cliente
+      FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id != ? AND p.pasta IS NOT NULL ORDER BY p.pasta`).bind(p.id).all()
+      : Promise.resolve({ results: [] }),
+    cartaoHistorico(env, sessao, p.id, req),
+    cartaoFinanceiro(env, sessao, { processoId: p.id }),
+  ]);
+  const ligados = vinculados.filter((v) => basePasta(v.pasta) === base);
+
+  const decisao = (r, d) => (r || d ? [r, d && dataBR(d)].filter(Boolean).join(" · ") : null);
+  const situacaoPrazo = (x) => x.situacao === "cumprido" ? html`<span class="selo selo-pago">Cumprido</span> <small>${dataBR(x.data_cumprimento)}</small>`
+    : x.situacao === "cancelado" ? html`<span class="selo">Cancelado</span>` : html`<span class="selo selo-semana">Pendente</span> ${urgencia(x.prazo_fatal, x.situacao)}`;
+
+  const agenda = [
+    ...prz.map((x) => ({ ordem: x.situacao === "aberto" ? 0 : 1, data: x.prazo_interno || x.prazo_fatal, html: html`<tr>
+      <td class="nowrap">${dataBR(x.prazo_interno || x.prazo_fatal)}${x.prazo_interno && x.prazo_interno !== x.prazo_fatal ? html`<br><small>fatal ${dataBR(x.prazo_fatal)}</small>` : ""}</td>
+      <td><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a>${x.tipo && x.tipo !== x.titulo ? html`<br><small>${x.tipo}</small>` : ""}</td>
+      <td class="col-descricao">${textoCurto(x.descricao)}</td>
+      <td>${x.responsavel || ""}</td>
+      <td class="nowrap">${situacaoPrazo(x)}</td>
+      <td class="acoes-linha"><a class="icone-acao" href="/sistema/prazos/${String(x.id)}" title="Editar" aria-label="Editar prazo">✎</a>
+        ${x.situacao === "aberto" ? html`<form method="post" action="/sistema/prazos/${String(x.id)}/cumprir" class="form-linha">${campoCsrf(sessao)}<button class="botao-check" type="submit" title="Marcar como cumprido" aria-label="Marcar como cumprido"></button></form>` : html`<span class="botao-check marcado" aria-hidden="true">✓</span>`}</td>
+    </tr>` })),
+    ...ags.map((x) => ({ ordem: x.situacao === "agendado" ? 0 : 1, data: x.data, html: html`<tr>
+      <td class="nowrap">${dataBR(x.data)}${x.hora ? html`<br><small>${x.hora}</small>` : ""}</td>
+      <td><a href="/sistema/agenda/${String(x.id)}">${x.titulo}</a><br><small>${x.tipo || "Compromisso"}</small></td>
+      <td class="col-descricao">${textoCurto([x.local, x.observacoes].filter(Boolean).join(" — "))}</td>
+      <td></td>
+      <td class="nowrap">${x.situacao === "realizado" ? html`<span class="selo selo-pago">Realizado</span>` : x.situacao === "cancelado" ? html`<span class="selo">Cancelado</span>` : html`<span class="selo selo-semana">Agendado</span>`}</td>
+      <td class="acoes-linha"><a class="icone-acao" href="/sistema/agenda/${String(x.id)}" title="Editar" aria-label="Editar compromisso">✎</a></td>
+    </tr>` })),
+  ].sort((a, b) => a.ordem - b.ordem || String(b.data).localeCompare(String(a.data)));
+
+  const acoesAgenda = html`<a class="botao-link botao-pequeno" href="/sistema/prazos/novo?processo=${String(p.id)}">Novo prazo</a>
+    <a class="botao-link botao-pequeno botao-secundario" href="/sistema/agenda/novo?processo=${String(p.id)}">Novo compromisso</a>`;
+
+  return resposta(pagina({
+    titulo: p.numero || `Pasta ${p.pasta}`, sessao, ...mensagemDaUrl(req),
+    corpo: html`
+      <p class="trilha"><a href="/sistema/processos">Processos</a></p>
+      <div class="titulo-acoes"><div><h1>${p.pasta ? `Pasta ${p.pasta}` : "Processo"}</h1>
+        <p class="subtitulo">${p.numero || "sem número"}${p.cliente_id ? html` · <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : ""}${p.parte_contraria ? ` × ${p.parte_contraria}` : ""}</p></div>
+        <a class="botao-link botao-secundario" href="/sistema/processos/${String(p.id)}/editar">Editar</a></div>
+
+      ${bloco("Dados da Pasta", ficha(
+        campo("Pasta", p.pasta), campo("Adv. responsável", p.advogado_responsavel),
+        campo("Cliente", p.cliente_id ? html`<a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : null),
+        campo("Posição do cliente", p.posicao_cliente), campo("AJG deferida", p.ajg_deferida), campo("Parte contrária", p.parte_contraria),
+        campo("Data de cadastro", dataBR(p.data_cadastro)), campo("Tipo de ação", p.tipo_acao),
+        campo("Status da pasta", p.situacao ? html`<span class="selo ${/encerr|arquiv|baix/i.test(p.situacao) ? "" : "selo-pago"}">${p.situacao}</span>` : null)))}
+
+      ${bloco("Dados do Processo", ficha(
+        campo("Número (CNJ)", p.numero), campo("Data de distribuição", dataBR(p.data_distribuicao)), campo("Instância", p.instancia),
+        campo("Fase processual", p.fase), campo("Valor da ação", moeda(p.valor_causa)), campo("Nº vara", p.numero_vara),
+        campo("Órgão julgador", p.vara), campo("Comarca", p.comarca), campo("UF", p.uf), campo("Competência", p.competencia),
+        campo("Rito processual", p.rito), campo("Data de citação", dataBR(p.data_citacao)), campo("Trânsito em julgado", dataBR(p.data_transito)),
+        campo("Data do encerramento", dataBR(p.data_encerramento)), campo("Motivo do encerramento", p.motivo_encerramento)))}
+
+      ${bloco("Outras Informações", ficha(
+        campo("Advogado da parte contrária", p.advogado_parte_contraria), campo("Número OAB", p.oab_parte_contraria),
+        campo("Telefone", telefone || null), campo("E-mail", email ? html`<a href="mailto:${email}">${email}</a>` : null),
+        ...(contato && !telefone && !email ? [campo("Contato", contato, { largo: true })] : [])), { aberto: Boolean(p.advogado_parte_contraria || telefone || email || contato) })}
+
+      ${bloco("Decisões", ficha(
+        campo("1ª instância", decisao(p.resultado_primeira, p.data_decisao_primeira)),
+        campo("2ª instância", decisao(p.resultado_segunda, p.data_decisao_segunda)),
+        campo("Instâncias superiores", decisao(p.resultado_superior, p.data_decisao_superior)),
+        campo("Resultado atual", decisao(p.resultado_atual || p.resultado, p.data_decisao_final))),
+        { aberto: Boolean(p.resultado_primeira || p.resultado_segunda || p.resultado_superior || p.resultado_atual) })}
+
+      ${bloco("Observações", observacoes ? html`<p class="pre">${observacoes}</p>` : html`<p class="vazio">Sem observações.</p>`, { aberto: Boolean(observacoes) })}
+
+      ${hist}
+
+      ${ligados.length ? bloco("Processos Vinculados", html`<div class="tabela-rolagem"><table>
+        <thead><tr><th>Pasta</th><th>Número</th><th>Tipo de ação</th><th>Cliente</th><th>Parte contrária</th><th>Fase</th><th>Status</th></tr></thead>
+        <tbody>${ligados.map((v) => html`<tr><td><a href="/sistema/processos/${String(v.id)}">${v.pasta}</a></td><td>${v.numero || "—"}</td><td>${v.tipo_acao}</td>
+          <td>${v.cliente}</td><td>${v.parte_contraria}</td><td>${v.fase}</td><td>${v.situacao}</td></tr>`)}</tbody></table></div>`, { contagem: ligados.length }) : ""}
+
+      ${bloco("Agenda", agenda.length ? html`<div class="tabela-rolagem"><table class="tabela-agenda">
+        <thead><tr><th>Prazo interno</th><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead>
+        <tbody>${agenda.map((a) => a.html)}</tbody></table></div>` : html`<p class="vazio">Nenhum prazo ou compromisso.</p>`,
+        { id: "agenda", acoes: acoesAgenda, contagem: agenda.length })}
+
+      ${fin}
+
+      ${pubs.length ? bloco("Intimações", html`<ul class="lista-simples">${pubs.map((x) => html`<li><span><a href="/sistema/publicacoes/${String(x.id)}">${dataBR(x.data_disponibilizacao)} · ${x.tipo || "Intimação"}${x.tribunal ? ` · ${x.tribunal}` : ""}</a></span><span>${x.situacao === "pendente" ? "para triagem" : ""}</span></li>`)}</ul>`,
+        { contagem: pubs.length, aberto: false }) : ""}
+
+      <div class="rodape-ficha"><a class="botao-link botao-secundario" href="/sistema/processos">Voltar</a>
+        <a class="botao-link" href="/sistema/processos/${String(p.id)}/editar">Editar processo</a></div>`,
+  }));
+}

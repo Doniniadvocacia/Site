@@ -26,7 +26,7 @@ async function lerColecao(env, colecao) {
 
 // Datas do Wix podem vir como texto ou como {"$date": "..."}.
 const txt = (v) => {
-  if (v === null || v === undefined) return null;
+  if (v === null || v === undefined || v === "RESET_ALL") return null;
   if (typeof v === "object" && v.$date) return String(v.$date).slice(0, 10);
   if (typeof v === "object") return v._id || null;
   return String(v).trim() || null;
@@ -108,7 +108,7 @@ export async function importar(req, env, sessao) {
            data_decisao_superior=?30, data_decisao_final=?31, proximo_prazo=?32, contato_parte_contraria_enc=?33, observacoes_enc=?34, atualizado_em=?35
          WHERE processos.editado_local = 0`
       ).bind(p._id, idCliente[ref] ?? null, txt(p.pasta), txt(p.numero), txt(p.title), txt(p.tipoAcao), txt(p.rito), txt(p.fase), txt(p.instancia),
-        txt(p.situacao), txt(p.competencia), txt(p.comarca), txt(p.vara) || txt(p.nmeroVara), txt(p.uf), txt(p.posicaoCliente), txt(p.parteContraria),
+        txt(p.situacao), txt(p.competencia), txt(p.comarca), txt(p.vara), txt(p.uf), txt(p.posicaoCliente), txt(p.parteContraria),
         txt(p.advogadoParteContraria), txt(p.advogadoResponsavel), txt(p.ajgDeferida),
         p.valorCausa === null || p.valorCausa === undefined || p.valorCausa === "" ? null : Number(p.valorCausa),
         txt(p.dataDistribuicao), txt(p.dataCadastro), txt(p.resultado), txt(p.resultadoAtual), txt(p.resultadoPrimeiraInstancia),
@@ -117,6 +117,15 @@ export async function importar(req, env, sessao) {
         await cifrar(env, juntar(p.emailParteContraria, p.telefoneParteContraria)), await cifrar(env, txt(p.observacoes)), t));
     }
     for (let i = 0; i < ps.length; i += 50) await env.DB.batch(ps.slice(i, i + 50));
+    // Campos complementares da ficha (vara, citação, trânsito, encerramento, contatos da parte contrária).
+    const ps2 = [];
+    for (const p of processos) {
+      ps2.push(env.DB.prepare(`UPDATE processos SET numero_vara=?, data_citacao=?, data_transito=?, data_encerramento=?, motivo_encerramento=?,
+          oab_parte_contraria=?, telefone_parte_contraria_enc=?, email_parte_contraria_enc=? WHERE wix_id=? AND editado_local=0`)
+        .bind(txt(p.nmeroVara), normalizarData(p.dataCitacao), normalizarData(p.dataTransito), normalizarData(p.dataEncerramento),
+          txt(p.motivoEncerramento), txt(p.numeroOAB), await cifrar(env, txt(p.telefoneParteContraria)), await cifrar(env, txt(p.emailParteContraria)), p._id));
+    }
+    for (let i = 0; i < ps2.length; i += 50) await env.DB.batch(ps2.slice(i, i + 50));
     const semCliente = processos.filter((p) => !idCliente[typeof p.cliente === "object" && p.cliente ? p.cliente._id : p.cliente]).length;
 
     // Prazos, intimações e agenda: só entram os que ainda não existem (edições feitas aqui são preservadas).

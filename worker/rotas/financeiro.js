@@ -5,7 +5,7 @@ import { agora, cifrar, decifrar, tokenAleatorio } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
 import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
-import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso, bloco } from "./comum.js";
 import { linkAnexo } from "./historico.js";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -82,9 +82,10 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
   const soma = (fn) => results.filter(fn).reduce((s, l) => s + l.valor, 0);
   const recebido = soma((l) => l.tipo === "receita" && l.pago), aReceber = soma((l) => l.tipo === "receita" && !l.pago), despesas = soma((l) => l.tipo === "despesa");
   const novo = processoId ? `/sistema/financeiro/novo?processo=${processoId}` : `/sistema/financeiro/novo?cliente=${clienteId}`;
-  return html`<section class="cartao"><div class="titulo-acoes"><h2>Financeiro</h2><a class="botao-link" href="${novo}">Novo lançamento</a></div>
+  return bloco("Lançamentos Financeiros", html`
     ${results.length ? html`<p class="resumo-linha">Recebido <strong class="receita">${moeda(recebido)}</strong> · A receber <strong>${moeda(aReceber)}</strong> · Despesas <strong class="despesa">${moeda(despesas)}</strong></p>` : ""}
-    ${tabela(sessao, results, { mostrarProcesso: !processoId })}</section>`;
+    ${tabela(sessao, results, { mostrarProcesso: !processoId })}`,
+    { id: "financeiro", contagem: results.length, acoes: html`<a class="botao-link botao-pequeno" href="${novo}">Novo lançamento</a>` });
 }
 
 // ---------- Formulário ----------

@@ -55,3 +55,10 @@ export function descricaoDaIntimacao(pub) {
   const teor = textoDeHtml(pub.texto);
   return `${origem}${pub.numero_processo ? `\nProcesso ${pub.numero_processo}` : ""}${teor ? `\n\n${teor}` : ""}`.slice(0, 20000);
 }
+
+// Bloco recolhível; abre por padrão.
+export const bloco = (titulo, corpo, { id = "", acoes = "", aberto = true, contagem = null } = {}) => html`
+  <details class="bloco"${id ? html` id="${id}"` : ""}${aberto ? html` open` : ""}>
+    <summary><h2>${titulo}${contagem !== null ? html` <span class="contagem">${String(contagem)}</span>` : ""}</h2><span class="bloco-acoes">${acoes}</span><span class="seta" aria-hidden="true"></span></summary>
+    <div class="bloco-corpo">${corpo}</div>
+  </details>`;

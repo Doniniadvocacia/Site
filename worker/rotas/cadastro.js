@@ -89,65 +89,86 @@ export async function cadastroCliente(req, env, sessao, id) {
 }
 
 // ---------- Processos ----------
-const FASES = ["Aguarda Citação", "Conhecimento", "Instrução", "Sentencial", "Recursal", "Cumprimento de Sentença", "Trânsito em Julgado"];
-const RESULTADOS = ["Procedente", "Parcialmente Procedente", "Improcedente", "Extinto s/ Resolução de Mérito", "Acordo"];
+// Opções iguais às do Diligo no Wix; valores já usados no banco também são sugeridos.
+const FASES = ["Aguarda Citação", "Conhecimento", "Instrução", "Sentencial", "Recursal", "Cumprimento de Sentença", "Suspenso", "Aguarda Arquivamento", "Arquivado"];
+const RESULTADOS = ["Procedente", "Parcialmente Procedente", "Improcedente", "Extinto sem Resolução do Mérito", "Acordo Homologado", "Recurso Provido", "Recurso Parcialmente Provido", "Recurso não Provido"];
+const MOTIVOS = ["Procedência da Ação", "Parcial Procedência da Ação", "Improcedência da Ação", "Acordo", "Pagamento Condenação", "Extinto S/ Resolução do Mérito", "Desistência", "Revogação de Mandato"];
 const TEXTOS_PROC = {
-  pasta: 20, numero: 40, tipo_acao: 150, rito: 60, fase: 60, instancia: 40, situacao: 60, competencia: 60, comarca: 100, vara: 100, uf: 2,
-  posicao_cliente: 60, parte_contraria: 200, advogado_parte_contraria: 200, advogado_responsavel: 120, ajg_deferida: 20,
-  resultado: 60, resultado_atual: 60, resultado_primeira: 60, resultado_segunda: 60, resultado_superior: 60,
+  pasta: 20, numero: 40, tipo_acao: 150, rito: 60, fase: 60, instancia: 40, situacao: 60, competencia: 60, comarca: 100, vara: 120, numero_vara: 20, uf: 2,
+  posicao_cliente: 60, parte_contraria: 200, advogado_parte_contraria: 200, oab_parte_contraria: 30, advogado_responsavel: 120, ajg_deferida: 20,
+  resultado: 60, resultado_atual: 60, resultado_primeira: 60, resultado_segunda: 60, resultado_superior: 60, motivo_encerramento: 80,
 };
-const DATAS_PROC = ["data_distribuicao", "data_cadastro", "data_decisao_primeira", "data_decisao_segunda", "data_decisao_superior", "data_decisao_final"];
+const DATAS_PROC = ["data_distribuicao", "data_cadastro", "data_citacao", "data_transito", "data_encerramento",
+  "data_decisao_primeira", "data_decisao_segunda", "data_decisao_superior", "data_decisao_final"];
 
 function formularioProcesso(sessao, p, acao, apoio) {
-  const t = (nome, rotulo, extra = {}) => html`<label class="${extra.largo ? "largo" : ""}">${rotulo}<input name="${nome}" maxlength="${String(TEXTOS_PROC[nome] || 200)}" value="${p[nome] || ""}"${extra.list ? html` list="${extra.list}"` : ""}${extra.required ? html` required` : ""}></label>`;
+  const t = (nome, rotulo, extra = {}) => html`<label class="${extra.largo ? "largo" : ""}">${rotulo}<input name="${nome}" maxlength="${String(TEXTOS_PROC[nome] || 200)}" value="${p[nome] || ""}"${extra.list ? html` list="${extra.list}"` : ""}${extra.placeholder ? html` placeholder="${extra.placeholder}"` : ""}></label>`;
   const d = (nome, rotulo) => html`<label>${rotulo}<input type="date" name="${nome}" value="${p[nome] || ""}"></label>`;
+  const s = (nome, rotulo, lista, vazio = "—") => html`<label>${rotulo}<select name="${nome}">${opcoes([...new Set([...lista, ...(p[nome] ? [p[nome]] : [])])].map((v) => [v, v]), p[nome], vazio)}</select></label>`;
+  const grupo = (titulo, corpo, extra = "") => html`<fieldset class="largo grade-form grupo-form ${extra}"><legend>${titulo}</legend>${corpo}</fieldset>`;
   return html`<form method="post" action="${acao}" class="formulario grade-form">
     ${campoCsrf(sessao)}
-    <label class="largo">Cliente<select name="cliente_id">${opcoes(apoio.clientes, p.cliente_id, "Selecione o cliente")}</select></label>
-    ${t("pasta", "Pasta")}${t("numero", "Número do processo")}
-    ${t("tipo_acao", "Tipo de ação", { list: "l-acao" })}${t("rito", "Rito", { list: "l-rito" })}
-    <label>Fase<input name="fase" maxlength="60" value="${p.fase || ""}" list="l-fase"></label>
-    ${t("instancia", "Instância", { list: "l-instancia" })}${t("situacao", "Situação", { list: "l-situacao" })}${t("competencia", "Competência", { list: "l-competencia" })}
-    ${t("comarca", "Comarca")}${t("vara", "Vara")}
-    <label>UF<select name="uf">${opcoes(UFS, p.uf)}</select></label>
-    ${t("posicao_cliente", "Posição do cliente", { list: "l-posicao" })}
-    ${t("advogado_responsavel", "Advogado responsável", { list: "l-advogado" })}
-    <label>AJG deferida<select name="ajg_deferida">${opcoes(lista("Sim", "Não", "Pendente"), p.ajg_deferida)}</select></label>
-    <label>Valor da causa (R$)<input name="valor_causa" inputmode="decimal" value="${p.valor_causa ?? ""}" placeholder="0,00"></label>
-    ${d("data_distribuicao", "Distribuição")}${d("data_cadastro", "Cadastro")}
-    <fieldset class="largo grade-form"><legend>Parte contrária</legend>
-      ${t("parte_contraria", "Nome")}${t("advogado_parte_contraria", "Advogado")}
-      <label class="largo">Contato (e-mail, telefone)<input name="contato" maxlength="400" value="${p.contato || ""}"></label>
-    </fieldset>
-    <fieldset class="largo grade-form"><legend>Resultados</legend>
-      ${t("resultado", "Resultado", { list: "l-resultado" })}${t("resultado_atual", "Resultado atual", { list: "l-resultado" })}
-      ${t("resultado_primeira", "1ª instância", { list: "l-resultado" })}${d("data_decisao_primeira", "Data (1ª)")}
-      ${t("resultado_segunda", "2ª instância", { list: "l-resultado" })}${d("data_decisao_segunda", "Data (2ª)")}
-      ${t("resultado_superior", "Instância superior", { list: "l-resultado" })}${d("data_decisao_superior", "Data (superior)")}
-      ${d("data_decisao_final", "Decisão final")}
-    </fieldset>
-    <label class="largo">Observações<textarea name="observacoes" rows="3" maxlength="4000">${p.observacoes || ""}</textarea></label>
-    <div class="largo botoes-form"><button type="submit">Salvar processo</button></div>
-    ${datalist("l-acao", apoio.acoes)}${datalist("l-rito", apoio.ritos)}${datalist("l-fase", apoio.fases)}${datalist("l-instancia", apoio.instancias)}
-    ${datalist("l-situacao", apoio.situacoes)}${datalist("l-competencia", apoio.competencias)}${datalist("l-posicao", apoio.posicoes)}
-    ${datalist("l-advogado", apoio.advogados)}${datalist("l-resultado", apoio.resultados)}
+    ${grupo("Dados da Pasta", html`
+      ${t("pasta", "Pasta")}
+      ${t("advogado_responsavel", "Adv. responsável", { list: "l-advogado" })}
+      <label class="duplo">Cliente<select name="cliente_id">${opcoes(apoio.clientes, p.cliente_id, "Selecione o cliente")}</select></label>
+      ${s("posicao_cliente", "Posição do cliente", apoio.posicoes)}
+      ${s("ajg_deferida", "AJG deferida", ["Sim", "Não", "Pendente"])}
+      <label class="duplo">Parte contrária<input name="parte_contraria" maxlength="200" value="${p.parte_contraria || ""}"></label>
+      ${d("data_cadastro", "Data de cadastro")}
+      ${t("tipo_acao", "Tipo de ação", { list: "l-acao" })}
+      ${s("situacao", "Status da pasta", apoio.situacoes)}`)}
+    ${grupo("Dados do Processo", html`
+      <label class="duplo">Número do processo (CNJ)<input name="numero" maxlength="40" value="${p.numero || ""}" placeholder="0000000-00.0000.0.00.0000"></label>
+      ${d("data_distribuicao", "Data de distribuição")}
+      ${s("instancia", "Instância", apoio.instancias)}
+      ${s("fase", "Fase processual", apoio.fases)}
+      <label>Valor da ação (R$)<input name="valor_causa" inputmode="decimal" value="${p.valor_causa ?? ""}" placeholder="0,00"></label>
+      ${t("numero_vara", "Nº vara", { placeholder: "1ª" })}
+      ${t("vara", "Órgão julgador", { list: "l-orgao" })}
+      ${t("comarca", "Comarca", { list: "l-comarca" })}
+      <label>UF<select name="uf">${opcoes(UFS, p.uf)}</select></label>
+      ${s("competencia", "Competência", apoio.competencias)}
+      ${s("rito", "Rito processual", apoio.ritos)}
+      ${d("data_citacao", "Data de citação")}
+      ${d("data_transito", "Trânsito em julgado")}
+      ${d("data_encerramento", "Data do encerramento")}
+      ${s("motivo_encerramento", "Motivo do encerramento", apoio.motivos)}`)}
+    ${grupo("Outras Informações", html`
+      <label class="duplo">Advogado da parte contrária<input name="advogado_parte_contraria" maxlength="200" value="${p.advogado_parte_contraria || ""}"></label>
+      ${t("oab_parte_contraria", "Número OAB", { placeholder: "RS000000" })}
+      <label>Telefone<input name="telefone" maxlength="40" inputmode="tel" value="${p.telefone || ""}"></label>
+      <label class="duplo">E-mail<input name="email" type="email" maxlength="200" value="${p.email || ""}"></label>
+      ${p.contato ? html`<label class="largo">Contato (registro antigo)<input name="contato" maxlength="400" value="${p.contato}"></label>` : ""}`)}
+    ${grupo("Decisões", html`
+      ${s("resultado_primeira", "Decisão 1ª instância", apoio.resultados)}${d("data_decisao_primeira", "Data da decisão")}
+      ${s("resultado_segunda", "Decisão 2ª instância", apoio.resultados)}${d("data_decisao_segunda", "Data da decisão")}
+      ${s("resultado_superior", "Instâncias superiores", apoio.resultados)}${d("data_decisao_superior", "Data da decisão")}
+      ${s("resultado_atual", "Resultado atual", apoio.resultados)}${d("data_decisao_final", "Data da decisão")}`, "grupo-decisoes")}
+    <label class="largo">Observações<textarea name="observacoes" rows="4" maxlength="4000" placeholder="Ex.: Honorários de êxito: 10%">${p.observacoes || ""}</textarea></label>
+    <div class="largo botoes-form"><button type="submit">Salvar</button><a class="botao-link botao-secundario" href="${p.id ? `/sistema/processos/${p.id}` : "/sistema/processos"}">Cancelar</a></div>
+    ${datalist("l-acao", apoio.acoes)}${datalist("l-advogado", apoio.advogados)}${datalist("l-orgao", apoio.orgaos)}${datalist("l-comarca", apoio.comarcas)}
   </form>
-  <p class="dica">Contato da parte contrária e observações são gravados cifrados.</p>`;
+  <p class="dica">Telefone, e-mail da parte contrária e observações são gravados cifrados.</p>`;
 }
-
 
 export async function cadastroProcesso(req, env, sessao, id) {
   const existente = id ? await env.DB.prepare("SELECT * FROM processos WHERE id = ?").bind(Number(id)).first() : null;
   if (id && !existente) return naoEncontrado(sessao);
   const acao = id ? `/sistema/processos/${id}/editar` : "/sistema/processos/novo";
-  const [clientes, acoes, ritos, fases, instancias, situacoes, competencias, posicoes, advogados, resultados] = await Promise.all([
+  const [clientes, acoes, ritos, fases, instancias, situacoes, competencias, posicoes, advogados, resultados, orgaos, comarcas, motivos] = await Promise.all([
     env.DB.prepare("SELECT id, nome FROM clientes ORDER BY nome COLLATE NOCASE").all(),
-    ...["tipo_acao", "rito", "fase", "instancia", "situacao", "competencia", "posicao_cliente", "advogado_responsavel", "resultado"].map((c) => usados(env, "processos", c)),
+    ...["tipo_acao", "rito", "fase", "instancia", "situacao", "competencia", "posicao_cliente", "advogado_responsavel", "resultado_atual", "vara", "comarca", "motivo_encerramento"]
+      .map((c) => usados(env, "processos", c)),
   ]);
+  const juntar = (...l) => [...new Set(l.flat().filter(Boolean))];
   const apoio = {
-    clientes: clientes.results.map((c) => [c.id, c.nome]), acoes, ritos, instancias, competencias, advogados,
-    fases: [...new Set([...FASES, ...fases])], situacoes: [...new Set(["Ativo", "Suspenso", "Arquivado", ...situacoes])],
-    posicoes: [...new Set(["Autor", "Réu", ...posicoes])], resultados: [...new Set([...RESULTADOS, ...resultados])],
+    clientes: clientes.results.map((c) => [c.id, c.nome]), acoes, advogados: juntar("Eduardo Donini", advogados), orgaos, comarcas,
+    ritos: juntar("Ordinário", "Sumaríssimo", "Especial", ritos), instancias: juntar("1º Grau", "2º Grau", "Instâncias Superiores", instancias),
+    competencias: juntar("Estadual", "Federal", "Trabalhista", "Juizado Especial Cível", "Juizado Especial Federal", competencias),
+    fases: juntar(FASES, fases), situacoes: juntar("Ativa", "Suspensa", "Encerrada", situacoes),
+    posicoes: juntar("Autor", "Réu", "Reclamante", "Reclamado", "Exequente", "Executado", "Requerente", "Requerido", posicoes),
+    resultados: juntar(RESULTADOS, resultados), motivos: juntar(MOTIVOS, motivos),
   };
   const titulo = existente ? (existente.numero || `Pasta ${existente.pasta}`) : "Novo processo";
   const tela = (p, erro) => resposta(pagina({
@@ -160,13 +181,15 @@ export async function cadastroProcesso(req, env, sessao, id) {
     if (!existente) {
       const proxima = await env.DB.prepare("SELECT MAX(CAST(pasta AS INTEGER)) AS n FROM processos").first();
       const cli = Number(new URL(req.url).searchParams.get("cliente")) || null;
-      return tela({ cliente_id: cli, pasta: String((proxima?.n || 0) + 1).padStart(4, "0"), situacao: "Ativo", data_cadastro: new Date().toISOString().slice(0, 10), uf: "RS" });
+      return tela({ cliente_id: cli, pasta: String((proxima?.n || 0) + 1).padStart(4, "0"), situacao: "Ativa", data_cadastro: new Date().toISOString().slice(0, 10), uf: "RS" });
     }
-    const [contato, observacoes] = await Promise.all([decifrar(env, existente.contato_parte_contraria_enc), decifrar(env, existente.observacoes_enc)]);
-    return tela({ ...existente, contato, observacoes });
+    const [contato, observacoes, telefone, email] = await Promise.all([existente.contato_parte_contraria_enc, existente.observacoes_enc,
+      existente.telefone_parte_contraria_enc, existente.email_parte_contraria_enc].map((v) => decifrar(env, v)));
+    return tela({ ...existente, contato, observacoes, telefone, email });
   }
   const { f, ok } = await csrfOk(req, sessao);
-  const p = { cliente_id: Number(f.get("cliente_id")) || null, contato: txt(f, "contato", 400), observacoes: txt(f, "observacoes", 4000) };
+  const p = { id: existente?.id, cliente_id: Number(f.get("cliente_id")) || null, contato: txt(f, "contato", 400), observacoes: txt(f, "observacoes", 4000),
+    telefone: txt(f, "telefone", 40), email: txt(f, "email", 200) };
   for (const [k, max] of Object.entries(TEXTOS_PROC)) p[k] = txt(f, k, max);
   for (const k of DATAS_PROC) p[k] = dataValida(txt(f, k));
   p.valor_causa = numeroBR(f.get("valor_causa"));
@@ -177,15 +200,15 @@ export async function cadastroProcesso(req, env, sessao, id) {
   if (dup) return tela(p, "Já existe um processo com esse número.");
   const colunas = ["cliente_id", ...Object.keys(TEXTOS_PROC), ...DATAS_PROC, "valor_causa"];
   const valores = colunas.map((k) => p[k] ?? null);
-  const [contatoEnc, obsEnc] = await Promise.all([cifrar(env, p.contato), cifrar(env, p.observacoes)]);
+  const [contatoEnc, obsEnc, telEnc, emailEnc] = await Promise.all([p.contato, p.observacoes, p.telefone, p.email].map((v) => cifrar(env, v)));
   const t = agora();
   let novoId = existente?.id;
   if (existente) {
     await env.DB.prepare(`UPDATE processos SET ${colunas.map((c) => `${c} = ?`).join(", ")}, contato_parte_contraria_enc = ?, observacoes_enc = ?,
-      atualizado_em = ?, editado_local = 1 WHERE id = ?`).bind(...valores, contatoEnc, obsEnc, t, existente.id).run();
+      telefone_parte_contraria_enc = ?, email_parte_contraria_enc = ?, atualizado_em = ?, editado_local = 1 WHERE id = ?`).bind(...valores, contatoEnc, obsEnc, telEnc, emailEnc, t, existente.id).run();
   } else {
-    const r = await env.DB.prepare(`INSERT INTO processos (${colunas.join(", ")}, contato_parte_contraria_enc, observacoes_enc, criado_em, atualizado_em, editado_local)
-      VALUES (${colunas.map(() => "?").join(", ")}, ?, ?, ?, ?, 1)`).bind(...valores, contatoEnc, obsEnc, t, t).run();
+    const r = await env.DB.prepare(`INSERT INTO processos (${colunas.join(", ")}, contato_parte_contraria_enc, observacoes_enc, telefone_parte_contraria_enc, email_parte_contraria_enc, criado_em, atualizado_em, editado_local)
+      VALUES (${colunas.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?, 1)`).bind(...valores, contatoEnc, obsEnc, telEnc, emailEnc, t, t).run();
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "processo_alterado" : "processo_criado", `processo ${novoId}`);
