@@ -12,7 +12,14 @@
     // Só /sistema passa pelo código; o resto do site continua servido direto como arquivos.
     "run_worker_first": ["/sistema", "/sistema/*"]
   },
-  // "d1_databases": entra aqui quando o banco D1 "diligo" estiver criado.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "diligo",
+      "database_id": "6e583790-963f-42d5-beff-4e809593403c",
+      "migrations_dir": "migrations"
+    }
+  ],
   "observability": { "enabled": true }
   // Segredos (configurar no painel, nunca aqui): DATA_KEY, SETUP_TOKEN, WIX_API_KEY
 }
