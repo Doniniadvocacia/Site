@@ -19,6 +19,24 @@ function origemValida(req) {
   return origem === new URL(req.url).origin;
 }
 
+async function status(env) {
+  // Diagnóstico da configuração: mostra apenas se cada item existe, nunca o valor.
+  let tabelas = false;
+  let usuarios = "?";
+  try { const r = await env.DB.prepare("SELECT COUNT(*) AS n, SUM(totp_ativo) AS a FROM usuarios").first(); tabelas = true; usuarios = `${r.n} (com 2FA ativo: ${r.a || 0})`; } catch {}
+  const ok = (v) => (v ? "sim" : "NÃO");
+  const linhas = [
+    `Banco D1 ligado: ${ok(env.DB)}`,
+    `Tabelas criadas: ${ok(tabelas)}`,
+    `Usuários cadastrados: ${usuarios}`,
+    `DATA_KEY: ${ok(env.DATA_KEY)}${env.DATA_KEY ? (chaveValida(env.DATA_KEY) ? " (formato válido)" : " (FORMATO INVÁLIDO: precisa ser 32 bytes em base64)") : ""}`,
+    `SETUP_TOKEN: ${ok(env.SETUP_TOKEN)}`,
+    `WIX_API_KEY: ${ok(env.WIX_API_KEY)}`,
+    `Variáveis recebidas pelo sistema: ${Object.keys(env).filter((k) => /^[A-Z_]+$/.test(k)).sort().join(", ") || "nenhuma"}`,
+  ];
+  return new Response(linhas.join("\n") + "\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+}
+
 async function sistema(req, env) {
   const url = new URL(req.url);
   const caminho = url.pathname.replace(/\/+$/, "") || "/";
@@ -49,6 +67,7 @@ async function sistema(req, env) {
   const admin = sessao.perfil === "admin";
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);
   if (caminho === "/sistema/importar" && admin) return importar(req, env, sessao);
+  if (caminho === "/sistema/status" && admin) return status(env);
 
   return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Página não encontrada</h1>` }), 404);
 }
@@ -56,23 +75,6 @@ async function sistema(req, env) {
 export default {
   async fetch(req, env) {
     const { pathname } = new URL(req.url);
-    if (pathname === "/sistema/status") {
-      // Diagnóstico da configuração: mostra apenas se cada item existe, nunca o valor.
-      let tabelas = false;
-      let usuarios = "?";
-      try { const r = await env.DB.prepare("SELECT COUNT(*) AS n, SUM(totp_ativo) AS a FROM usuarios").first(); tabelas = true; usuarios = `${r.n} (com 2FA ativo: ${r.a || 0})`; } catch {}
-      const ok = (v) => (v ? "sim" : "NÃO");
-      const linhas = [
-        `Banco D1 ligado: ${ok(env.DB)}`,
-        `Tabelas criadas: ${ok(tabelas)}`,
-        `Usuários cadastrados: ${usuarios}`,
-        `DATA_KEY: ${ok(env.DATA_KEY)}${env.DATA_KEY ? (chaveValida(env.DATA_KEY) ? " (formato válido)" : " (FORMATO INVÁLIDO: precisa ser 32 bytes em base64)") : ""}`,
-        `SETUP_TOKEN: ${ok(env.SETUP_TOKEN)}`,
-        `WIX_API_KEY: ${ok(env.WIX_API_KEY)}`,
-        `Variáveis recebidas pelo sistema: ${Object.keys(env).filter((k) => /^[A-Z_]+$/.test(k)).sort().join(", ") || "nenhuma"}`,
-      ];
-      return new Response(linhas.join("\n") + "\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
-    }
     if (pathname === "/sistema" || pathname.startsWith("/sistema/")) {
       if (!env.DB) return new Response("Banco de dados não configurado.", { status: 503 });
       try {
