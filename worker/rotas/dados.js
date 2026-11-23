@@ -2,6 +2,8 @@
 import { html, pagina, resposta, dataBR, moeda } from "../html.js";
 import { decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
+import { hojeBR, somarDias } from "../calendario.js";
+import { urgencia, rotuloProcesso } from "./comum.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
@@ -13,27 +15,38 @@ const secao = (titulo, campos, extra = "") => {
 };
 
 export async function painel(req, env, sessao) {
-  const [c, p, ultimaImport] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) AS n FROM clientes").first(),
-    env.DB.prepare("SELECT COUNT(*) AS n FROM processos").first(),
-    env.DB.prepare("SELECT criado_em, detalhe FROM auditoria WHERE acao = 'importacao_wix' ORDER BY id DESC LIMIT 1").first(),
+  const hoje = hojeBR(), semana = somarDias(hoje, 7);
+  const [vencidos, naSemana, pendentes, ultimaCaptura] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) AS n FROM prazos WHERE situacao = 'aberto' AND prazo_fatal < ?").bind(hoje).first(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM prazos WHERE situacao = 'aberto' AND prazo_fatal BETWEEN ? AND ?").bind(hoje, semana).first(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first(),
+    env.DB.prepare("SELECT criado_em, erro FROM capturas ORDER BY id DESC LIMIT 1").first(),
   ]);
-  const { results: situacoes } = await env.DB.prepare(
-    "SELECT COALESCE(NULLIF(situacao, ''), 'Sem situação') AS s, COUNT(*) AS n FROM processos GROUP BY 1 ORDER BY n DESC"
-  ).all();
+  const [{ results: proximos }, { results: compromissos }] = await Promise.all([
+    env.DB.prepare(`SELECT p.id, p.titulo, p.prazo_fatal, p.situacao, p.responsavel, pr.pasta, pr.numero, p.processo_id FROM prazos p
+      LEFT JOIN processos pr ON pr.id = p.processo_id WHERE p.situacao = 'aberto' AND p.prazo_fatal <= ? ORDER BY p.prazo_fatal LIMIT 15`).bind(semana).all(),
+    env.DB.prepare("SELECT id, titulo, data, hora, local FROM agenda WHERE situacao = 'agendado' AND data BETWEEN ? AND ? ORDER BY data, hora LIMIT 10").bind(hoje, somarDias(hoje, 14)).all(),
+  ]);
+  const ind = (href, n, rotulo, alerta) => html`<a class="indicador${alerta && n > 0 ? " indicador-alerta" : ""}" href="${href}"><strong>${String(n)}</strong><span>${rotulo}</span></a>`;
   return resposta(pagina({
     titulo: "Painel", sessao,
     corpo: html`
       <h1>Olá, ${sessao.nome.split(" ")[0]}</h1>
       <div class="indicadores">
-        <a class="indicador" href="/sistema/clientes"><strong>${String(c.n)}</strong><span>clientes</span></a>
-        <a class="indicador" href="/sistema/processos"><strong>${String(p.n)}</strong><span>processos</span></a>
+        ${ind("/sistema/prazos?visao=vencidos", vencidos.n, "prazos vencidos", true)}
+        ${ind("/sistema/prazos?visao=semana", naSemana.n, "prazos em 7 dias")}
+        ${ind("/sistema/publicacoes", pendentes.n, "intimações p/ triagem", true)}
       </div>
-      ${situacoes.length ? html`<section class="cartao"><h2>Processos por situação</h2>
-        <ul class="lista-simples">${situacoes.map((s) => html`<li><a href="/sistema/processos?situacao=${encodeURIComponent(s.s)}">${s.s}</a> <span>${String(s.n)}</span></li>`)}</ul>
-      </section>` : ""}
-      <p class="dica">Etapa 1 da migração: dados importados do Wix, somente para consulta.
-        ${ultimaImport ? html`Última importação em ${new Date(ultimaImport.criado_em * 1000).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}.` : "Nenhuma importação feita ainda."}</p>`,
+      <div class="duas-colunas">
+        <section class="cartao"><h2>Prazos até ${dataBR(semana)}</h2>
+          ${proximos.length ? html`<ul class="lista-simples">${proximos.map((p) => html`<li><span><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a><br><small>${rotuloProcesso(p)}${p.responsavel ? ` · ${p.responsavel}` : ""}</small></span>
+            <span class="nowrap">${dataBR(p.prazo_fatal)} ${urgencia(p.prazo_fatal, p.situacao)}</span></li>`)}</ul>` : html`<p>Nenhum prazo nos próximos 7 dias.</p>`}
+        </section>
+        <section class="cartao"><h2>Agenda (14 dias)</h2>
+          ${compromissos.length ? html`<ul class="lista-simples">${compromissos.map((a) => html`<li><span><a href="/sistema/agenda/${String(a.id)}">${a.titulo}</a>${a.local ? html`<br><small>${a.local}</small>` : ""}</span><span class="nowrap">${dataBR(a.data)} ${a.hora || ""}</span></li>`)}</ul>` : html`<p>Nenhum compromisso agendado.</p>`}
+        </section>
+      </div>
+      <p class="dica">${ultimaCaptura ? html`Última captura do DJEN em ${new Date(ultimaCaptura.criado_em * 1000).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}${ultimaCaptura.erro ? html` · <span class="alerta-texto">com erro</span>` : ""}.` : "A captura do DJEN ainda não rodou. Cadastre as OABs em Configurações."}</p>`,
   }));
 }
 
@@ -120,6 +133,11 @@ export async function processos(req, env, sessao, id) {
   if (!p) return naoEncontrado(sessao);
   const [contato, observacoes] = await Promise.all([decifrar(env, p.contato_parte_contraria_enc), decifrar(env, p.observacoes_enc)]);
   await auditar(env, req, sessao.usuario_id, "processo_visualizado", `processo ${p.id}`);
+  const [{ results: prz }, { results: pubs }, { results: ags }] = await Promise.all([
+    env.DB.prepare("SELECT id, titulo, prazo_fatal, situacao FROM prazos WHERE processo_id = ? ORDER BY prazo_fatal DESC").bind(p.id).all(),
+    env.DB.prepare("SELECT id, data_disponibilizacao, tipo, situacao FROM publicacoes WHERE processo_id = ? ORDER BY data_disponibilizacao DESC LIMIT 30").bind(p.id).all(),
+    env.DB.prepare("SELECT id, titulo, data, hora FROM agenda WHERE processo_id = ? ORDER BY data DESC").bind(p.id).all(),
+  ]);
   return resposta(pagina({
     titulo: p.numero || `Pasta ${p.pasta}`, sessao,
     corpo: html`
@@ -138,6 +156,11 @@ export async function processos(req, env, sessao, id) {
         campo("Instância superior", [p.resultado_superior, dataBR(p.data_decisao_superior)].filter(Boolean).join(" · ")),
         campo("Decisão final", dataBR(p.data_decisao_final))],
         observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : "")}
+      <section class="cartao"><div class="titulo-acoes"><h2>Prazos</h2><a class="botao-link" href="/sistema/prazos/novo?processo=${String(p.id)}">Novo prazo</a></div>
+        ${prz.length ? html`<ul class="lista-simples">${prz.map((x) => html`<li><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.prazo_fatal)} ${urgencia(x.prazo_fatal, x.situacao)} ${x.situacao !== "aberto" ? x.situacao : ""}</span></li>`)}</ul>` : html`<p>Nenhum prazo.</p>`}</section>
+      <section class="cartao"><div class="titulo-acoes"><h2>Agenda</h2><a class="botao-link" href="/sistema/agenda/novo?processo=${String(p.id)}">Novo compromisso</a></div>
+        ${ags.length ? html`<ul class="lista-simples">${ags.map((x) => html`<li><a href="/sistema/agenda/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.data)} ${x.hora || ""}</span></li>`)}</ul>` : html`<p>Nenhum compromisso.</p>`}</section>
+      ${pubs.length ? html`<section class="cartao"><h2>Intimações</h2><ul class="lista-simples">${pubs.map((x) => html`<li><a href="/sistema/publicacoes/${String(x.id)}">${dataBR(x.data_disponibilizacao)} · ${x.tipo || "Intimação"}</a><span>${x.situacao === "pendente" ? "para triagem" : ""}</span></li>`)}</ul></section>` : ""}
 `,
   }));
 }

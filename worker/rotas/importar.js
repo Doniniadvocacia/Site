@@ -3,6 +3,7 @@
 import { html, pagina, resposta, campoCsrf } from "../html.js";
 import { agora, cifrar, iguais } from "../seguranca.js";
 import { auditar } from "../sessao.js";
+import { normalizarData } from "../calendario.js";
 
 const SITE_ID_PADRAO = "4ce0a7a8-3fa0-495f-a643-664a08144c36";
 
@@ -37,7 +38,7 @@ export async function importar(req, env, sessao) {
     corpo: html`
       <h1>Importar do Wix</h1>
       <section class="cartao">
-        <p>Copia os clientes e processos do sistema atual no Wix para o banco novo. Registros já importados são atualizados, sem duplicar.</p>
+        <p>Copia clientes e processos (atualizando os já importados) e traz os prazos, intimações e compromissos que ainda não existem aqui. Prazos e compromissos editados neste sistema não são sobrescritos.</p>
         <p class="dica">Documentos, contatos, endereços e observações são gravados cifrados. Pode ser repetido quantas vezes for preciso até a virada.</p>
         ${env.WIX_API_KEY ? html`<form method="post">${campoCsrf(sessao)}<button type="submit">Importar agora</button></form>`
           : html`<p class="erro">O segredo WIX_API_KEY não está configurado no Cloudflare.</p>`}
@@ -95,7 +96,54 @@ export async function importar(req, env, sessao) {
     }
     for (let i = 0; i < ps.length; i += 50) await env.DB.batch(ps.slice(i, i + 50));
     const semCliente = processos.filter((p) => !idCliente[typeof p.cliente === "object" && p.cliente ? p.cliente._id : p.cliente]).length;
-    const resumo = `${clientes.length} clientes e ${processos.length} processos importados${semCliente ? ` (${semCliente} processo(s) sem cliente vinculado)` : ""}.`;
+
+    // Prazos, intimações e agenda: só entram os que ainda não existem (edições feitas aqui são preservadas).
+    const { results: mapaP } = await env.DB.prepare("SELECT id, wix_id, numero, pasta FROM processos").all();
+    const dig = (v) => String(v || "").replace(/\D/g, "");
+    const porWix = new Map(mapaP.map((x) => [x.wix_id, x.id]));
+    const porNumero = new Map(mapaP.filter((x) => x.numero).map((x) => [dig(x.numero), x.id]));
+    const porPasta = new Map(mapaP.filter((x) => x.pasta).map((x) => [String(x.pasta).trim(), x.id]));
+    const acharProcesso = (ref, pasta) => porWix.get(ref) ?? porNumero.get(dig(ref)) ?? porPasta.get(String(pasta || "").trim()) ?? null;
+    const novos = { prazos: 0, publicacoes: 0, agenda: 0 };
+
+    const prazos = await lerColecao(env, "Prazos");
+    const sp = prazos.map((z) => {
+      const marca = `${txt(z.status) || ""} ${txt(z.situacaoCumprido) || ""}`.toLowerCase();
+      const situacao = /cancel/.test(marca) ? "cancelado" : (/cumprid|sim|conclu/.test(marca) || z.dataCumprimento) ? "cumprido" : "aberto";
+      return env.DB.prepare(`INSERT INTO prazos (wix_id, processo_id, titulo, tipo, categoria, descricao, prazo_fatal, prazo_interno, hora, responsavel,
+          situacao, data_cumprimento, data_audiencia, hora_audiencia, uf, criado_em, atualizado_em)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(wix_id) DO NOTHING`)
+        .bind(z._id, acharProcesso(txt(z.processoId), txt(z.pasta)), txt(z.title) || txt(z.tipo) || "Prazo", txt(z.tipo), txt(z.categoria), txt(z.descricao),
+          normalizarData(z.prazoFatal), normalizarData(z.prazoInterno), txt(z.hora), txt(z.responsavel), situacao,
+          normalizarData(z.dataCumprimento), normalizarData(z.dataAudiencia), txt(z.horaAudiencia), txt(z.uf), t, t);
+    });
+    for (let i = 0; i < sp.length; i += 50) for (const r of await env.DB.batch(sp.slice(i, i + 50))) novos.prazos += r.meta.changes;
+
+    const pubs = await lerColecao(env, "Publicacoes");
+    const spub = pubs.map((u) => {
+      const d = normalizarData(u.dataPublicao);
+      return env.DB.prepare(`INSERT INTO publicacoes (wix_id, djen_id, data_disponibilizacao, data_publicacao, tribunal, tipo, numero_processo, processo_id,
+          texto, link, oab, situacao, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'importada', ?) ON CONFLICT DO NOTHING`)
+        .bind(u._id, txt(u.idDJEN), d, d, txt(u.tribunal), txt(u.tipo), txt(u.processo), acharProcesso(txt(u.processo)), txt(u.text) || txt(u.title),
+          txt(u.link), txt(u.oab), t);
+    });
+    for (let i = 0; i < spub.length; i += 50) for (const r of await env.DB.batch(spub.slice(i, i + 50))) novos.publicacoes += r.meta.changes;
+
+    const ags = await lerColecao(env, "Agenda");
+    const sag = ags.filter((a) => normalizarData(a.dataHora)).map((a) => {
+      const iso = typeof a.dataHora === "object" && a.dataHora?.$date ? a.dataHora.$date : String(a.dataHora);
+      const hora = (iso.match(/T(\d{2}:\d{2})/) || [])[1] || null;
+      const proc = typeof a.processo === "object" && a.processo ? a.processo._id : a.processo;
+      const cli = typeof a.cliente === "object" && a.cliente ? a.cliente._id : a.cliente;
+      return env.DB.prepare(`INSERT INTO agenda (wix_id, processo_id, cliente_id, titulo, tipo, data, hora, local, observacoes, criado_em, atualizado_em)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(wix_id) DO NOTHING`)
+        .bind(a._id, porWix.get(proc) ?? null, idCliente[cli] ?? null, txt(a.title) || "Compromisso", txt(a.tipo), normalizarData(a.dataHora), hora,
+          txt(a.local), txt(a.observacoes), t, t);
+    });
+    for (let i = 0; i < sag.length; i += 50) for (const r of await env.DB.batch(sag.slice(i, i + 50))) novos.agenda += r.meta.changes;
+
+    const resumo = `${clientes.length} clientes e ${processos.length} processos atualizados${semCliente ? ` (${semCliente} processo(s) sem cliente vinculado)` : ""}. ` +
+      `Novos: ${novos.prazos} de ${prazos.length} prazos, ${novos.publicacoes} de ${pubs.length} intimações, ${novos.agenda} de ${ags.length} compromissos.`;
     await auditar(env, req, sessao.usuario_id, "importacao_wix", resumo);
     return tela({ aviso: resumo });
   } catch (e) {

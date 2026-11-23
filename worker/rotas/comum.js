@@ -1,0 +1,42 @@
+// Utilidades compartilhadas pelas telas da etapa 2.
+import { html, seguro, h, dataBR } from "../html.js";
+import { iguais } from "../seguranca.js";
+import { hojeBR, somarDias } from "../calendario.js";
+
+export const opcoes = (lista, selecionado, vazio = "—") =>
+  seguro(`<option value="">${h(vazio)}</option>` + lista.map(([v, r]) =>
+    `<option value="${h(v)}"${String(v) === String(selecionado ?? "") ? " selected" : ""}>${h(r)}</option>`).join(""));
+
+export async function listasApoio(env) {
+  const [{ results: procs }, { results: usuarios }] = await Promise.all([
+    env.DB.prepare(`SELECT p.id, p.pasta, p.numero, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
+                    ORDER BY CAST(p.pasta AS INTEGER), p.pasta`).all(),
+    env.DB.prepare("SELECT nome FROM usuarios WHERE ativo = 1 AND perfil != 'cliente' ORDER BY nome").all(),
+  ]);
+  return {
+    processos: procs.map((p) => [p.id, [p.pasta && `Pasta ${p.pasta}`, p.numero, p.cliente].filter(Boolean).join(" · ")]),
+    responsaveis: usuarios.map((u) => [u.nome, u.nome]),
+  };
+}
+
+export async function csrfOk(req, sessao) {
+  const f = await req.formData();
+  return { f, ok: iguais(String(f.get("csrf") || ""), sessao.csrf) };
+}
+
+export const txt = (f, k, max = 2000) => { const v = String(f.get(k) ?? "").trim(); return v ? v.slice(0, max) : null; };
+export const dataValida = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+
+// Etiqueta de urgência para a data fatal.
+export function urgencia(fatal, situacao = "aberto") {
+  if (situacao !== "aberto" || !fatal) return "";
+  const hoje = hojeBR();
+  if (fatal < hoje) return html`<span class="selo selo-vencido">Vencido</span>`;
+  if (fatal === hoje) return html`<span class="selo selo-hoje">Hoje</span>`;
+  if (fatal === somarDias(hoje, 1)) return html`<span class="selo selo-amanha">Amanhã</span>`;
+  if (fatal <= somarDias(hoje, 7)) return html`<span class="selo selo-semana">7 dias</span>`;
+  return "";
+}
+
+export const rotuloProcesso = (p) => [p.pasta && `Pasta ${p.pasta}`, p.numero].filter(Boolean).join(" · ") || "—";
+export { dataBR };

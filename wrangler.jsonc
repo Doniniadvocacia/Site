@@ -20,6 +20,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Captura do DJEN às 7h e 13h de Brasília (10h e 16h UTC), de segunda a sexta.
+  "triggers": { "crons": ["0 10 * * 1-5", "0 16 * * 1-5"] },
   // Mantém variáveis cadastradas pelo painel ao publicar.
   "keep_vars": true,
   "observability": { "enabled": true }

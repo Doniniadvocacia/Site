@@ -54,7 +54,10 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
         <a href="/sistema/">Painel</a>
         <a href="/sistema/clientes">Clientes</a>
         <a href="/sistema/processos">Processos</a>
-        ${sessao.perfil === "admin" ? html`<a href="/sistema/usuarios">Usuários</a><a href="/sistema/importar">Importar</a>` : ""}
+        <a href="/sistema/prazos">Prazos</a>
+        <a href="/sistema/publicacoes">Intimações</a>
+        <a href="/sistema/agenda">Agenda</a>
+        ${sessao.perfil === "admin" ? html`<a href="/sistema/configuracoes">Configurações</a>` : ""}
         <span class="menu-espaco"></span>
         <a href="/sistema/conta/senha" class="menu-usuario">${sessao.nome}</a>
         <form method="post" action="/sistema/sair" class="form-sair">

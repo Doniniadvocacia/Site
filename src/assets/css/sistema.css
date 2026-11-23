@@ -74,3 +74,43 @@ td.acoes select { padding: .4rem; font-size: .8rem; }
 .lista-simples { list-style: none; padding: 0; margin: 0; }
 .lista-simples li { display: flex; justify-content: space-between; gap: 1rem; padding: .45rem 0; border-bottom: 1px solid #f0ece4; }
 .lista-simples li span { color: var(--suave); font-size: .85rem; }
+
+/* Etapa 2: prazos, intimações, agenda */
+textarea { font: inherit; padding: .6rem .7rem; border: 1px solid #cfd5df; border-radius: 6px; resize: vertical; }
+.grade-form { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grade-form .largo { grid-column: 1 / -1; }
+fieldset.calculo { border: 1px dashed var(--dourado); border-radius: 8px; padding: 1rem; display: grid; gap: .8rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: end; background: #fdfbf6; }
+fieldset.calculo legend { font: 600 .8rem var(--sans); color: var(--navy); padding: 0 .4rem; letter-spacing: .06em; text-transform: uppercase; }
+fieldset.calculo label { display: grid; gap: .3rem; font-size: .85rem; color: var(--suave); }
+.resultado-calculo { grid-column: 1 / -1; margin: 0; background: var(--branco); border-left: 3px solid var(--dourado); padding: .6rem .8rem; }
+.botao-secundario { background: var(--branco); color: var(--navy); }
+.botao-secundario:hover { background: #eef1f6; }
+.botoes-form { display: flex; flex-wrap: wrap; gap: .6rem; }
+.botao-link { display: inline-block; font: 500 .85rem/1 var(--sans); padding: .65rem 1rem; border-radius: 6px; background: var(--navy); color: var(--branco); text-decoration: none; }
+.botao-link:hover { background: var(--navy-2); }
+.titulo-acoes { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .6rem; }
+.titulo-acoes h1, .titulo-acoes h2 { margin: 0; }
+.titulo-acoes form { margin: 0; }
+.abas { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0 1rem; border-bottom: 1px solid var(--linha); }
+.abas a { padding: .5rem .9rem; text-decoration: none; color: var(--suave); border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: .9rem; }
+.abas a.ativa, .abas a:hover { color: var(--navy); border-bottom-color: var(--dourado); }
+.selo { display: inline-block; font: 600 .68rem/1 var(--sans); letter-spacing: .05em; text-transform: uppercase; padding: .25rem .45rem; border-radius: 4px; margin-left: .3rem; vertical-align: middle; }
+.selo-vencido { background: #fbeaea; color: var(--erro); }
+.selo-hoje { background: var(--erro); color: var(--branco); }
+.selo-amanha { background: #fdf0d8; color: #8a5a00; }
+.selo-semana { background: #eef1f6; color: var(--navy); }
+.indicador-alerta { background: #6b1f1f; }
+.duas-colunas { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.duas-colunas .cartao { margin: 0; }
+.teor { white-space: pre-wrap; background: var(--creme); border-radius: 6px; padding: 1rem; max-height: 420px; overflow-y: auto; font-size: .9rem; }
+.nowrap { white-space: nowrap; }
+.alerta-texto { color: var(--erro); }
+.link-discreto { color: var(--texto); text-decoration: none; }
+.link-discreto:hover { text-decoration: underline; }
+.form-linha { margin: 0; display: inline; }
+.grade-cartoes { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.cartao-link { display: grid; gap: .3rem; background: var(--branco); border: 1px solid var(--linha); border-top: 3px solid var(--dourado); border-radius: 8px; padding: 1.2rem; text-decoration: none; color: var(--texto); }
+.cartao-link strong { font: 1.05rem var(--serifa); color: var(--navy); }
+.cartao-link span { font-size: .85rem; color: var(--suave); }
+.cartao-link:hover { border-color: var(--navy); }

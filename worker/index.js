@@ -7,6 +7,11 @@ import { configurar, entrar, doisFatores, sair, trocarSenha } from "./rotas/aces
 import { usuarios } from "./rotas/usuarios.js";
 import { painel, clientes, processos } from "./rotas/dados.js";
 import { importar } from "./rotas/importar.js";
+import { prazos } from "./rotas/prazos.js";
+import { publicacoes } from "./rotas/publicacoes.js";
+import { agenda } from "./rotas/agenda.js";
+import { oabs, feriados } from "./rotas/configuracoes.js";
+import { capturarDjen } from "./djen.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -37,6 +42,17 @@ async function status(env) {
   return new Response(linhas.join("\n") + "\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
 }
 
+function configuracoes(sessao) {
+  const item = (href, titulo, texto) => html`<a class="cartao-link" href="${href}"><strong>${titulo}</strong><span>${texto}</span></a>`;
+  return resposta(pagina({ titulo: "Configurações", sessao, corpo: html`<h1>Configurações</h1><div class="grade-cartoes">
+    ${item("/sistema/usuarios", "Usuários", "Contas da equipe, senhas provisórias e 2FA")}
+    ${item("/sistema/oabs", "OABs e DJEN", "Inscrições monitoradas e captura de intimações")}
+    ${item("/sistema/feriados", "Feriados", "Feriados locais e suspensões de expediente")}
+    ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
+    ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
+  </div>` }));
+}
+
 async function sistema(req, env) {
   const url = new URL(req.url);
   const caminho = url.pathname.replace(/\/+$/, "") || "/";
@@ -63,11 +79,17 @@ async function sistema(req, env) {
   let m;
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/cumprir)?))?$/))) return prazos(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/agenda(?:\/(novo|\d+))?$/))) return agenda(req, env, sessao, m[1]);
 
   const admin = sessao.perfil === "admin";
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);
   if (caminho === "/sistema/importar" && admin) return importar(req, env, sessao);
   if (caminho === "/sistema/status" && admin) return status(env);
+  if (caminho === "/sistema/configuracoes" && admin) return configuracoes(sessao);
+  if (caminho === "/sistema/oabs" && admin) return oabs(req, env, sessao);
+  if (caminho === "/sistema/feriados" && admin) return feriados(req, env, sessao);
 
   return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Página não encontrada</h1>` }), 404);
 }
@@ -85,5 +107,10 @@ export default {
       }
     }
     return env.ASSETS.fetch(req);
+  },
+
+  // Captura agendada do DJEN (ver "triggers" no wrangler.jsonc)
+  async scheduled(evento, env, ctx) {
+    if (env.DB) ctx.waitUntil(capturarDjen(env, "agendada"));
   },
 };
