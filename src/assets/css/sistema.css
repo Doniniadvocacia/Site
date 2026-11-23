@@ -332,3 +332,10 @@ fieldset.calculo label { display: grid; gap: .3rem; font-size: .85rem; color: va
   .cartao-resumo { padding: .8rem; }
   .cartao-resumo strong { font-size: 1.1rem; }
 }
+.andamento-longo { margin: 0 0 .3rem; }
+.andamento-longo summary { cursor: pointer; list-style: none; }
+.andamento-longo summary::-webkit-details-marker { display: none; }
+.andamento-longo .ver-mais { color: var(--navy); font-size: .8rem; text-decoration: underline; white-space: nowrap; }
+.andamento-longo .recolher, .andamento-longo[open] summary .pre, .andamento-longo[open] .ver-mais { display: none; }
+.andamento-longo[open] .recolher { display: inline; color: var(--navy); font-size: .8rem; text-decoration: underline; }
+.andamento-longo p { margin: 0; }

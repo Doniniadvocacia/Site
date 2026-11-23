@@ -1,5 +1,5 @@
 // Histórico processual: andamentos com anexo opcional, exibidos na ficha do processo.
-import { html, pagina, resposta, redirecionar, campoCsrf, dataBR } from "../html.js";
+import { html, pagina, resposta, redirecionar, campoCsrf, dataBR, textoDeHtml } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
@@ -7,6 +7,16 @@ import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
 import { csrfOk, txt, dataValida } from "./comum.js";
 
 export const linkAnexo = (a) => (a.anexo_id ? html` <a class="anexo" href="/sistema/anexos/${String(a.anexo_id)}" target="_blank" rel="noopener">📎 ${a.anexo_nome || "anexo"}</a>${a.anexo_pendente ? html` <small>(não copiado do Wix)</small>` : ""}` : "");
+
+// Texto do andamento: HTML de intimações vira texto simples; textos longos ficam recolhidos.
+function textoAndamento(descricao) {
+  const texto = textoDeHtml(descricao);
+  const linhas = texto.split("\n");
+  if (texto.length <= 360 && linhas.length <= 5) return html`<p class="pre">${texto}</p>`;
+  let resumo = linhas.slice(0, 3).join("\n");
+  if (resumo.length > 280) resumo = resumo.slice(0, 280).replace(/\s+\S*$/, "");
+  return html`<details class="andamento-longo"><summary><span class="pre">${resumo}…</span> <span class="ver-mais">ver íntegra</span><span class="recolher">recolher</span></summary><p class="pre">${texto}</p></details>`;
+}
 
 // Cartão do histórico na ficha do processo.
 export async function cartaoHistorico(env, sessao, processoId) {
@@ -24,7 +34,7 @@ export async function cartaoHistorico(env, sessao, processoId) {
     </form>
     ${results.length ? html`<ol class="linha-tempo">${results.map((h) => html`<li>
       <div class="linha-tempo-data">${dataBR(h.data)}</div>
-      <div class="linha-tempo-texto"><p class="pre">${h.descricao}</p>${linkAnexo(h)}
+      <div class="linha-tempo-texto">${textoAndamento(h.descricao)}${linkAnexo(h)}
         <small class="dica">${h.autor ? `por ${h.autor}` : h.wix_id ? "importado do Wix" : ""}</small>
         ${podeExcluir(h) ? html`<form method="post" action="/sistema/historico/${String(h.id)}/excluir" class="form-linha form-excluir">${campoCsrf(sessao)}
           <label class="confirmar"><input type="checkbox" name="confirmar" value="1" required> confirmar</label><button type="submit" class="botao-pequeno botao-secundario">Excluir</button></form>` : ""}

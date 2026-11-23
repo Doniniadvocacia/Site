@@ -111,3 +111,32 @@ export function moeda(v) {
   if (v === null || v === undefined || v === "") return "";
   return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+// Converte o HTML que vem do DJEN/PJe/eproc (e do Wix) em texto simples, preservando quebras de linha.
+// O resultado continua sendo escapado na hora de exibir: nenhuma marcação de origem externa chega à página.
+const ENTIDADES = {
+  nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", ordm: "º", ordf: "ª", sect: "§", deg: "°", ndash: "–", mdash: "—",
+  laquo: "«", raquo: "»", ldquo: "“", rdquo: "”", lsquo: "‘", rsquo: "’", hellip: "…", middot: "·", bull: "•",
+  aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú", Aacute: "Á", Eacute: "É", Iacute: "Í", Oacute: "Ó", Uacute: "Ú",
+  agrave: "à", Agrave: "À", acirc: "â", ecirc: "ê", ocirc: "ô", Acirc: "Â", Ecirc: "Ê", Ocirc: "Ô", atilde: "ã", otilde: "õ",
+  Atilde: "Ã", Otilde: "Õ", ccedil: "ç", Ccedil: "Ç", uuml: "ü", Uuml: "Ü",
+};
+export function textoDeHtml(v) {
+  let s = String(v ?? "");
+  if (!/<\/?[a-z!][^>]*>/i.test(s) && !/&[a-z#0-9]+;/i.test(s)) return s.trim();
+  s = s.replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<!DOCTYPE[^>]*>/gi, "")
+    .replace(/<(head|style|script|title)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n• ")
+    .replace(/<\/(p|div|tr|table|h[1-6]|li|center|ul|ol|blockquote|section|article)\s*>/gi, "\n")
+    .replace(/<(p|div|table|h[1-6]|center|blockquote)\b[^>]*>/gi, "\n")
+    .replace(/<\/(td|th)\s*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&([a-z]+);/gi, (m, n) => ENTIDADES[n] ?? m);
+  return s.split("\n")
+    .map((l) => l.replace(/[ \t ]+/g, " ").replace(/\s+([:;,.])(\s|$)/g, "$1$2").trim())
+    .join("\n").replace(/\n{2,}/g, "\n").trim();
+}

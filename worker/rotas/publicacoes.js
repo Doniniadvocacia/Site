@@ -1,12 +1,12 @@
 // Intimações do DJEN: fila de triagem e histórico.
-import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
+import { html, pagina, resposta, redirecionar, campoCsrf, textoDeHtml } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { opcoes, listasApoio, csrfOk, rotuloProcesso, dataBR } from "./comum.js";
 import { formularioPrazo, lerPrazo, gravarPrazo } from "./prazos.js";
 
 const SITUACAO = { pendente: "Pendente", com_prazo: "Prazo criado", sem_prazo: "Sem prazo", importada: "Importada do Wix" };
-const trecho = (s, n = 160) => { const t = String(s || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n) + "…" : t; };
+const trecho = (s, n = 160) => { const t = textoDeHtml(s).replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n) + "…" : t; };
 
 export async function publicacoes(req, env, sessao, id) {
   if (!id) {
@@ -55,7 +55,7 @@ export async function publicacoes(req, env, sessao, id) {
           <div><dt>Situação</dt><dd>${SITUACAO[pub.situacao]}${pub.triador ? ` · por ${pub.triador}` : ""}</dd></div>
         </dl>
         ${pub.link && /^https:\/\//.test(pub.link) ? html`<p><a href="${pub.link}" rel="noopener noreferrer" target="_blank">Ver no DJEN ↗</a></p>` : ""}
-        <h3>Teor</h3><div class="teor">${pub.texto || "(sem texto)"}</div>
+        <h3>Teor</h3><div class="teor">${textoDeHtml(pub.texto) || "(sem texto)"}</div>
       </section>
       ${prazosPub.length ? html`<section class="cartao"><h2>Prazos desta intimação</h2><ul class="lista-simples">${prazosPub.map((x) => html`<li><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.prazo_fatal)} · ${x.situacao}</span></li>`)}</ul></section>` : ""}
       <section class="cartao">
