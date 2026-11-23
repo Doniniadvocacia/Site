@@ -20,6 +20,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Mantém variáveis cadastradas pelo painel ao publicar.
+  "keep_vars": true,
   "observability": { "enabled": true }
   // Segredos (configurar no painel, nunca aqui): DATA_KEY, SETUP_TOKEN, WIX_API_KEY
 }

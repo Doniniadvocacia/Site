@@ -39,7 +39,10 @@ export async function configurar(req, env) {
   if (await haUsuarios(env)) return redirecionar("/sistema/entrar");
   if (req.method === "GET") return resposta(telaConfigurar());
   const f = await req.formData();
-  if (!env.SETUP_TOKEN || !iguais(String(f.get("token") || "").trim(), String(env.SETUP_TOKEN).trim())) {
+  if (!env.SETUP_TOKEN || !String(env.SETUP_TOKEN).trim()) {
+    return resposta(telaConfigurar("O segredo SETUP_TOKEN não está disponível no servidor. Confira no Cloudflare se ele foi cadastrado como Segredo e se a última publicação já terminou."), 503);
+  }
+  if (!iguais(String(f.get("token") || "").trim(), String(env.SETUP_TOKEN).trim())) {
     await auditar(env, req, null, "configuracao_negada");
     return resposta(telaConfigurar("Código de configuração inválido."), 403);
   }
