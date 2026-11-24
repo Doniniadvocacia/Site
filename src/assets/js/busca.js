@@ -1,3 +1,12 @@
+// Menu da conta (nome do usuário): fecha ao clicar fora ou com Esc.
+(function () {
+  "use strict";
+  var menu = document.querySelector(".menu-conta");
+  if (!menu) return;
+  document.addEventListener("click", function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
+})();
+
 // Sugestões da barra de busca do Diligo: lista os itens enquanto o usuário digita.
 (function () {
   "use strict";

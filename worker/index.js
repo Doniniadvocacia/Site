@@ -16,6 +16,7 @@ import { cadastroCliente, cadastroProcesso } from "./rotas/cadastro.js";
 import { adicionarHistorico, excluirHistorico, editarHistorico } from "./rotas/historico.js";
 import { financeiro } from "./rotas/financeiro.js";
 import { servirAnexo } from "./anexos.js";
+import { editarCadastro } from "./rotas/conta.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -79,6 +80,7 @@ async function sistema(req, env) {
   if (!EQUIPE.has(sessao.perfil)) return resposta(pagina({ titulo: "Acesso negado", corpo: html`<h1>Acesso negado</h1>` }), 403);
   if (caminho === "/sistema/conta/senha") return trocarSenha(req, env, sessao);
   if (sessao.trocar_senha) return redirecionar("/sistema/conta/senha");
+  if (caminho === "/sistema/conta/cadastro") return editarCadastro(req, env, sessao);
   sessao.pendentes = (await env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first())?.n || 0;
 
   if (caminho === "/sistema") return painel(req, env, sessao);

@@ -65,11 +65,17 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
           <button type="submit" aria-label="Buscar" title="Buscar">⌕</button>
           <ul id="sugestoes-busca" class="sugestoes" role="listbox" aria-label="Sugestões de busca" hidden></ul>
         </form>
-        <a href="/sistema/conta/senha" class="menu-usuario">${sessao.nome}</a>
-        <form method="post" action="/sistema/sair" class="form-sair">
-          <input type="hidden" name="csrf" value="${sessao.csrf}">
-          <button type="submit">Sair</button>
-        </form>
+        <details class="menu-conta">
+          <summary class="menu-usuario" aria-label="Menu da conta de ${sessao.nome}">${sessao.nome}<span class="seta-conta" aria-hidden="true"></span></summary>
+          <div class="menu-conta-lista" role="menu">
+            <a href="/sistema/conta/senha" role="menuitem">Alterar senha</a>
+            <a href="/sistema/conta/cadastro" role="menuitem">Editar cadastro</a>
+            <form method="post" action="/sistema/sair" class="form-sair">
+              <input type="hidden" name="csrf" value="${sessao.csrf}">
+              <button type="submit" role="menuitem">Sair</button>
+            </form>
+          </div>
+        </details>
       </nav>`
     : "";
   return html`<!doctype html>
