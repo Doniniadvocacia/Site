@@ -408,3 +408,5 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .resumo-financeiro { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }
 .cartao-resumo.saldo-anterior { border-top-color: #8a7a5c; }
 @media (min-width: 641px) { .resumo-financeiro { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); } }
+.resumo-financeiro { align-items: stretch; grid-auto-rows: 1fr; }
+.cartao-resumo { align-content: start; }
