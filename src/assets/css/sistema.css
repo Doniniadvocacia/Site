@@ -397,3 +397,12 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .campo-arquivo { max-width: 520px; }
 .botoes-form { align-items: center; }
 .botoes-form button, .botoes-form .botao-link { align-self: center; }
+.cartao-resumo.saldo-conta { border-top-color: var(--dourado); background: #fffdf8; }
+.ajustar-saldo { margin-top: .3rem; font-size: .8rem; }
+.ajustar-saldo summary { cursor: pointer; color: var(--navy); text-decoration: underline; list-style: none; }
+.ajustar-saldo summary::-webkit-details-marker { display: none; }
+.ajustar-saldo form { margin-top: .5rem; gap: .5rem; }
+.ajustar-saldo label { font-size: .78rem; }
+.ajustar-saldo input { padding: .4rem .5rem; font-size: .85rem; }
+.ajustar-saldo .dica { margin: .4rem 0 0; font-size: .75rem; }
+.resumo-financeiro { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }

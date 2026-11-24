@@ -42,7 +42,8 @@ export function urgencia(fatal, situacao = "aberto") {
 export function numeroBR(v) {
   const s = String(v ?? "").replace(/R\$|\s/g, "").trim();
   if (!s) return null;
-  const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+  // "15.000" e "1.500.000" (pontos de milhar, sem centavos) também são aceitos.
+  const n = Number(s.includes(",") || /^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, "").replace(",", ".") : s);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
 }
 
