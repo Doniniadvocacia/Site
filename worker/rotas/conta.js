@@ -42,7 +42,7 @@ export async function editarCadastro(req, env, sessao) {
             <label>Telefone fixo<input name="telefone" maxlength="14" inputmode="tel" data-mascara="telefone" value="${v.telefone || ""}" placeholder="(XX) XXXX-XXXX"></label>
           </fieldset>
           <fieldset class="largo grade-form grupo-form grupo-endereco"><legend>Endereço</legend>
-            <label>CEP <small>(preenche o endereço)</small><input name="cep" data-endereco="cep" maxlength="9" inputmode="numeric" data-mascara="cep" value="${v.cep || ""}" placeholder="XXXXX-XXX" autocomplete="postal-code"></label>
+            <label>CEP<input name="cep" data-endereco="cep" maxlength="9" inputmode="numeric" data-mascara="cep" value="${v.cep || ""}" placeholder="XXXXX-XXX" autocomplete="postal-code"></label>
             <label class="duplo">Rua<input name="rua" data-endereco="rua" maxlength="150" value="${v.rua || ""}" autocomplete="address-line1"></label>
             <label>Número<input name="numero" data-endereco="numero" maxlength="15" value="${v.numero || ""}"></label>
             <label>Complemento<input name="complemento" data-endereco="complemento" maxlength="80" value="${v.complemento || ""}" placeholder="Apto, sala, bloco" autocomplete="address-line2"></label>

@@ -34,7 +34,7 @@ function formularioCliente(sessao, c, acao, sugestoes) {
     <label>Gênero<select name="genero">${opcoes(lista("Masculino", "Feminino", "Outro"), c.genero)}</select></label>
     <fieldset class="largo grade-form grupo-form grupo-endereco"><legend>Endereço</legend>
       ${c.endereco_antigo ? html`<p class="dica largo">Endereço registrado anteriormente: <strong>${c.endereco_antigo}</strong>. Preencha os campos abaixo para atualizar.</p>` : ""}
-      <label>CEP <small>(preenche o endereço)</small><input name="cep" maxlength="9" inputmode="numeric" data-mascara="cep" data-endereco="cep" value="${c.cep || ""}" placeholder="XXXXX-XXX"></label>
+      <label>CEP<input name="cep" maxlength="9" inputmode="numeric" data-mascara="cep" data-endereco="cep" value="${c.cep || ""}" placeholder="XXXXX-XXX"></label>
       <label class="duplo">Rua<input name="rua" maxlength="150" data-endereco="rua" value="${c.rua || ""}"></label>
       <label>Número<input name="numero" maxlength="15" data-endereco="numero" value="${c.numero || ""}"></label>
       <label>Complemento<input name="complemento" maxlength="80" data-endereco="complemento" value="${c.complemento || ""}" placeholder="Apto, sala, bloco"></label>

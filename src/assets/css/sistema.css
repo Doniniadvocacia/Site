@@ -503,3 +503,8 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .aviso-cep.erro-cep { color: var(--erro); }
 .grade-form > label > input:not([type=checkbox]):not([type=radio]), .grade-form > label > select, .grade-form > label > textarea { width: 100%; box-sizing: border-box; }
 .grupo-endereco > label { align-self: end; }
+/* Aviso do CEP não desloca o campo: fica sobreposto logo abaixo dele */
+.grupo-endereco > label { position: relative; }
+.aviso-cep { position: absolute; left: 0; top: 100%; margin-top: .15rem; white-space: nowrap; line-height: 1.2; min-height: 0; }
+.aviso-cep:empty { display: none; }
+.grupo-endereco { row-gap: 1.3rem; }

@@ -14,7 +14,7 @@
       var d = cep.value.replace(/\D/g, "");
       if (d.length !== 8 || d === ultimo) return;
       ultimo = d;
-      aviso.textContent = "Buscando endereço…";
+      aviso.textContent = "";
       aviso.className = "aviso-cep";
       fetch("/sistema/cep/" + d, { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (r) { return r.json(); })
@@ -26,7 +26,8 @@
           });
           var compl = campo("complemento");
           if (compl && !compl.value && j.complemento) compl.value = j.complemento;
-          aviso.textContent = "Endereço encontrado. Confira e informe o número.";
+          aviso.textContent = "";
+          cep.setAttribute("data-cep-ok", d);
           var numero = campo("numero");
           if (numero && !numero.value) numero.focus();
         })
