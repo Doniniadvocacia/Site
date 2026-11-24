@@ -33,8 +33,8 @@ export async function cartaoHistorico(env, sessao, processoId, req = null) {
       ${campoCsrf(sessao)}
       <label>Data<input type="date" name="data" required value="${hojeBR()}"></label>
       <label class="largo">Andamento<textarea name="descricao" rows="3" required maxlength="20000" placeholder="Ex.: Juntada de petição; despacho; audiência realizada..."></textarea></label>
-      ${anexosDisponiveis(env) ? html`<label>Arquivo (até 20 MB)<input type="file" name="arquivo"></label>` : html`<p class="dica">Anexos indisponíveis até o R2 ser ativado.</p>`}
-      <div class="botoes-form"><button type="submit">Adicionar ao histórico</button></div>
+      ${anexosDisponiveis(env) ? html`<label class="largo campo-arquivo">Arquivo (até 20 MB)<input type="file" name="arquivo"></label>` : html`<p class="dica largo">Anexos indisponíveis até o R2 ser ativado.</p>`}
+      <div class="largo botoes-form"><button type="submit">Adicionar ao histórico</button></div>
     </form></details>`;
   const lista = results.length ? html`<ol class="linha-tempo">${results.map((h) => html`<li>
       <div class="linha-tempo-data">${dataBR(h.data)}</div>

@@ -394,3 +394,6 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .grupo-decisoes { grid-template-columns: 2fr 1fr 2fr 1fr; }
 @media (max-width: 900px) { .grupo-decisoes { grid-template-columns: 2fr 1fr; } }
 @media (max-width: 640px) { .ficha-processo { grid-template-columns: 1fr 1fr; gap: .8rem 1rem; } }
+.campo-arquivo { max-width: 520px; }
+.botoes-form { align-items: center; }
+.botoes-form button, .botoes-form .botao-link { align-self: center; }
