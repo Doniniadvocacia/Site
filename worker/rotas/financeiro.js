@@ -3,7 +3,7 @@
 import { html, seguro, pagina, resposta, redirecionar, campoCsrf, dataBR, moeda } from "../html.js";
 import { agora, cifrar, decifrar, tokenAleatorio } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { hojeBR } from "../calendario.js";
+import { hojeBR, somarDias } from "../calendario.js";
 import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso, bloco } from "./comum.js";
 import { linkAnexo } from "./historico.js";
@@ -204,36 +204,52 @@ export async function financeiro(req, env, sessao, id) {
     return redirecionar(ref && new URL(ref).pathname.startsWith("/sistema/") ? new URL(ref).pathname + new URL(ref).search : "/sistema/financeiro");
   }
 
-  // Lista mensal
+  // Lista: mês (padrão) ou período, com filtros por tipo, categoria, cliente e situação
   if (!id) {
     const sp = new URL(req.url).searchParams;
     const mes = /^\d{4}-\d{2}$/.test(sp.get("mes") || "") ? sp.get("mes") : hoje.slice(0, 7);
     const tipo = ["receita", "despesa"].includes(sp.get("tipo")) ? sp.get("tipo") : "";
     const sit = ["aberto", "pago", "atrasado"].includes(sp.get("situacao")) ? sp.get("situacao") : "";
-    const ini = `${mes}-01`, fim = somarMeses(ini, 1);
-    const [{ results: doMes }, atraso, saldo] = await Promise.all([
-      env.DB.prepare(`${SELECT_LANC} WHERE f.vencimento >= ? AND f.vencimento < ? ORDER BY f.vencimento, f.id`).bind(ini, fim).all(),
+    const categoria = (sp.get("categoria") || "").slice(0, 80);
+    const clienteId = Number(sp.get("cliente")) || null;
+    let de = dataValida(sp.get("de") || ""), ate = dataValida(sp.get("ate") || "");
+    if (de && ate && de > ate) [de, ate] = [ate, de];
+    const periodo = Boolean(de || ate);
+    const ini = `${mes}-01`, fimMes = somarMeses(ini, 1);
+    // Período: [de, ate] inclusive; sem período, o mês escolhido.
+    const onde = ["f.vencimento >= ?", "f.vencimento < ?"], args = [periodo ? (de || "0000-01-01") : ini, periodo ? somarDias(ate || "9999-12-30", 1) : fimMes];
+    if (categoria) { onde.push("f.categoria = ?"); args.push(categoria); }
+    if (clienteId) { onde.push("COALESCE(f.cliente_id, pr.cliente_id) = ?"); args.push(clienteId); }
+    const [{ results: doPeriodo }, atraso, saldo, cats, clis] = await Promise.all([
+      env.DB.prepare(`${SELECT_LANC} WHERE ${onde.join(" AND ")} ORDER BY f.vencimento, f.id LIMIT 2000`).bind(...args).all(),
       env.DB.prepare(`SELECT SUM(CASE WHEN tipo = 'receita' THEN valor ELSE 0 END) AS receber, SUM(CASE WHEN tipo = 'despesa' THEN valor ELSE 0 END) AS pagar,
         COUNT(*) AS n FROM financeiro WHERE pago = 0 AND vencimento < ?`).bind(hoje).first(),
       saldoConta(env, hoje),
+      env.DB.prepare("SELECT DISTINCT categoria FROM financeiro WHERE COALESCE(categoria, '') != '' ORDER BY categoria").all(),
+      env.DB.prepare(`SELECT DISTINCT c.id, c.nome FROM financeiro f LEFT JOIN processos pr ON pr.id = f.processo_id
+        JOIN clientes c ON c.id = COALESCE(f.cliente_id, pr.cliente_id) ORDER BY c.nome COLLATE NOCASE`).all(),
     ]);
-    const soma = (fn) => doMes.filter(fn).reduce((s, l) => s + l.valor, 0);
+    const soma = (fn) => doPeriodo.filter(fn).reduce((s, l) => s + l.valor, 0);
     const rec = soma((l) => l.tipo === "receita"), recPago = soma((l) => l.tipo === "receita" && l.pago);
     const desp = soma((l) => l.tipo === "despesa"), despPago = soma((l) => l.tipo === "despesa" && l.pago);
-    const linhas = doMes.filter((l) => (!tipo || l.tipo === tipo) && (!sit || (sit === "pago" ? l.pago : sit === "aberto" ? !l.pago : !l.pago && l.vencimento < hoje)));
+    const linhas = doPeriodo.filter((l) => (!tipo || l.tipo === tipo) && (!sit || (sit === "pago" ? l.pago : sit === "aberto" ? !l.pago : !l.pago && l.vencimento < hoje)));
+    const filtrando = Boolean(tipo || sit || categoria || clienteId || periodo);
     const [a, m] = mes.split("-").map(Number);
-    const url = (o) => { const q = new URLSearchParams({ mes, ...(tipo && { tipo }), ...(sit && { situacao: sit }), ...o }); for (const [k, v] of [...q]) if (!v) q.delete(k); return `/sistema/financeiro?${q}`; };
-    const aba = (chave, valor, rotulo, atual) => html`<a href="${url({ [chave]: valor })}" class="${atual === valor ? "ativa" : ""}">${rotulo}</a>`;
+    const sufixo = periodo ? "do período" : "do mês";
+    // Navegação de mês preserva os demais filtros.
+    const url = (o) => { const q = new URLSearchParams({ mes, tipo, situacao: sit, categoria, cliente: clienteId ? String(clienteId) : "", ...o }); for (const [k, v] of [...q]) if (!v) q.delete(k); return `/sistema/financeiro?${q}`; };
+    const op = (lista, atual) => lista.map(([v, r]) => html`<option value="${v}"${String(atual ?? "") === String(v) ? html` selected` : ""}>${r}</option>`);
     return resposta(pagina({
       titulo: "Financeiro", sessao,
       corpo: html`
         <div class="titulo-acoes"><h1>Financeiro</h1><a class="botao-link" href="/sistema/financeiro/novo">Novo lançamento</a></div>
+        ${periodo ? html`<div class="navegacao-mes"><strong class="periodo">Período: ${de && ate ? `${dataBR(de)} a ${dataBR(ate)}` : de ? `a partir de ${dataBR(de)}` : `até ${dataBR(ate)}`}</strong></div>` : html`
         <div class="navegacao-mes">
           <a href="${url({ mes: somarMeses(ini, -1).slice(0, 7) })}" aria-label="Mês anterior">‹</a>
           <strong>${MESES[m - 1]} de ${String(a)}</strong>
           <a href="${url({ mes: somarMeses(ini, 1).slice(0, 7) })}" aria-label="Próximo mês">›</a>
           ${mes !== hoje.slice(0, 7) ? html`<a class="hoje" href="${url({ mes: hoje.slice(0, 7) })}">Mês atual</a>` : ""}
-        </div>
+        </div>`}
         <div class="resumo-financeiro">
           <div class="cartao-resumo saldo-conta">
             <div class="topo-cartao"><span>Saldo atual da conta</span>${botaoOlho()}</div>
@@ -244,15 +260,24 @@ export async function financeiro(req, env, sessao, id) {
             <strong class="${saldo.anterior < 0 ? "despesa" : ""}">${valor(saldo.anterior)}</strong>
             <small>em ${dataBR(new Date(Date.UTC(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10))}</small>
           </div>
-          <div class="cartao-resumo receita"><span>Receitas do mês</span><strong>${valor(rec)}</strong><small>Recebido ${valor(recPago)}</small></div>
-          <div class="cartao-resumo despesa"><span>Despesas do mês</span><strong>${valor(desp)}</strong><small>Pago ${valor(despPago)}</small></div>
-          <div class="cartao-resumo"><span>Resultado do mês</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${valor(recPago - despPago)}</strong><small>Previsto ${valor(rec - desp)}</small></div>
+          <div class="cartao-resumo receita"><span>Receitas ${sufixo}</span><strong>${valor(rec)}</strong><small>Recebido ${valor(recPago)}</small></div>
+          <div class="cartao-resumo despesa"><span>Despesas ${sufixo}</span><strong>${valor(desp)}</strong><small>Pago ${valor(despPago)}</small></div>
+          <div class="cartao-resumo"><span>Resultado ${sufixo}</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${valor(recPago - despPago)}</strong><small>Previsto ${valor(rec - desp)}</small></div>
           <div class="cartao-resumo alerta"><span>Em atraso (todos os meses)</span><strong>${valor(atraso?.receber || 0)}</strong><small>a receber · ${valor(atraso?.pagar || 0)} a pagar</small></div>
         </div>
-        <nav class="abas">${aba("tipo", "", "Tudo", tipo)}${aba("tipo", "receita", "Receitas", tipo)}${aba("tipo", "despesa", "Despesas", tipo)}
-          <span class="separador"></span>${aba("situacao", "", "Todas", sit)}${aba("situacao", "aberto", "Em aberto", sit)}${aba("situacao", "atrasado", "Em atraso", sit)}${aba("situacao", "pago", "Pagas", sit)}</nav>
+        <form method="get" action="/sistema/financeiro" class="filtros-financeiro" role="search" aria-label="Filtrar lançamentos">
+          ${periodo ? "" : html`<input type="hidden" name="mes" value="${mes}">`}
+          <label>Receita/despesa<select name="tipo">${op([["", "Todas"], ["receita", "Receitas"], ["despesa", "Despesas"]], tipo)}</select></label>
+          <label>Tipo de lançamento<select name="categoria">${op([["", "Todos"], ...cats.results.map((c) => [c.categoria, c.categoria])], categoria)}</select></label>
+          <label class="filtro-cliente">Cliente<select name="cliente">${op([["", "Todos"], ...clis.results.map((c) => [c.id, c.nome])], clienteId)}</select></label>
+          <label>Situação<select name="situacao">${op([["", "Todas"], ["aberto", "Em aberto"], ["atrasado", "Em atraso"], ["pago", "Pagas"]], sit)}</select></label>
+          <label>Data inicial<input type="date" name="de" value="${de || ""}"></label>
+          <label>Data final<input type="date" name="ate" value="${ate || ""}"></label>
+          <div class="botoes-filtro"><button type="submit">Filtrar</button>
+            <a class="botao-link botao-secundario" href="/sistema/financeiro">Limpar</a></div>
+        </form>
         ${tabela(sessao, linhas)}
-        <p class="dica">${String(linhas.length)} lançamento(s).</p>`,
+        <p class="dica">${String(linhas.length)} lançamento(s)${filtrando ? " com os filtros aplicados" : ""}${periodo ? " — datas pelo vencimento" : ""}.</p>`,
     }));
   }
 
