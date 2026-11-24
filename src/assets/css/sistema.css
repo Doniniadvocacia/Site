@@ -712,3 +712,10 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .resumo-relatorio { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 @media print { .resumo-relatorio { grid-template-columns: repeat(4, 1fr); gap: 6px; } .resumo-relatorio .cartao-resumo { padding: 6px 8px; } .resumo-relatorio strong { font-size: 13px; } }
 .lanc-conta { margin: .15rem 0 0; font-size: .8rem; color: var(--suave); }
+/* Nome de anexo longo quebra a linha em vez de invadir a coluna do valor/pagamento */
+.lanc-descricao { min-width: 0; overflow-wrap: anywhere; }
+.lanc-descricao .anexo { display: inline-block; max-width: 100%; margin-top: .25rem; overflow-wrap: anywhere; word-break: break-word; }
+.lanc-valor { min-width: 0; }
+.lancamento { grid-template-columns: 96px minmax(200px, 1.2fr) minmax(220px, 2fr) 230px; }
+.lanc-pago span { white-space: nowrap; }
+@media (max-width: 900px) { .lancamento { grid-template-columns: 90px 1fr; } }
