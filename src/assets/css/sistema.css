@@ -410,3 +410,15 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 @media (min-width: 641px) { .resumo-financeiro { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); } }
 .resumo-financeiro { align-items: stretch; grid-auto-rows: 1fr; }
 .cartao-resumo { align-content: start; }
+/* Ocultar/mostrar valores */
+.topo-cartao { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.botao-olho { width: 2.2rem; height: 2.2rem; padding: 0; border-radius: 999px; border: 2px solid var(--navy); background: var(--branco); color: var(--navy); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; margin: -.4rem -.2rem -.4rem 0; }
+.botao-olho:hover { background: #eef1f6; }
+/* Valores visíveis: olho riscado (clique para ocultar). Ocultos: olho aberto (clique para mostrar). */
+.botao-olho .olho-aberto { display: none; }
+.botao-olho[aria-pressed="true"] .olho-fechado { display: none; }
+.botao-olho[aria-pressed="true"] .olho-aberto { display: block; }
+.valores-ocultos .valor { color: var(--suave); letter-spacing: .04em; }
+.cartao-resumo .valor { font: inherit; color: inherit; letter-spacing: inherit; text-transform: none; }
+.topo-cartao > span { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
+.valores-ocultos .cartao-resumo strong .valor, .valores-ocultos td .valor { color: var(--suave); }

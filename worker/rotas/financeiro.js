@@ -1,6 +1,6 @@
 // Financeiro: receitas e despesas, parcelas, recorrências e baixas.
 // Acesso: administradores e usuários com a credencial do financeiro (sessao.financeiro).
-import { html, pagina, resposta, redirecionar, campoCsrf, dataBR, moeda } from "../html.js";
+import { html, seguro, pagina, resposta, redirecionar, campoCsrf, dataBR, moeda } from "../html.js";
 import { agora, cifrar, decifrar, tokenAleatorio } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
@@ -15,6 +15,12 @@ const CATEGORIAS = {
 };
 const FORMAS = ["Pix", "Transferência", "Crédito em Conta", "Boleto", "Cartão de Crédito", "Dinheiro", "Alvará"].map((x) => [x, x]);
 const CONDICOES = [["À Vista", "À vista"], ["Parcelado", "Parcelado"], ["Entrada+Parcelado", "Entrada + parcelado"], ["Recorrente", "Recorrente (mensal)"]];
+
+// Valor monetário que pode ser ocultado pelo botão do olho (assets/js/valores.js).
+const valor = (v) => { const m = moeda(v); return html`<span class="valor" data-valor="${m}">${m}</span>`; };
+const OLHO = '<svg class="olho-aberto" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>' +
+  '<svg class="olho-fechado" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 4l16 16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+export const botaoOlho = () => html`<button type="button" class="botao-olho" data-alternar-valores aria-pressed="false" title="Ocultar valores" aria-label="Ocultar valores">${seguro(OLHO)}</button>`;
 
 const negado = (sessao) => resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1><p>O financeiro é liberado para administradores e usuários com credencial específica.</p>` }), 403);
 
@@ -63,7 +69,7 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
       <td><a href="/sistema/financeiro/${String(l.id)}">${l.descricao}</a>${rotuloParcela(l) ? html` <small class="parcela">${rotuloParcela(l)}</small>` : ""}
         <br><small>${l.categoria || ""}</small>${l.anexo_id ? linkAnexo(l) : ""}</td>
       ${mostrarProcesso ? html`<td>${l.cliente_nome || ""}${l.processo_id ? html`<br><small><a href="/sistema/processos/${String(l.processo_id)}">${rotuloProcesso(l)}</a></small>` : ""}</td>` : ""}
-      <td class="num nowrap ${l.tipo}">${l.tipo === "despesa" ? "− " : ""}${moeda(l.valor)}</td>
+      <td class="num nowrap ${l.tipo}">${l.tipo === "despesa" ? "− " : ""}${valor(l.valor)}</td>
       <td class="nowrap">${situacao(l)}</td>
       <td>${l.pago ? "" : html`<form method="post" action="/sistema/financeiro/${String(l.id)}/baixar" class="form-linha">${campoCsrf(sessao)}<button class="botao-pequeno" type="submit">${l.tipo === "receita" ? "Recebido" : "Pago"}</button></form>`}</td>
     </tr>`)}</tbody></table></div>`;
@@ -83,7 +89,7 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
   const recebido = soma((l) => l.tipo === "receita" && l.pago), aReceber = soma((l) => l.tipo === "receita" && !l.pago), despesas = soma((l) => l.tipo === "despesa");
   const novo = processoId ? `/sistema/financeiro/novo?processo=${processoId}` : `/sistema/financeiro/novo?cliente=${clienteId}`;
   return bloco("Lançamentos Financeiros", html`
-    ${results.length ? html`<p class="resumo-linha">Recebido <strong class="receita">${moeda(recebido)}</strong> · A receber <strong>${moeda(aReceber)}</strong> · Despesas <strong class="despesa">${moeda(despesas)}</strong></p>` : ""}
+    ${results.length ? html`<p class="resumo-linha">Recebido <strong class="receita">${valor(recebido)}</strong> · A receber <strong>${valor(aReceber)}</strong> · Despesas <strong class="despesa">${valor(despesas)}</strong></p>` : ""}
     ${tabela(sessao, results, { mostrarProcesso: !processoId })}`,
     { id: "financeiro", contagem: results.length, acoes: html`<a class="botao-link botao-pequeno" href="${novo}">Novo lançamento</a>` });
 }
@@ -230,18 +236,18 @@ export async function financeiro(req, env, sessao, id) {
         </div>
         <div class="resumo-financeiro">
           <div class="cartao-resumo saldo-conta">
-            <span>Saldo atual da conta</span>
-            <strong class="${saldo.atual < 0 ? "despesa" : ""}">${moeda(saldo.atual)}</strong>
+            <div class="topo-cartao"><span>Saldo atual da conta</span>${botaoOlho()}</div>
+            <strong class="${saldo.atual < 0 ? "despesa" : ""}">${valor(saldo.atual)}</strong>
           </div>
           <div class="cartao-resumo saldo-anterior">
             <span>Saldo do mês anterior</span>
-            <strong class="${saldo.anterior < 0 ? "despesa" : ""}">${moeda(saldo.anterior)}</strong>
+            <strong class="${saldo.anterior < 0 ? "despesa" : ""}">${valor(saldo.anterior)}</strong>
             <small>em ${dataBR(new Date(Date.UTC(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10))}</small>
           </div>
-          <div class="cartao-resumo receita"><span>Receitas do mês</span><strong>${moeda(rec)}</strong><small>Recebido ${moeda(recPago)}</small></div>
-          <div class="cartao-resumo despesa"><span>Despesas do mês</span><strong>${moeda(desp)}</strong><small>Pago ${moeda(despPago)}</small></div>
-          <div class="cartao-resumo"><span>Resultado do mês</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${moeda(recPago - despPago)}</strong><small>Previsto ${moeda(rec - desp)}</small></div>
-          <div class="cartao-resumo alerta"><span>Em atraso (todos os meses)</span><strong>${moeda(atraso?.receber || 0)}</strong><small>a receber · ${moeda(atraso?.pagar || 0)} a pagar</small></div>
+          <div class="cartao-resumo receita"><span>Receitas do mês</span><strong>${valor(rec)}</strong><small>Recebido ${valor(recPago)}</small></div>
+          <div class="cartao-resumo despesa"><span>Despesas do mês</span><strong>${valor(desp)}</strong><small>Pago ${valor(despPago)}</small></div>
+          <div class="cartao-resumo"><span>Resultado do mês</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${valor(recPago - despPago)}</strong><small>Previsto ${valor(rec - desp)}</small></div>
+          <div class="cartao-resumo alerta"><span>Em atraso (todos os meses)</span><strong>${valor(atraso?.receber || 0)}</strong><small>a receber · ${valor(atraso?.pagar || 0)} a pagar</small></div>
         </div>
         <nav class="abas">${aba("tipo", "", "Tudo", tipo)}${aba("tipo", "receita", "Receitas", tipo)}${aba("tipo", "despesa", "Despesas", tipo)}
           <span class="separador"></span>${aba("situacao", "", "Todas", sit)}${aba("situacao", "aberto", "Em aberto", sit)}${aba("situacao", "atrasado", "Em atraso", sit)}${aba("situacao", "pago", "Pagas", sit)}</nav>
