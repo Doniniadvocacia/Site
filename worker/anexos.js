@@ -2,6 +2,7 @@
 import { agora, cifrarBytes, decifrarBytes, tokenAleatorio } from "./seguranca.js";
 
 export const LIMITE_ANEXO = 20 * 1024 * 1024; // 20 MB
+const POR_EXTENSAO = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
 const INLINE = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"]);
 const MIME_POR_EXTENSAO = {
   pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif",
@@ -57,14 +58,22 @@ export async function servirAnexo(env, sessao, id) {
   const obj = await env.ARQUIVOS.get(a.chave);
   if (!obj) return texto("Arquivo não encontrado no armazenamento.", 404);
   const dados = await decifrarBytes(env, await obj.arrayBuffer());
-  const mime = a.tipo_mime || "application/octet-stream";
+  // Tipo do arquivo: sem parâmetros; arquivos do Wix às vezes chegam como octet-stream, então a extensão decide.
+  let mime = String(a.tipo_mime || "application/octet-stream").split(";")[0].trim().toLowerCase();
+  if (mime === "application/octet-stream" || mime === "binary/octet-stream") mime = POR_EXTENSAO[(a.nome || "").toLowerCase().split(".").pop()] || mime;
   const modo = INLINE.has(mime) ? "inline" : "attachment";
+  // PDF: o leitor de PDF do Chrome se recusa a abrir documentos com CSP "sandbox" ("Esta página foi bloqueada
+  // pelo Chrome", ERR_BLOCKED_BY_CLIENT). PDFs vão sem sandbox (o leitor do navegador é isolado da página);
+  // imagens continuam em sandbox; os demais arquivos são sempre baixados, nunca exibidos.
+  const csp = mime === "application/pdf" ? "frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
+    : modo === "inline" ? "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+      : "default-src 'none'; frame-ancestors 'none'";
   return new Response(dados, { headers: {
     "Content-Type": mime,
     "Content-Disposition": `${modo}; filename="${nomeSeguro(a.nome).replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(a.nome)}`,
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+    "Content-Security-Policy": csp,
     "X-Robots-Tag": "noindex, nofollow",
   } });
 }
