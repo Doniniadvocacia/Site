@@ -63,3 +63,12 @@ export const bloco = (titulo, corpo, { id = "", acoes = "", aberto = true, conta
     <summary><h2>${titulo}${contagem !== null ? html` <span class="contagem">${String(contagem)}</span>` : ""}</h2><span class="bloco-acoes">${acoes}</span><span class="seta" aria-hidden="true"></span></summary>
     <div class="bloco-corpo">${corpo}</div>
   </details>`;
+
+// Cabeçalho comum da Agenda (calendário, prazos e compromissos ficam na mesma página).
+export const cabecalhoAgenda = (ativa) => html`
+  <div class="titulo-acoes"><h1>Agenda</h1><span class="botoes-pilula"><a class="botao-link" href="/sistema/prazos/novo">Novo prazo</a> <a class="botao-link botao-secundario" href="/sistema/agenda/novo">Novo compromisso</a></span></div>
+  <nav class="abas">
+    <a href="/sistema/agenda" class="${ativa === "calendario" ? "ativa" : ""}">Calendário</a>
+    <a href="/sistema/agenda?visao=prazos" class="${ativa === "prazos" ? "ativa" : ""}">Prazos</a>
+    <a href="/sistema/agenda?visao=lista" class="${ativa === "compromissos" ? "ativa" : ""}">Compromissos</a>
+  </nav>`;

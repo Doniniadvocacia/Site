@@ -3,7 +3,8 @@ import { html, pagina, resposta, redirecionar, campoCsrf, seguro } from "../html
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR, somarDias, feriadosNacionais } from "../calendario.js";
-import { opcoes, listasApoio, csrfOk, txt, dataValida, dataBR } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, txt, dataValida, dataBR, cabecalhoAgenda } from "./comum.js";
+import { listaPrazos } from "./prazos.js";
 
 const SITUACOES = [["agendado", "Agendado"], ["realizado", "Realizado"], ["cancelado", "Cancelado"]];
 
@@ -81,8 +82,7 @@ async function calendarioMensal(req, env, sessao) {
   return resposta(pagina({
     titulo: "Agenda", sessao,
     corpo: html`
-      <div class="titulo-acoes"><h1>Agenda</h1><span><a class="botao-link" href="/sistema/prazos/novo">Novo prazo</a> <a class="botao-link" href="/sistema/agenda/novo">Novo compromisso</a></span></div>
-      <nav class="abas"><a href="/sistema/agenda" class="ativa">Calendário</a><a href="/sistema/agenda?visao=lista">Lista de compromissos</a></nav>
+      ${cabecalhoAgenda("calendario")}
       <div class="cal-navegacao">
         <a href="/sistema/agenda?mes=${mesAnt}" aria-label="Mês anterior">‹</a>
         <strong>${MESES[m - 1][0].toUpperCase() + MESES[m - 1].slice(1)} de ${String(ano)}</strong>
@@ -119,6 +119,7 @@ async function agendaDoDia(req, env, sessao, data) {
 
 export async function agenda(req, env, sessao, id) {
   const visao = new URL(req.url).searchParams.get("visao");
+  if (!id && visao === "prazos") return listaPrazos(req, env, sessao);
   if (!id && visao !== "lista" && visao !== "anteriores") return calendarioMensal(req, env, sessao);
   if (id && id.startsWith("dia/")) return agendaDoDia(req, env, sessao, id.slice(4));
   if (!id) {
@@ -128,8 +129,8 @@ export async function agenda(req, env, sessao, id) {
     return resposta(pagina({
       titulo: "Agenda", sessao,
       corpo: html`
-        <div class="titulo-acoes"><h1>Agenda</h1><a class="botao-link" href="/sistema/agenda/novo">Novo compromisso</a></div>
-        <nav class="abas"><a href="/sistema/agenda">Calendário</a><a href="/sistema/agenda?visao=lista" class="${passados ? "" : "ativa"}">Próximos compromissos</a><a href="/sistema/agenda?visao=anteriores" class="${passados ? "ativa" : ""}">Anteriores</a></nav>
+        ${cabecalhoAgenda("compromissos")}
+        <nav class="abas sub-abas"><a href="/sistema/agenda?visao=lista" class="${passados ? "" : "ativa"}">Próximos</a><a href="/sistema/agenda?visao=anteriores" class="${passados ? "ativa" : ""}">Anteriores</a></nav>
         ${results.length ? html`<div class="tabela-rolagem"><table>
           <thead><tr><th>Data</th><th>Compromisso</th><th>Local</th><th>Processo</th><th>Situação</th></tr></thead>
           <tbody>${results.map((a) => html`<tr>

@@ -55,7 +55,6 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
         <a href="/sistema/">Painel</a>
         <a href="/sistema/clientes">Clientes</a>
         <a href="/sistema/processos">Processos</a>
-        <a href="/sistema/prazos">Prazos</a>
         <a href="/sistema/publicacoes">Intimações${pend ? html` <span class="selo-menu">${String(pend)}</span>` : ""}</a>
         <a href="/sistema/agenda">Agenda</a>
         ${sessao.financeiro ? html`<a href="/sistema/financeiro">Financeiro</a>` : ""}

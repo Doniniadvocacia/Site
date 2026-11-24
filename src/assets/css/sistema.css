@@ -470,3 +470,6 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
   .lanc-descricao { grid-column: 2; }
   .lanc-valor { grid-column: 1 / -1; grid-auto-flow: column; justify-content: space-between; align-items: center; border-top: 1px dashed var(--linha); padding-top: .6rem; }
 }
+.sub-abas { border-bottom: 0; margin-top: -.4rem; gap: .2rem; }
+.sub-abas a { font-size: .82rem; padding: .3rem .7rem; border: 1px solid var(--linha); border-radius: 999px; margin-bottom: 0; }
+.sub-abas a.ativa, .sub-abas a:hover { background: var(--navy); color: var(--branco); border-color: var(--navy); }

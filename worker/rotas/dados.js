@@ -80,7 +80,7 @@ export async function painel(req, env, sessao) {
           <div class="destaque-numero"><strong>${String(ativos)}</strong><span>Ativos</span></div>
           <div class="destaque-rodape"><span>Percentual de Ativos</span><span>${String(pct)}%</span></div>
         </a>
-        <a class="destaque azul" href="/sistema/prazos">
+        <a class="destaque azul" href="/sistema/agenda?visao=prazos">
           <span class="marca-agua">${icone.agenda(130)}</span>
           <h2>Prazos</h2>
           <dl class="destaque-lista">

@@ -3,7 +3,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
-import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda } from "./comum.js";
 
 const SITUACOES = [["aberto", "Aberto"], ["cumprido", "Cumprido"], ["cancelado", "Cancelado"]];
 const CONTAGENS = [["uteis", "Dias úteis"], ["corridos", "Dias corridos"]];
@@ -78,11 +78,10 @@ export async function gravarPrazo(env, p, { id = null, usuarioId, publicacaoId =
   return r.meta.last_row_id;
 }
 
-export async function prazos(req, env, sessao, id) {
-  // ---------- Lista ----------
-  if (!id && req.method === "GET") {
+// Aba "Prazos" da Agenda.
+export async function listaPrazos(req, env, sessao) {
     const sp = new URL(req.url).searchParams;
-    const visao = sp.get("visao") || "abertos";
+    const visao = sp.get("filtro") || "abertos";
     const hoje = hojeBR();
     const filtros = {
       abertos: ["p.situacao = 'aberto'", []],
@@ -95,13 +94,13 @@ export async function prazos(req, env, sessao, id) {
     const ordem = visao === "cumpridos" ? "p.data_cumprimento DESC" : "p.prazo_fatal ASC";
     const { results } = await env.DB.prepare(`SELECT p.*, pr.pasta, pr.numero FROM prazos p LEFT JOIN processos pr ON pr.id = p.processo_id
       WHERE ${onde} ORDER BY ${ordem} LIMIT 500`).bind(...args).all();
-    const aba = (v, r) => html`<a href="/sistema/prazos?visao=${v}" class="${visao === v ? "ativa" : ""}">${r}</a>`;
+    const aba = (v, r) => html`<a href="/sistema/agenda?visao=prazos&filtro=${v}" class="${visao === v ? "ativa" : ""}">${r}</a>`;
     return resposta(pagina({
       titulo: "Prazos", sessao,
       corpo: html`
-        <div class="titulo-acoes"><h1>Prazos</h1><a class="botao-link" href="/sistema/prazos/novo">Novo prazo</a></div>
-        <nav class="abas">${aba("abertos", "Abertos")}${aba("vencidos", "Vencidos")}${aba("semana", "Próximos 7 dias")}${aba("cumpridos", "Cumpridos")}${aba("todos", "Todos")}</nav>
-        <div class="tabela-rolagem"><table>
+        ${cabecalhoAgenda("prazos")}
+        <nav class="abas sub-abas">${aba("abertos", "Abertos")}${aba("vencidos", "Vencidos")}${aba("semana", "Próximos 7 dias")}${aba("cumpridos", "Cumpridos")}${aba("todos", "Todos")}</nav>
+        ${results.length ? html`<div class="tabela-rolagem"><table>
           <thead><tr><th>Fatal</th><th>Interno</th><th>Prazo</th><th>Processo</th><th>Responsável</th><th></th></tr></thead>
           <tbody>${results.map((p) => html`<tr>
             <td class="nowrap">${dataBR(p.prazo_fatal)} ${urgencia(p.prazo_fatal, p.situacao)}</td>
@@ -111,9 +110,16 @@ export async function prazos(req, env, sessao, id) {
             <td>${p.responsavel}</td>
             <td>${p.situacao === "aberto" ? html`<form method="post" action="/sistema/prazos/${String(p.id)}/cumprir" class="form-linha">${campoCsrf(sessao)}<button class="botao-pequeno" type="submit">Cumprido</button></form>` : html`<small>${p.situacao === "cumprido" ? `Cumprido ${dataBR(p.data_cumprimento)}` : "Cancelado"}</small>`}</td>
           </tr>`)}</tbody>
-        </table></div>
+        </table></div>` : html`<section class="cartao"><p class="vazio">Nenhum prazo nesta seleção.</p></section>`}
         <p class="dica">${String(results.length)} prazo(s).</p>`,
     }));
+}
+
+export async function prazos(req, env, sessao, id) {
+  // ---------- Lista: agora é a aba "Prazos" da Agenda ----------
+  if (!id && req.method === "GET") {
+    const v = new URL(req.url).searchParams.get("visao");
+    return redirecionar(`/sistema/agenda?visao=prazos${v ? `&filtro=${encodeURIComponent(v)}` : ""}`);
   }
 
   // ---------- Mover data de trabalho (arrastar no calendário) ----------
@@ -143,7 +149,7 @@ export async function prazos(req, env, sessao, id) {
         .bind(hojeBR(), agora(), pid).run();
       await auditar(env, req, sessao.usuario_id, "prazo_cumprido", `prazo ${pid}`);
     }
-    return redirecionar(req.headers.get("Referer")?.includes("/sistema/") ? new URL(req.headers.get("Referer")).pathname + new URL(req.headers.get("Referer")).search : "/sistema/prazos");
+    return redirecionar(req.headers.get("Referer")?.includes("/sistema/") ? new URL(req.headers.get("Referer")).pathname + new URL(req.headers.get("Referer")).search : "/sistema/agenda?visao=prazos");
   }
 
   // ---------- Novo / editar ----------
@@ -154,7 +160,7 @@ export async function prazos(req, env, sessao, id) {
   const acao = novo ? "/sistema/prazos/novo" : `/sistema/prazos/${id}`;
   const tela = (p, { erro, aviso, calculo } = {}) => resposta(pagina({
     titulo: novo ? "Novo prazo" : p.titulo, sessao, erro, aviso,
-    corpo: html`<p class="trilha"><a href="/sistema/prazos">Prazos</a></p>
+    corpo: html`<p class="trilha"><a href="/sistema/agenda?visao=prazos">Agenda › Prazos</a></p>
       <h1>${novo ? "Novo prazo" : p.titulo}</h1>
       ${existente?.publicacao_id ? html`<p class="subtitulo">Criado a partir de <a href="/sistema/publicacoes/${String(existente.publicacao_id)}">intimação do DJEN</a></p>` : ""}
       <section class="cartao">${formularioPrazo({ sessao, p, apoio, acao, calculo })}</section>`,
