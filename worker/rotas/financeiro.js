@@ -77,7 +77,7 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
         <p class="lanc-vencimento">Data de vencimento: <strong class="${atrasado ? "atrasado" : ""}">${dataBR(l.vencimento)}</strong>${atrasado ? html` <span class="selo selo-vencido">Em atraso</span>` : ""}</p>
         ${mostrarProcesso && (quem || l.processo_id) ? html`<p class="lanc-cliente">${l.processo_id ? html`<a href="/sistema/processos/${String(l.processo_id)}">${quem || rotuloProcesso(l)}</a>` : quem}</p>` : ""}
         <p class="lanc-categoria">${l.categoria || ""}</p>
-        <p class="lanc-conta">${l.conta ? html`${l.tipo === "receita" ? "Crédito" : "Débito"}: ${l.conta}` : html`<span class="selo selo-sem-conta">Sem conta</span>`}</p>
+        ${l.conta ? html`<p class="lanc-conta">${l.tipo === "receita" ? "Crédito" : "Débito"}: ${l.conta}</p>` : /cart[aã]o de cr[eé]dito/i.test(l.forma_pagamento || "") ? html`<p class="lanc-conta">Cartão de crédito</p>` : ""}
       </div>
       <div class="lanc-descricao">
         <a href="/sistema/financeiro/${String(l.id)}">${l.descricao}</a>${rotuloParcela(l) ? html` <span class="parcela">${rotuloParcela(l)}</span>` : ""}
@@ -277,7 +277,7 @@ export async function financeiro(req, env, sessao, id) {
     else if (conta) { onde.push("f.conta = ?"); args.push(conta); }
     // "Sem conta" vale para todos os meses: sem período escolhido, mostra todos os lançamentos sem conta.
     if (conta === "__sem__" && !periodo) { args[0] = "0000-01-01"; args[1] = "9999-12-31"; }
-    const [{ results: doPeriodo }, atraso, saldo, cats, clis, contasUsadas, semConta] = await Promise.all([
+    const [{ results: doPeriodo }, atraso, saldo, cats, clis, contasUsadas] = await Promise.all([
       env.DB.prepare(`${SELECT_LANC} WHERE ${onde.join(" AND ")} ORDER BY f.vencimento, f.id LIMIT 2000`).bind(...args).all(),
       env.DB.prepare(`SELECT SUM(CASE WHEN tipo = 'receita' THEN valor ELSE 0 END) AS receber, SUM(CASE WHEN tipo = 'despesa' THEN valor ELSE 0 END) AS pagar,
         COUNT(*) AS n FROM financeiro WHERE pago = 0 AND vencimento < ?`).bind(hoje).first(),
@@ -286,7 +286,6 @@ export async function financeiro(req, env, sessao, id) {
       env.DB.prepare(`SELECT DISTINCT c.id, c.nome FROM financeiro f LEFT JOIN processos pr ON pr.id = f.processo_id
         JOIN clientes c ON c.id = COALESCE(f.cliente_id, pr.cliente_id) ORDER BY c.nome COLLATE NOCASE`).all(),
       env.DB.prepare("SELECT DISTINCT conta FROM financeiro WHERE COALESCE(TRIM(conta), '') != '' ORDER BY conta").all(),
-      env.DB.prepare("SELECT COUNT(*) AS n, SUM(pago) AS pagos FROM financeiro WHERE COALESCE(TRIM(conta), '') = ''").first(),
     ]);
     const soma = (fn) => doPeriodo.filter(fn).reduce((s, l) => s + l.valor, 0);
     const rec = soma((l) => l.tipo === "receita"), recPago = soma((l) => l.tipo === "receita" && l.pago);
@@ -324,8 +323,6 @@ export async function financeiro(req, env, sessao, id) {
           <div class="cartao-resumo"><span>Resultado ${sufixo}</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${valor(recPago - despPago)}</strong><small>Previsto ${valor(rec - desp)}</small></div>
           <div class="cartao-resumo alerta"><span>Em atraso (todos os meses)</span><strong>${valor(atraso?.receber || 0)}</strong><small>a receber · ${valor(atraso?.pagar || 0)} a pagar</small></div>
         </div>
-        ${semConta?.n && conta !== "__sem__" ? html`<p class="alerta-conta">⚠ ${String(semConta.n)} lançamento(s) sem conta de crédito/débito indicada (${String(semConta.pagos || 0)} já pago(s)/recebido(s)). <a href="/sistema/financeiro?conta=__sem__">Ver e corrigir</a></p>` : ""}
-        ${conta === "__sem__" ? html`<p class="alerta-conta">Mostrando lançamentos sem conta de crédito/débito${periodo ? " no período" : " de todos os meses"}. Abra cada um e escolha a conta.</p>` : ""}
         <form method="get" action="/sistema/financeiro" class="filtros-financeiro" role="search" aria-label="Filtrar lançamentos">
           ${periodo ? "" : html`<input type="hidden" name="mes" value="${mes}">`}
           <label>Receita/despesa<select name="tipo">${op([["", "Todas"], ["receita", "Receitas"], ["despesa", "Despesas"]], tipo)}</select></label>

@@ -711,6 +711,4 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 }
 .resumo-relatorio { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 @media print { .resumo-relatorio { grid-template-columns: repeat(4, 1fr); gap: 6px; } .resumo-relatorio .cartao-resumo { padding: 6px 8px; } .resumo-relatorio strong { font-size: 13px; } }
-.alerta-conta { background: #fdf6e7; border: 1px solid #ecd9a8; color: #6b4e12; border-radius: 8px; padding: .6rem .9rem; font-size: .88rem; margin: 0 0 1rem; }
 .lanc-conta { margin: .15rem 0 0; font-size: .8rem; color: var(--suave); }
-.selo-sem-conta { background: #fdf0d8; color: #8a5a00; margin-left: 0; }
