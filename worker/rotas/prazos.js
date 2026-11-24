@@ -3,7 +3,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
-import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda, dataTravada } from "./comum.js";
 
 const SITUACOES = [["aberto", "Aberto"], ["cumprido", "Cumprido"], ["cancelado", "Cancelado"]];
 const CONTAGENS = [["uteis", "Dias úteis"], ["corridos", "Dias corridos"]];
@@ -134,9 +134,16 @@ export async function prazos(req, env, sessao, id) {
     if (!ok) return json({ ok: false, mensagem: "Sessão expirada. Recarregue a página." }, 403);
     const pid = Number(id.split("/")[0]);
     const nova = dataValida(txt(f, "data"));
-    const pz = await env.DB.prepare("SELECT id, titulo, prazo_fatal, prazo_interno, situacao FROM prazos WHERE id = ?").bind(pid).first();
+    const pz = await env.DB.prepare("SELECT id, titulo, tipo, categoria, prazo_fatal, prazo_interno, situacao FROM prazos WHERE id = ?").bind(pid).first();
     if (!pz || !nova) return json({ ok: false, mensagem: "Prazo ou data inválidos." }, 400);
-    if (pz.situacao !== "aberto") return json({ ok: false, mensagem: "Só prazos abertos podem ser reprogramados." }, 409);
+    if (pz.situacao !== "aberto") return json({ ok: false, mensagem: "Só itens em aberto podem ser reagendados." }, 409);
+    if (dataTravada(pz)) return json({ ok: false, mensagem: "Sessão de julgamento tem data fixada e não pode ser reagendada." }, 409);
+    if (pz.categoria === "Compromisso") {
+      // Compromisso: reagenda livremente (a data do compromisso é a própria data fatal).
+      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, agora(), pid).run();
+      await auditar(env, req, sessao.usuario_id, "compromisso_reagendado", `compromisso ${pid}: ${pz.prazo_interno || pz.prazo_fatal || "-"} → ${nova}`);
+      return json({ ok: true, mensagem: `"${pz.titulo}" reagendado para ${nova.split("-").reverse().join("/")}.`, noFatal: false });
+    }
     if (!pz.prazo_fatal || nova > pz.prazo_fatal) {
       return json({ ok: false, mensagem: `Não é possível passar do prazo fatal (${pz.prazo_fatal.split("-").reverse().join("/")}).` }, 409);
     }
@@ -185,6 +192,10 @@ export async function prazos(req, env, sessao, id) {
   const { f, ok } = await csrfOk(req, sessao);
   if (!ok) return tela(existente || {}, { erro: "Sessão expirada. Tente novamente." });
   const { p, calculo } = await lerPrazo(env, f);
+  if (existente && dataTravada(existente) && (p.prazo_fatal !== existente.prazo_fatal || p.prazo_interno !== existente.prazo_interno)) {
+    p.prazo_fatal = existente.prazo_fatal; p.prazo_interno = existente.prazo_interno;
+    return tela(p, { erro: "Sessão de julgamento tem data fixada e não pode ser reagendada. As datas foram mantidas." });
+  }
   if (f.get("acao") === "calcular") return tela(p, calculo ? { calculo } : { erro: "Para calcular, informe a data da publicação e o número de dias." });
   if (ehCompromisso(p) && !p.prazo_fatal && p.prazo_interno) p.prazo_fatal = p.prazo_interno;
   if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: ehCompromisso(p) ? "Informe o título e a data do compromisso." : "Informe o título e o prazo fatal (ou a data da publicação e os dias para calcular)." });

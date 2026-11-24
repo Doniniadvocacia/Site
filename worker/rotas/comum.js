@@ -72,3 +72,6 @@ export const cabecalhoAgenda = (ativa) => html`
     <a href="/sistema/agenda?visao=prazos" class="${ativa === "prazos" ? "ativa" : ""}">Prazos</a>
     <a href="/sistema/agenda?visao=lista" class="${ativa === "compromissos" ? "ativa" : ""}">Compromissos</a>
   </nav>`;
+
+// Compromissos de sessão de julgamento têm data fixada pelo tribunal: não podem ser reagendados.
+export const dataTravada = (p) => p?.categoria === "Compromisso" && /sess[aã]o\s+de\s+julgamento/i.test(`${p.tipo || ""} ${p.titulo || ""}`);

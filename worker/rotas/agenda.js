@@ -3,7 +3,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf, seguro } from "../html
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR, somarDias, feriadosNacionais } from "../calendario.js";
-import { opcoes, listasApoio, csrfOk, txt, dataValida, dataBR, cabecalhoAgenda } from "./comum.js";
+import { opcoes, listasApoio, csrfOk, txt, dataValida, dataBR, cabecalhoAgenda, dataTravada } from "./comum.js";
 import { listaPrazos } from "./prazos.js";
 
 const SITUACOES = [["agendado", "Agendado"], ["realizado", "Realizado"], ["cancelado", "Cancelado"]];
@@ -45,13 +45,22 @@ async function itensDoPeriodo(env, inicio, fim) {
 
 const etiqueta = (it) => {
   const rotulo = `${it.hora ? it.hora + " " : ""}${it.pasta ? it.pasta + " - " : ""}${it.titulo}`;
-  if (!it.prazo) return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}" href="${it.href}" title="${rotulo}">${rotulo}</a>`;
+  if (!it.prazo) {
+    const travadoAv = dataTravada({ ...it, categoria: "Compromisso" });
+    const movelAv = !it.feito && !travadoAv;
+    return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${travadoAv ? " travado" : ""}" href="${it.href}"
+      title="Compromisso: ${rotulo}${travadoAv ? " · data fixada (sessão de julgamento)" : movelAv ? " · arraste para reagendar" : ""}"
+      ${movelAv ? seguro(`draggable="true" data-agenda="${it.id}" data-fatal="9999-12-31" data-compromisso="1"`) : ""}>${rotulo}</a>`;
+  }
   const fatal = it.prazo_fatal ? it.prazo_fatal.split("-").reverse().join("/") : "";
-  const noFatal = it.data === it.prazo_fatal;
-  const movel = !it.feito && !!it.prazo_fatal;
-  return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}" href="${it.href}"
-    title="${it.compromisso ? "Compromisso" : "Prazo"}: ${rotulo}${it.compromisso ? "" : ` · Prazo fatal: ${fatal}`}${it.feito ? " (cumprido)" : movel ? " · arraste para reprogramar" : ""}"
-    ${movel ? seguro(`draggable="true" data-prazo="${it.id}" data-fatal="${it.prazo_fatal}"`) : ""}>${rotulo}</a>`;
+  const noFatal = !it.compromisso && it.data === it.prazo_fatal;
+  // Compromissos podem ir para qualquer data (exceto sessões de julgamento); prazos não passam do fatal.
+  const travado = dataTravada(it);
+  const movel = !it.feito && !travado && (it.compromisso || !!it.prazo_fatal);
+  const limite = it.compromisso ? "9999-12-31" : it.prazo_fatal;
+  return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}${travado ? " travado" : ""}" href="${it.href}"
+    title="${it.compromisso ? "Compromisso" : "Prazo"}: ${rotulo}${it.compromisso ? "" : ` · Prazo fatal: ${fatal}`}${it.feito ? " (cumprido)" : travado ? " · data fixada (sessão de julgamento)" : movel ? " · arraste para reagendar" : ""}"
+    ${movel ? seguro(`draggable="true" data-prazo="${it.id}" data-fatal="${limite}"${it.compromisso ? ' data-compromisso="1"' : ""}`) : ""}>${rotulo}</a>`;
 };
 
 async function calendarioMensal(req, env, sessao) {
@@ -92,7 +101,7 @@ async function calendarioMensal(req, env, sessao) {
         <a href="/sistema/agenda?mes=${mesSeg}" aria-label="Próximo mês">›</a>
         ${mes !== hoje.slice(0, 7) ? html`<a class="cal-hoje" href="/sistema/agenda">Hoje</a>` : ""}
       </div>
-      <p class="dica">Arraste um prazo para reprogramar a data de trabalho (prazo interno). O prazo fatal não muda e a etiqueta não pode ir para depois dele. Etiquetas com borda branca estão no próprio dia do prazo fatal.</p>
+      <p class="dica">Arraste para reagendar. Prazos mudam só a data de trabalho (prazo interno) e não podem passar do prazo fatal; etiquetas com borda branca estão no próprio dia do fatal. Compromissos podem ir para qualquer data, exceto sessões de julgamento, que têm data fixa.</p>
       <div class="aviso-flutuante" id="aviso-agenda" role="status" hidden></div>
       <div class="cal-rolagem"><div class="calendario" data-csrf="${sessao.csrf}">
         ${SEMANA.map((s) => html`<div class="cal-semana">${s}</div>`)}
@@ -125,6 +134,19 @@ export async function agenda(req, env, sessao, id) {
   if (!id && visao === "prazos") return listaPrazos(req, env, sessao);
   if (!id && visao !== "lista" && visao !== "anteriores") return calendarioMensal(req, env, sessao);
   if (id && id.startsWith("dia/")) return agendaDoDia(req, env, sessao, id.slice(4));
+  if (id && id.endsWith("/mover") && req.method === "POST") {
+    const json = (corpo, status = 200) => new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    const { f, ok } = await csrfOk(req, sessao);
+    if (!ok) return json({ ok: false, mensagem: "Sessão expirada. Recarregue a página." }, 403);
+    const aid = Number(id.split("/")[0]), nova = dataValida(txt(f, "data"));
+    const ag = await env.DB.prepare("SELECT id, titulo, tipo, data, situacao FROM agenda WHERE id = ?").bind(aid).first();
+    if (!ag || !nova) return json({ ok: false, mensagem: "Compromisso ou data inválidos." }, 400);
+    if (ag.situacao !== "agendado") return json({ ok: false, mensagem: "Só compromissos agendados podem ser reagendados." }, 409);
+    if (dataTravada({ ...ag, categoria: "Compromisso" })) return json({ ok: false, mensagem: "Sessão de julgamento tem data fixada e não pode ser reagendada." }, 409);
+    await env.DB.prepare("UPDATE agenda SET data = ?, atualizado_em = ? WHERE id = ?").bind(nova, agora(), aid).run();
+    await auditar(env, req, sessao.usuario_id, "compromisso_reagendado", `agenda ${aid}: ${ag.data} → ${nova}`);
+    return json({ ok: true, mensagem: `"${ag.titulo}" reagendado para ${nova.split("-").reverse().join("/")}.` });
+  }
   if (!id) {
     // Compromissos: itens da categoria "Compromisso" (como no Wix) e compromissos avulsos da agenda.
     const cumpridos = visao === "anteriores";
@@ -193,6 +215,10 @@ export async function agenda(req, env, sessao, id) {
     situacao: ["agendado", "realizado", "cancelado"].includes(f.get("situacao")) ? f.get("situacao") : "agendado",
   };
   if (!a.titulo || !a.data) return tela(a, "Informe o título e a data.");
+  if (ex && dataTravada({ ...ex, categoria: "Compromisso" }) && a.data !== ex.data) {
+    a.data = ex.data;
+    return tela(a, "Sessão de julgamento tem data fixada e não pode ser reagendada. A data foi mantida.");
+  }
   const t = agora();
   let aid = ex?.id;
   if (ex) {

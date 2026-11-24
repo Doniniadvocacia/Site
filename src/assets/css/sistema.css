@@ -475,3 +475,5 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .sub-abas a.ativa, .sub-abas a:hover { background: var(--navy); color: var(--branco); border-color: var(--navy); }
 .selo-prazo { background: #eef1f6; color: var(--navy); margin-left: 0; }
 .selo-compromisso { background: #f3ecdf; color: #7a5b22; margin-left: 0; }
+.etiqueta.travado { cursor: default; }
+.etiqueta.travado::before { content: "🔒 "; font-size: .7em; }

@@ -1,4 +1,4 @@
-// Diligo — arrastar prazos no calendário para reprogramar a data de trabalho (prazo interno).
+// Diligo — arrastar no calendário: prazos mudam o prazo interno (até o fatal); compromissos vão para qualquer data.
 // O servidor valida tudo de novo; aqui só melhora a experiência.
 (function () {
   const cal = document.querySelector(".calendario[data-csrf]");
@@ -19,12 +19,12 @@
   const limpar = () => dias().forEach((d) => d.classList.remove("bloqueado", "alvo", "permitido"));
 
   cal.addEventListener("dragstart", (e) => {
-    const el = e.target.closest(".etiqueta[data-prazo]");
+    const el = e.target.closest(".etiqueta[data-prazo], .etiqueta[data-agenda]");
     if (!el) return;
     arrastando = el;
     el.classList.add("arrastando");
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", el.dataset.prazo);
+    e.dataTransfer.setData("text/plain", el.dataset.prazo || el.dataset.agenda);
     const fatal = el.dataset.fatal;
     dias().forEach((d) => d.classList.add(d.dataset.data > fatal ? "bloqueado" : "permitido"));
   });
@@ -54,7 +54,8 @@
     if (el.closest(".dia") === dia) return;
     const corpo = new URLSearchParams({ csrf, data });
     try {
-      const r = await fetch(`/sistema/prazos/${el.dataset.prazo}/mover`, {
+      const destino = el.dataset.agenda ? `/sistema/agenda/${el.dataset.agenda}/mover` : `/sistema/prazos/${el.dataset.prazo}/mover`;
+      const r = await fetch(destino, {
         method: "POST", body: corpo, credentials: "same-origin",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
