@@ -7,12 +7,15 @@ import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso,
 
 const SITUACOES = [["aberto", "Aberto"], ["cumprido", "Cumprido"], ["cancelado", "Cancelado"]];
 const CONTAGENS = [["uteis", "Dias úteis"], ["corridos", "Dias corridos"]];
+const CATEGORIAS = [["Prazo", "Prazo"], ["Compromisso", "Compromisso"]];
+export const ehCompromisso = (p) => p?.categoria === "Compromisso";
 
 // Formulário de prazo, reaproveitado na triagem de intimações.
 export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, extraTopo = "", botaoSalvar = "Salvar prazo", extraBotoes = "" }) {
   return html`<form method="post" action="${acao}" class="formulario grade-form">
     ${campoCsrf(sessao)}${extraTopo}
-    <label class="largo">Processo<select name="processo_id">${opcoes(apoio.processos, p.processo_id, "Sem processo vinculado")}</select></label>
+    <label>Categoria<select name="categoria">${opcoes(CATEGORIAS, p.categoria || "Prazo", "Prazo")}</select></label>
+    <label class="duplo">Processo<select name="processo_id">${opcoes(apoio.processos, p.processo_id, "Sem processo vinculado")}</select></label>
     <label class="largo">Título<input name="titulo" required maxlength="200" value="${p.titulo || ""}" placeholder="Ex.: Contestação, Réplica, Recurso de apelação"></label>
     <label>Tipo<input name="tipo" maxlength="100" value="${p.tipo || ""}" list="tipos-prazo"></label>
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, p.responsavel)}</select></label>
@@ -35,7 +38,7 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
     <label>Audiência (hora)<input type="time" name="hora_audiencia" value="${p.hora_audiencia || ""}"></label>
     <label class="largo">Descrição<textarea name="descricao" rows="${String(Math.min(16, Math.max(3, String(p.descricao || "").split("\n").length + 1)))}" maxlength="20000">${p.descricao || ""}</textarea></label>
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">${botaoSalvar}</button>${extraBotoes}</div>
-    <datalist id="tipos-prazo"><option value="Manifestação"><option value="Contestação"><option value="Réplica"><option value="Recurso"><option value="Contrarrazões"><option value="Embargos de declaração"><option value="Audiência"><option value="Cumprimento de sentença"></datalist>
+    <datalist id="tipos-prazo"><option value="Manifestação"><option value="Contestação"><option value="Réplica"><option value="Recurso"><option value="Contrarrazões"><option value="Embargos de declaração"><option value="Audiência"><option value="Cumprimento de sentença"><option value="Acompanhamento Processual"><option value="Monitorar Citação"><option value="Monitorar Trânsito em Julgado"><option value="Monitorar Expedição Alvará"><option value="Monitorar Precatório/RPV"><option value="Sessão de Julgamento"><option value="Cumprir Diligência"></datalist>
   </form>`;
 }
 
@@ -44,6 +47,7 @@ export async function lerPrazo(env, f) {
   const p = {
     processo_id: Number(f.get("processo_id")) || null,
     titulo: txt(f, "titulo", 200), tipo: txt(f, "tipo", 100), responsavel: txt(f, "responsavel", 120),
+    categoria: f.get("categoria") === "Compromisso" ? "Compromisso" : "Prazo",
     data_inicio: dataValida(txt(f, "data_inicio")), dias: Number(f.get("dias")) || null,
     contagem: f.get("contagem") === "corridos" ? "corridos" : "uteis",
     antecedencia: Math.max(0, Math.min(30, Number(f.get("antecedencia") ?? 2) || 0)),
@@ -65,16 +69,16 @@ export async function lerPrazo(env, f) {
 export async function gravarPrazo(env, p, { id = null, usuarioId, publicacaoId = null }) {
   const t = agora();
   const v = [p.processo_id, p.titulo, p.tipo, p.descricao, p.data_inicio, p.dias, p.contagem, p.prazo_fatal, p.prazo_interno,
-    p.hora, p.responsavel, p.situacao, p.data_cumprimento, p.data_audiencia, p.hora_audiencia, t];
+    p.hora, p.responsavel, p.situacao, p.data_cumprimento, p.data_audiencia, p.hora_audiencia, t, p.categoria || "Prazo"];
   if (id) {
     await env.DB.prepare(`UPDATE prazos SET processo_id=?1, titulo=?2, tipo=?3, descricao=?4, data_inicio=?5, dias=?6, contagem=?7,
       prazo_fatal=?8, prazo_interno=?9, hora=?10, responsavel=?11, situacao=?12, data_cumprimento=?13, data_audiencia=?14,
-      hora_audiencia=?15, atualizado_em=?16 WHERE id=?17`).bind(...v, id).run();
+      hora_audiencia=?15, atualizado_em=?16, categoria=?17 WHERE id=?18`).bind(...v, id).run();
     return id;
   }
   const r = await env.DB.prepare(`INSERT INTO prazos (processo_id, titulo, tipo, descricao, data_inicio, dias, contagem, prazo_fatal,
-    prazo_interno, hora, responsavel, situacao, data_cumprimento, data_audiencia, hora_audiencia, atualizado_em, criado_em, criado_por, publicacao_id)
-    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,?17,?18)`).bind(...v, usuarioId, publicacaoId).run();
+    prazo_interno, hora, responsavel, situacao, data_cumprimento, data_audiencia, hora_audiencia, atualizado_em, categoria, criado_em, criado_por, publicacao_id)
+    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?16,?18,?19)`).bind(...v, usuarioId, publicacaoId).run();
   return r.meta.last_row_id;
 }
 
@@ -90,7 +94,8 @@ export async function listaPrazos(req, env, sessao) {
       cumpridos: ["p.situacao = 'cumprido'", []],
       todos: ["1 = 1", []],
     };
-    const [onde, args] = filtros[visao] || filtros.abertos;
+    const [ondeBase, args] = filtros[visao] || filtros.abertos;
+    const onde = `${ondeBase} AND COALESCE(p.categoria, 'Prazo') != 'Compromisso'`;
     const ordem = visao === "cumpridos" ? "p.data_cumprimento DESC" : "p.prazo_fatal ASC";
     const { results } = await env.DB.prepare(`SELECT p.*, pr.pasta, pr.numero FROM prazos p LEFT JOIN processos pr ON pr.id = p.processo_id
       WHERE ${onde} ORDER BY ${ordem} LIMIT 500`).bind(...args).all();
@@ -159,28 +164,30 @@ export async function prazos(req, env, sessao, id) {
   const apoio = await listasApoio(env);
   const acao = novo ? "/sistema/prazos/novo" : `/sistema/prazos/${id}`;
   const tela = (p, { erro, aviso, calculo } = {}) => resposta(pagina({
-    titulo: novo ? "Novo prazo" : p.titulo, sessao, erro, aviso,
-    corpo: html`<p class="trilha"><a href="/sistema/agenda?visao=prazos">Agenda › Prazos</a></p>
-      <h1>${novo ? "Novo prazo" : p.titulo}</h1>
+    titulo: novo ? (ehCompromisso(p) ? "Novo compromisso" : "Novo prazo") : p.titulo, sessao, erro, aviso,
+    corpo: html`<p class="trilha"><a href="/sistema/agenda?visao=${ehCompromisso(p) ? "lista" : "prazos"}">Agenda › ${ehCompromisso(p) ? "Compromissos" : "Prazos"}</a></p>
+      <h1>${novo ? (ehCompromisso(p) ? "Novo compromisso" : "Novo prazo") : p.titulo}</h1>
       ${existente?.publicacao_id ? html`<p class="subtitulo">Criado a partir de <a href="/sistema/publicacoes/${String(existente.publicacao_id)}">intimação do DJEN</a></p>` : ""}
       <section class="cartao">${formularioPrazo({ sessao, p, apoio, acao, calculo })}</section>`,
   }));
 
   if (req.method === "GET") {
     const sp = new URL(req.url).searchParams;
-    let base = existente || { processo_id: Number(sp.get("processo")) || null, situacao: "aberto", contagem: "uteis" };
+    let base = existente || { processo_id: Number(sp.get("processo")) || null, situacao: "aberto", contagem: "uteis",
+      categoria: sp.get("categoria") === "Compromisso" ? "Compromisso" : "Prazo", antecedencia: sp.get("categoria") === "Compromisso" ? 0 : 2 };
     // Prazos antigos gerados de intimação, ainda sem descrição: sugere o teor da intimação.
     if (existente && !existente.descricao && existente.publicacao_id) {
       const pub = await env.DB.prepare("SELECT * FROM publicacoes WHERE id = ?").bind(existente.publicacao_id).first();
       if (pub) base = { ...existente, descricao: descricaoDaIntimacao(pub) };
     }
-    return tela(base, sp.get("salvo") ? { aviso: "Prazo salvo." } : {});
+    return tela(base, sp.get("salvo") ? { aviso: ehCompromisso(base) ? "Compromisso salvo." : "Prazo salvo." } : {});
   }
   const { f, ok } = await csrfOk(req, sessao);
   if (!ok) return tela(existente || {}, { erro: "Sessão expirada. Tente novamente." });
   const { p, calculo } = await lerPrazo(env, f);
   if (f.get("acao") === "calcular") return tela(p, calculo ? { calculo } : { erro: "Para calcular, informe a data da publicação e o número de dias." });
-  if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: "Informe o título e o prazo fatal (ou a data da publicação e os dias para calcular)." });
+  if (ehCompromisso(p) && !p.prazo_fatal && p.prazo_interno) p.prazo_fatal = p.prazo_interno;
+  if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: ehCompromisso(p) ? "Informe o título e a data do compromisso." : "Informe o título e o prazo fatal (ou a data da publicação e os dias para calcular)." });
   const novoId = await gravarPrazo(env, p, { id: novo ? null : existente.id, usuarioId: sessao.usuario_id });
   await auditar(env, req, sessao.usuario_id, novo ? "prazo_criado" : "prazo_alterado", `prazo ${novoId}`);
   return redirecionar(`/sistema/prazos/${novoId}?salvo=1`);

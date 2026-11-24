@@ -144,7 +144,7 @@ export async function importar(req, env, sessao) {
       return env.DB.prepare(`INSERT INTO prazos (wix_id, processo_id, titulo, tipo, categoria, descricao, prazo_fatal, prazo_interno, hora, responsavel,
           situacao, data_cumprimento, data_audiencia, hora_audiencia, uf, criado_em, atualizado_em)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(wix_id) DO NOTHING`)
-        .bind(z._id, acharProcesso(txt(z.processoId), txt(z.pasta)), txt(z.title) || txt(z.tipo) || "Prazo", txt(z.tipo), txt(z.categoria), txt(z.descricao),
+        .bind(z._id, acharProcesso(txt(z.processoId), txt(z.pasta)), txt(z.title) || txt(z.tipo) || "Prazo", txt(z.tipo), txt(z.categoria) === "Compromisso" ? "Compromisso" : "Prazo", txt(z.descricao),
           normalizarData(z.prazoFatal), normalizarData(z.prazoInterno), txt(z.hora), txt(z.responsavel), situacao,
           normalizarData(z.dataCumprimento), normalizarData(z.dataAudiencia), txt(z.horaAudiencia), txt(z.uf), t, t);
     });

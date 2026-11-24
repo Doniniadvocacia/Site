@@ -33,7 +33,7 @@ export async function fichaProcesso(req, env, sessao, id) {
 
   const base = basePasta(p.pasta);
   const [{ results: prz }, { results: ags }, { results: pubs }, { results: vinculados }, hist, fin] = await Promise.all([
-    env.DB.prepare(`SELECT id, titulo, tipo, descricao, prazo_fatal, prazo_interno, situacao, data_cumprimento, responsavel FROM prazos
+    env.DB.prepare(`SELECT id, titulo, tipo, categoria, descricao, prazo_fatal, prazo_interno, situacao, data_cumprimento, responsavel FROM prazos
       WHERE processo_id = ? ORDER BY CASE situacao WHEN 'aberto' THEN 0 ELSE 1 END, COALESCE(prazo_interno, prazo_fatal) DESC`).bind(p.id).all(),
     env.DB.prepare("SELECT id, titulo, tipo, data, hora, local, situacao, observacoes FROM agenda WHERE processo_id = ? ORDER BY data DESC").bind(p.id).all(),
     env.DB.prepare("SELECT id, data_disponibilizacao, tipo, tribunal, situacao, texto FROM publicacoes WHERE processo_id = ? ORDER BY data_disponibilizacao DESC LIMIT 30").bind(p.id).all(),
@@ -52,7 +52,7 @@ export async function fichaProcesso(req, env, sessao, id) {
   const agenda = [
     ...prz.map((x) => ({ ordem: x.situacao === "aberto" ? 0 : 1, data: x.prazo_interno || x.prazo_fatal, html: html`<tr>
       <td class="nowrap">${dataBR(x.prazo_interno || x.prazo_fatal)}${x.prazo_interno && x.prazo_interno !== x.prazo_fatal ? html`<br><small>fatal ${dataBR(x.prazo_fatal)}</small>` : ""}</td>
-      <td><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a>${x.tipo && x.tipo !== x.titulo ? html`<br><small>${x.tipo}</small>` : ""}</td>
+      <td><span class="selo ${x.categoria === "Compromisso" ? "selo-compromisso" : "selo-prazo"}">${x.categoria === "Compromisso" ? "Compromisso" : "Prazo"}</span><br><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a>${x.tipo && x.tipo !== x.titulo ? html`<br><small>${x.tipo}</small>` : ""}</td>
       <td class="col-descricao">${textoCurto(x.descricao)}</td>
       <td>${x.responsavel || ""}</td>
       <td class="nowrap">${situacaoPrazo(x)}</td>
@@ -61,7 +61,7 @@ export async function fichaProcesso(req, env, sessao, id) {
     </tr>` })),
     ...ags.map((x) => ({ ordem: x.situacao === "agendado" ? 0 : 1, data: x.data, html: html`<tr>
       <td class="nowrap">${dataBR(x.data)}${x.hora ? html`<br><small>${x.hora}</small>` : ""}</td>
-      <td><a href="/sistema/agenda/${String(x.id)}">${x.titulo}</a><br><small>${x.tipo || "Compromisso"}</small></td>
+      <td><span class="selo selo-compromisso">Compromisso</span><br><a href="/sistema/agenda/${String(x.id)}">${x.titulo}</a>${x.tipo ? html`<br><small>${x.tipo}</small>` : ""}</td>
       <td class="col-descricao">${textoCurto([x.local, x.observacoes].filter(Boolean).join(" — "))}</td>
       <td></td>
       <td class="nowrap">${x.situacao === "realizado" ? html`<span class="selo selo-pago">Realizado</span>` : x.situacao === "cancelado" ? html`<span class="selo">Cancelado</span>` : html`<span class="selo selo-semana">Agendado</span>`}</td>
@@ -70,7 +70,7 @@ export async function fichaProcesso(req, env, sessao, id) {
   ].sort((a, b) => a.ordem - b.ordem || String(b.data).localeCompare(String(a.data)));
 
   const acoesAgenda = html`<a class="botao-link botao-pequeno" href="/sistema/prazos/novo?processo=${String(p.id)}">Novo prazo</a>
-    <a class="botao-link botao-pequeno botao-secundario" href="/sistema/agenda/novo?processo=${String(p.id)}">Novo compromisso</a>`;
+    <a class="botao-link botao-pequeno botao-secundario" href="/sistema/prazos/novo?categoria=Compromisso&processo=${String(p.id)}">Novo compromisso</a>`;
 
   return resposta(pagina({
     titulo: p.numero || `Pasta ${p.pasta}`, sessao, ...mensagemDaUrl(req),
@@ -116,7 +116,7 @@ export async function fichaProcesso(req, env, sessao, id) {
           <td>${v.cliente}</td><td>${v.parte_contraria}</td><td>${v.fase}</td><td>${v.situacao}</td></tr>`)}</tbody></table></div>`, { contagem: ligados.length }) : ""}
 
       ${bloco("Agenda", agenda.length ? html`<div class="tabela-rolagem"><table class="tabela-agenda">
-        <thead><tr><th>Prazo interno</th><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead>
+        <thead><tr><th>Data</th><th>Prazo / compromisso</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead>
         <tbody>${agenda.map((a) => a.html)}</tbody></table></div>` : html`<p class="vazio">Nenhum prazo ou compromisso.</p>`,
         { id: "agenda", acoes: acoesAgenda, contagem: agenda.length })}
 

@@ -44,14 +44,14 @@ export async function painel(req, env, sessao) {
     env.DB.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN ${INATIVO} THEN 0 ELSE 1 END) AS ativos FROM processos`).first(),
     env.DB.prepare(`SELECT SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) < ?1 THEN 1 ELSE 0 END) AS atrasados,
         SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) = ?1 THEN 1 ELSE 0 END) AS hoje,
-        SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) > ?1 THEN 1 ELSE 0 END) AS futuros FROM prazos WHERE situacao = 'aberto'`).bind(hoje).first(),
+        SUM(CASE WHEN COALESCE(prazo_interno, prazo_fatal) > ?1 THEN 1 ELSE 0 END) AS futuros FROM prazos WHERE situacao = 'aberto' AND COALESCE(categoria, 'Prazo') != 'Compromisso'`).bind(hoje).first(),
     env.DB.prepare(`SELECT COALESCE(NULLIF(TRIM(fase), ''), 'Sem fase') AS rotulo, COUNT(*) AS n FROM processos WHERE NOT ${INATIVO} GROUP BY 1`).all(),
     env.DB.prepare(`SELECT COALESCE(NULLIF(TRIM(COALESCE(NULLIF(resultado_atual, ''), resultado)), ''), '') AS rotulo, COUNT(*) AS n FROM processos GROUP BY 1`).all(),
     env.DB.prepare(`SELECT titulo, data, hora FROM (
         SELECT titulo, data, hora FROM agenda WHERE situacao = 'agendado' AND data >= ?1 AND LOWER(COALESCE(tipo, '') || titulo) LIKE '%audi%'
         UNION ALL SELECT titulo, data_audiencia AS data, hora_audiencia AS hora FROM prazos WHERE situacao = 'aberto' AND data_audiencia >= ?1)
       ORDER BY data, hora LIMIT 3`).bind(hoje).all(),
-    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, p.descricao, p.prazo_fatal, COALESCE(p.prazo_interno, p.prazo_fatal) AS interno,
+    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, p.categoria, p.descricao, p.prazo_fatal, COALESCE(p.prazo_interno, p.prazo_fatal) AS interno,
         pr.id AS processo_id, pr.pasta, pr.numero, c.nome AS cliente
       FROM prazos p LEFT JOIN processos pr ON pr.id = p.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id
       WHERE p.situacao = 'aberto' ORDER BY interno, p.prazo_fatal LIMIT 25`).all(),
@@ -112,7 +112,7 @@ export async function painel(req, env, sessao) {
             <dl>
               <div><dt>Pasta:</dt><dd>${p.pasta || "—"} ${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}" title="Abrir processo" class="icone-link">${icone.seta()}</a>` : ""}</dd></div>
               <div><dt>Cliente:</dt><dd>${p.cliente || "—"}</dd></div>
-              <div><dt>Prazo:</dt><dd><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a></dd></div>
+              <div><dt>${p.categoria === "Compromisso" ? "Compromisso:" : "Prazo:"}</dt><dd><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a> <span class="selo ${p.categoria === "Compromisso" ? "selo-compromisso" : "selo-prazo"}">${p.categoria === "Compromisso" ? "Compromisso" : "Prazo"}</span></dd></div>
             </dl>
             <dl>
               <div><dt>Número Processo:</dt><dd>${p.numero || "—"}</dd></div>

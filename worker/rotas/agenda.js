@@ -24,7 +24,7 @@ function corDoTipo(tipo) {
 
 async function itensDoPeriodo(env, inicio, fim) {
   const [{ results: prz }, { results: ags }, { results: locais }] = await Promise.all([
-    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, COALESCE(p.prazo_interno, p.prazo_fatal) AS data, p.prazo_fatal, p.hora, p.situacao, pr.pasta FROM prazos p
+    env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, p.categoria, COALESCE(p.prazo_interno, p.prazo_fatal) AS data, p.prazo_fatal, p.hora, p.situacao, pr.pasta FROM prazos p
       LEFT JOIN processos pr ON pr.id = p.processo_id WHERE COALESCE(p.prazo_interno, p.prazo_fatal) BETWEEN ? AND ? AND p.situacao != 'cancelado'
       ORDER BY 4, p.situacao, p.hora`).bind(inicio, fim).all(),
     env.DB.prepare(`SELECT a.id, a.titulo, a.tipo, a.data, a.hora, a.situacao, pr.pasta FROM agenda a
@@ -34,10 +34,13 @@ async function itensDoPeriodo(env, inicio, fim) {
   const porDia = new Map();
   const add = (d, it) => { if (!porDia.has(d)) porDia.set(d, []); porDia.get(d).push(it); };
   for (const a of ags) add(a.data, { ...a, href: `/sistema/agenda/${a.id}`, cor: "cor-compromisso", feito: a.situacao === "realizado", compromisso: true });
-  for (const p of prz) add(p.data, { ...p, href: `/sistema/prazos/${p.id}`, cor: corDoTipo(p.tipo), feito: p.situacao === "cumprido", prazo: true });
+  for (const p of prz) {
+    const comp = p.categoria === "Compromisso";
+    add(p.data, { ...p, href: `/sistema/prazos/${p.id}`, cor: comp ? "cor-compromisso" : corDoTipo(p.tipo), feito: p.situacao === "cumprido", prazo: true, compromisso: comp });
+  }
   const feriados = new Map(locais.map((f) => [f.data, f.descricao]));
   for (const ano of new Set([inicio.slice(0, 4), fim.slice(0, 4)])) for (const [d, n] of feriadosNacionais(Number(ano))) if (!feriados.has(d)) feriados.set(d, n);
-  return { porDia, feriados, tipos: [...new Set(prz.map((p) => p.tipo).filter(Boolean))].sort() };
+  return { porDia, feriados, tipos: [...new Set(prz.filter((p) => p.categoria !== "Compromisso").map((p) => p.tipo).filter(Boolean))].sort() };
 }
 
 const etiqueta = (it) => {
@@ -47,7 +50,7 @@ const etiqueta = (it) => {
   const noFatal = it.data === it.prazo_fatal;
   const movel = !it.feito && !!it.prazo_fatal;
   return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}" href="${it.href}"
-    title="${rotulo} · Prazo fatal: ${fatal}${it.feito ? " (cumprido)" : movel ? " · arraste para reprogramar" : ""}"
+    title="${it.compromisso ? "Compromisso" : "Prazo"}: ${rotulo}${it.compromisso ? "" : ` · Prazo fatal: ${fatal}`}${it.feito ? " (cumprido)" : movel ? " · arraste para reprogramar" : ""}"
     ${movel ? seguro(`draggable="true" data-prazo="${it.id}" data-fatal="${it.prazo_fatal}"`) : ""}>${rotulo}</a>`;
 };
 
@@ -123,25 +126,43 @@ export async function agenda(req, env, sessao, id) {
   if (!id && visao !== "lista" && visao !== "anteriores") return calendarioMensal(req, env, sessao);
   if (id && id.startsWith("dia/")) return agendaDoDia(req, env, sessao, id.slice(4));
   if (!id) {
-    const passados = visao === "anteriores";
-    const { results } = await env.DB.prepare(`SELECT a.*, pr.pasta, pr.numero FROM agenda a LEFT JOIN processos pr ON pr.id = a.processo_id
-      WHERE a.data ${passados ? "<" : ">="} ? ORDER BY a.data ${passados ? "DESC" : "ASC"}, a.hora LIMIT 300`).bind(hojeBR()).all();
+    // Compromissos: itens da categoria "Compromisso" (como no Wix) e compromissos avulsos da agenda.
+    const cumpridos = visao === "anteriores";
+    const [{ results: comp }, { results: avulsos }] = await Promise.all([
+      env.DB.prepare(`SELECT p.id, p.titulo, p.tipo, p.descricao, COALESCE(p.prazo_interno, p.prazo_fatal) AS data, p.hora, p.situacao, p.data_cumprimento,
+          p.responsavel, p.processo_id, pr.pasta, pr.numero, c.nome AS cliente FROM prazos p
+        LEFT JOIN processos pr ON pr.id = p.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id
+        WHERE p.categoria = 'Compromisso' AND p.situacao ${cumpridos ? "!= 'aberto'" : "= 'aberto'"}
+        ORDER BY 5 ${cumpridos ? "DESC" : "ASC"} LIMIT 300`).all(),
+      env.DB.prepare(`SELECT a.*, pr.pasta, pr.numero, c.nome AS cliente FROM agenda a LEFT JOIN processos pr ON pr.id = a.processo_id
+        LEFT JOIN clientes c ON c.id = pr.cliente_id WHERE a.situacao ${cumpridos ? "!= 'agendado'" : "= 'agendado'"} ORDER BY a.data ${cumpridos ? "DESC" : "ASC"}, a.hora LIMIT 300`).all(),
+    ]);
+    const hoje = hojeBR();
+    const itens = [
+      ...comp.map((x) => ({ ...x, href: `/sistema/prazos/${x.id}`, tarefa: true })),
+      ...avulsos.map((x) => ({ ...x, href: `/sistema/agenda/${x.id}`, tarefa: false })),
+    ].sort((a, b) => (cumpridos ? -1 : 1) * String(a.data).localeCompare(String(b.data)));
+    const resumo = (t) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > 110 ? x.slice(0, 110) + "…" : x; };
     return resposta(pagina({
       titulo: "Agenda", sessao,
       corpo: html`
         ${cabecalhoAgenda("compromissos")}
-        <nav class="abas sub-abas"><a href="/sistema/agenda?visao=lista" class="${passados ? "" : "ativa"}">Próximos</a><a href="/sistema/agenda?visao=anteriores" class="${passados ? "ativa" : ""}">Anteriores</a></nav>
-        ${results.length ? html`<div class="tabela-rolagem"><table>
-          <thead><tr><th>Data</th><th>Compromisso</th><th>Local</th><th>Processo</th><th>Situação</th></tr></thead>
-          <tbody>${results.map((a) => html`<tr>
-            <td class="nowrap">${dataBR(a.data)} ${a.hora || ""}</td>
-            <td><a href="/sistema/agenda/${String(a.id)}">${a.titulo}</a>${a.tipo ? html`<br><small>${a.tipo}</small>` : ""}</td>
-            <td>${a.local}</td>
-            <td>${a.processo_id ? html`<a href="/sistema/processos/${String(a.processo_id)}">${a.pasta ? `Pasta ${a.pasta}` : a.numero}</a>` : "—"}</td>
-            <td>${SITUACOES.find((s) => s[0] === a.situacao)?.[1]}</td></tr>`)}</tbody>
-        </table></div>` : html`<section class="cartao"><p>Nenhum compromisso ${passados ? "anterior" : "agendado"}.</p></section>`}`,
+        <nav class="abas sub-abas"><a href="/sistema/agenda?visao=lista" class="${cumpridos ? "" : "ativa"}">Pendentes</a><a href="/sistema/agenda?visao=anteriores" class="${cumpridos ? "ativa" : ""}">Cumpridos</a></nav>
+        ${itens.length ? html`<div class="tabela-rolagem"><table>
+          <thead><tr><th>Data</th><th>Compromisso</th><th>Descrição</th><th>Processo</th><th>Situação</th><th></th></tr></thead>
+          <tbody>${itens.map((x) => html`<tr>
+            <td class="nowrap">${dataBR(x.data)}${x.hora ? html`<br><small>${x.hora}</small>` : ""}${!cumpridos && x.data < hoje ? html` <span class="selo selo-vencido">Atrasado</span>` : ""}</td>
+            <td><a href="${x.href}">${x.titulo}</a>${x.tipo && x.tipo !== x.titulo ? html`<br><small>${x.tipo}</small>` : ""}</td>
+            <td class="col-descricao">${resumo(x.descricao || [x.local, x.observacoes].filter(Boolean).join(" — "))}</td>
+            <td>${x.processo_id ? html`<a href="/sistema/processos/${String(x.processo_id)}">${x.pasta ? `Pasta ${x.pasta}` : x.numero}</a>${x.cliente ? html`<br><small>${x.cliente}</small>` : ""}` : "—"}</td>
+            <td class="nowrap">${x.tarefa ? (x.situacao === "cumprido" ? html`<span class="selo selo-pago">Cumprido</span> <small>${dataBR(x.data_cumprimento)}</small>` : x.situacao === "cancelado" ? html`<span class="selo">Cancelado</span>` : html`<span class="selo selo-semana">Pendente</span>`)
+              : SITUACOES.find((s) => s[0] === x.situacao)?.[1]}</td>
+            <td>${x.tarefa && x.situacao === "aberto" ? html`<form method="post" action="/sistema/prazos/${String(x.id)}/cumprir" class="form-linha">${campoCsrf(sessao)}<button class="botao-pequeno" type="submit">Cumprido</button></form>` : ""}</td>
+          </tr>`)}</tbody>
+        </table></div>` : html`<section class="cartao"><p class="vazio">Nenhum compromisso ${cumpridos ? "cumprido" : "pendente"}.</p></section>`}`,
     }));
   }
+
 
   const novo = id === "novo";
   const ex = novo ? null : await env.DB.prepare("SELECT * FROM agenda WHERE id = ?").bind(Number(id)).first();
