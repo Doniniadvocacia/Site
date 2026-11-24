@@ -235,9 +235,13 @@ export async function importar(req, env, sessao) {
     }
     for (let i = 0; i < sf.length; i += 50) for (const r of await env.DB.batch(sf.slice(i, i + 50))) novos.financeiro += r.meta.changes;
 
+    // Favorecidos e recebedores do Wix (só nomes) entram no cadastro de favorecidos.
+    const nomesFav = [...new Set([...(await lerColecao(env, "Favorecidos")), ...(await lerColecao(env, "Recebedores"))].map((x) => txt(x.nome)).filter(Boolean))];
+    let novosFav = 0;
+    if (nomesFav.length) for (const r of await env.DB.batch(nomesFav.map((n) => env.DB.prepare("INSERT OR IGNORE INTO favorecidos (nome, criado_em) VALUES (?, ?)").bind(n, t)))) novosFav += r.meta.changes;
     const resumo = `${clientes.length} clientes e ${processos.length} processos atualizados${semCliente ? ` (${semCliente} processo(s) sem cliente vinculado)` : ""}. ` +
       `Novos: ${novos.prazos} de ${prazos.length} prazos, ${novos.publicacoes} de ${pubs.length} intimações, ${novos.agenda} de ${ags.length} compromissos, ` +
-      `${novos.historico} de ${hist.length} andamentos, ${novos.financeiro} de ${fin.length} lançamentos financeiros${semData ? ` (${semData} sem data ou valor, ignorados)` : ""}.`;
+      `${novos.historico} de ${hist.length} andamentos, ${novos.financeiro} de ${fin.length} lançamentos financeiros${semData ? ` (${semData} sem data ou valor, ignorados)` : ""}, ${novosFav} favorecidos.`;
     await auditar(env, req, sessao.usuario_id, "importacao_wix", resumo);
     return tela({ aviso: resumo });
   } catch (e) {

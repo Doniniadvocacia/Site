@@ -8,6 +8,7 @@ import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso, bloco } from "./comum.js";
 import { linkAnexo } from "./historico.js";
 import { obterListas, categoriasFinanceiras } from "../listas.js";
+import { listaFavorecidos } from "./favorecidos.js";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const CONDICOES = [["À Vista", "À vista"], ["Parcelado", "Parcelado"], ["Entrada+Parcelado", "Entrada + parcelado"], ["Recorrente", "Recorrente (mensal)"]];
@@ -114,35 +115,52 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
 }
 
 // ---------- Formulário ----------
+export const NOME_ESCRITORIO = "Eduardo Donini Advocacia";
+
+// Campo de busca (cliente ou processo): texto visível + id oculto + lista de sugestões (assets/js/selecao.js).
+const campoBusca = ({ tipo, rotulo, nome, id, texto, placeholder, cliente = null }) => html`<label class="campo-busca" data-busca="${tipo}">${rotulo}
+  <span class="campo-busca-caixa"><input type="text" class="busca-texto" value="${texto || ""}" placeholder="${placeholder}" autocomplete="off"
+    role="combobox" aria-autocomplete="list" aria-expanded="false"><button type="button" class="busca-limpar" aria-label="Limpar ${rotulo.toLowerCase()}" title="Limpar"${id ? "" : html` hidden`}>×</button></span>
+  <input type="hidden" name="${nome}" value="${id ? String(id) : ""}"${cliente ? html` data-cliente="${String(cliente)}"` : ""}>
+  <ul class="sugestoes busca-opcoes" role="listbox" hidden></ul></label>`;
+
 function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false }) {
-  const cats = apoio.categorias[l.tipo === "despesa" ? "despesa" : "receita"];
-  return html`<form method="post" action="${acao}" enctype="multipart/form-data" class="formulario grade-form form-lancamento">
+  const despesa = l.tipo === "despesa";
+  const cats = apoio.categorias[despesa ? "despesa" : "receita"];
+  const nomeProcesso = l.processo_id ? (apoio.processos.find(([id]) => Number(id) === Number(l.processo_id)) || [])[1] : "";
+  const nomeCliente = l.cliente_id ? (apoio.clientes.find(([id]) => Number(id) === Number(l.cliente_id)) || [])[1] : "";
+  const contas = [...new Set([...apoio.contas, ...(l.conta ? [l.conta] : [])])].map((x) => [x, x]);
+  const favs = [...new Set([...apoio.favorecidos.map((x) => x.nome), ...(l.favorecido ? [l.favorecido] : [])])].map((x) => [x, x]);
+  const condicao = l.condicao || "À Vista";
+  return html`<form method="post" action="${acao}" enctype="multipart/form-data" class="formulario grade-form form-lancamento ${despesa ? "eh-despesa" : "eh-receita"}"
+      data-condicao="${condicao}" data-escritorio="${NOME_ESCRITORIO}" data-favorecidos="${JSON.stringify(apoio.favorecidos.map((x) => ({ nome: x.nome, dados: x.dados || "" })))}">
     ${campoCsrf(sessao)}
     <fieldset class="largo tipo-lanc"><legend>Tipo</legend>
-      <label class="opcao"><input type="radio" name="tipo" value="receita"${l.tipo !== "despesa" ? html` checked` : ""}> Receita</label>
-      <label class="opcao"><input type="radio" name="tipo" value="despesa"${l.tipo === "despesa" ? html` checked` : ""}> Despesa</label>
+      <label class="opcao"><input type="radio" name="tipo" value="receita"${!despesa ? html` checked` : ""}> Receita</label>
+      <label class="opcao"><input type="radio" name="tipo" value="despesa"${despesa ? html` checked` : ""}> Despesa</label>
     </fieldset>
     <label class="largo">Descrição<input name="descricao" required maxlength="300" value="${l.descricao || ""}" placeholder="Ex.: Honorários iniciais — ação regressiva"></label>
     <label>Tipo de lançamento<select name="categoria" required data-categorias-receita="${JSON.stringify(apoio.categorias.receita)}" data-categorias-despesa="${JSON.stringify(apoio.categorias.despesa)}">${opcoes([...new Set([...cats, ...(l.categoria && !cats.includes(l.categoria) ? [l.categoria] : [])])].map((x) => [x, x]), l.categoria, "Selecione…")}</select></label>
-    <label>Processo<select name="processo_id">${opcoes(apoio.processos, l.processo_id, "Sem processo")}</select></label>
-    <label>Cliente<select name="cliente_id">${opcoes(apoio.clientes, l.cliente_id, "Do processo / nenhum")}</select></label>
+    ${campoBusca({ tipo: "cliente", rotulo: "Cliente", nome: "cliente_id", id: l.cliente_id, texto: nomeCliente, placeholder: "Buscar por nome, processo ou pasta" })}
+    ${campoBusca({ tipo: "processo", rotulo: "Processo", nome: "processo_id", id: l.processo_id, texto: nomeProcesso, placeholder: "Buscar por parte, nº do processo ou pasta", cliente: l.cliente_id })}
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, l.responsavel)}</select></label>
-    ${novo ? html`<fieldset class="largo grade-form"><legend>Valor e condição</legend>
-      <label>Condição<select name="condicao">${opcoes(CONDICOES, l.condicao || "À Vista", "À vista")}</select></label>
-      <label>Valor (R$)<input name="valor" required inputmode="decimal" value="${l.valor_txt ?? ""}" placeholder="0,00"></label>
-      <label>Vencimento (1º)<input type="date" name="vencimento" required value="${l.vencimento || ""}"></label>
-      <label>Nº de parcelas / meses<input type="number" name="parcelas" min="1" max="120" value="${String(l.parcelas || "")}" placeholder="—"></label>
-      <label>Entrada (R$)<input name="entrada" inputmode="decimal" value="${l.entrada_txt ?? ""}" placeholder="só para entrada + parcelado"></label>
-      <p class="dica largo">Parcelado: o valor total é dividido em parcelas mensais. Entrada + parcelado: a entrada vence na data informada e o restante é dividido a partir do mês seguinte. Recorrente: o valor se repete todo mês pelo número de meses informado.</p>
+    ${novo ? html`<fieldset class="largo grade-form grupo-condicao"><legend>Valor e condição</legend>
+      <label>Condição<select name="condicao">${opcoes(CONDICOES, condicao, "À vista")}</select></label>
+      <label>${seguro('<span class="rotulo-valor">Valor (R$)</span>')}<input name="valor" required inputmode="decimal" value="${l.valor_txt ?? ""}" placeholder="0,00"></label>
+      <label class="so-entrada">Entrada (R$)<input name="entrada" inputmode="decimal" value="${l.entrada_txt ?? ""}" placeholder="0,00"></label>
+      <label>${seguro('<span class="rotulo-vencimento">Vencimento</span>')}<input type="date" name="vencimento" required value="${l.vencimento || ""}"></label>
+      <label class="so-parcelas">${seguro('<span class="rotulo-parcelas">Nº de parcelas</span>')}<input type="number" name="parcelas" min="1" max="120" value="${String(l.parcelas || "")}"></label>
+      <p class="dica largo dica-condicao"></p>
     </fieldset>` : html`
       <label>Valor (R$)<input name="valor" required inputmode="decimal" value="${l.valor_txt ?? ""}"></label>
       <label>Vencimento<input type="date" name="vencimento" required value="${l.vencimento || ""}"></label>
       ${l.grupo ? html`<p class="dica largo">${rotuloParcela(l) ? `Parcela ${rotuloParcela(l)} · ` : ""}${l.condicao || ""}. A alteração vale só para este lançamento.</p>` : ""}`}
+    <label>${seguro(`<span class="rotulo-conta">${despesa ? "Conta de débito" : "Conta de crédito"}</span>`)}<select name="conta">${opcoes(contas, l.conta, "Selecione a conta")}</select></label>
     <label>Forma de pagamento<select name="forma_pagamento">${opcoes([...new Set([...apoio.formas, ...(l.forma_pagamento ? [l.forma_pagamento] : [])])].map((x) => [x, x]), l.forma_pagamento)}</select></label>
-    <label class="opcao-linha"><input type="checkbox" name="pago" value="1"${l.pago ? html` checked` : ""}> Já ${l.tipo === "despesa" ? "pago" : "recebido"}${novo ? " (1ª parcela)" : ""}</label>
+    <label class="opcao-linha"><input type="checkbox" name="pago" value="1"${l.pago ? html` checked` : ""}> ${seguro(`<span class="rotulo-pago">${despesa ? "Já pago" : "Já recebido"}</span>`)}${novo ? " (1ª parcela)" : ""}</label>
     <label>Data do pagamento<input type="date" name="data_pagamento" value="${l.data_pagamento || ""}"></label>
-    <label>Pagante<input name="pagante" maxlength="200" value="${l.pagante || ""}"></label>
-    <label>Favorecido<input name="favorecido" maxlength="200" value="${l.favorecido || ""}"></label>
+    <label>Pagante<input name="pagante" maxlength="200" value="${l.pagante || (novo && despesa ? NOME_ESCRITORIO : "")}"${novo && despesa && !l.pagante ? html` data-auto="1"` : ""}></label>
+    <label><span class="rotulo-linha">Favorecido <a class="link-pequeno" href="/sistema/favorecidos" target="_blank" rel="noopener">cadastrar</a></span><select name="favorecido">${opcoes(favs, l.favorecido, "Selecione…")}</select></label>
     <label class="largo">Dados bancários / Pix<textarea name="dados_bancarios" rows="2" maxlength="1000" placeholder="Banco, agência, conta ou chave Pix">${l.dados_bancarios || ""}</textarea></label>
     <label class="largo">Observações<textarea name="observacoes" rows="2" maxlength="4000">${l.observacoes || ""}</textarea></label>
     ${anexos ? html`<label class="largo">${l.anexo_id ? "Substituir anexo" : "Anexo (comprovante, nota, contrato)"}<input type="file" name="arquivo"></label>
@@ -154,7 +172,7 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     ${grupoQtd > 1 ? html`<label class="opcao-linha"><input type="checkbox" name="grupo" value="1"> Excluir também as outras ${String(grupoQtd - 1)} parcela(s) em aberto deste lançamento</label>` : ""}
     <button type="submit" name="acao" value="excluir" class="botao-secundario">Excluir lançamento</button></form>`}
   <p class="dica">Dados bancários e observações são gravados cifrados.</p>
-  <script src="/assets/js/lancamento.js" defer></script>`;
+  <script src="/assets/js/selecao.js" defer></script><script src="/assets/js/lancamento.js" defer></script>`;
 }
 
 function lerForm(f) {
@@ -167,6 +185,7 @@ function lerForm(f) {
     parcelas: Math.max(0, Math.min(120, Number(f.get("parcelas")) || 0)), vencimento: dataValida(txt(f, "vencimento")),
     forma_pagamento: txt(f, "forma_pagamento", 40), pago: f.get("pago") === "1" ? 1 : 0, data_pagamento: dataValida(txt(f, "data_pagamento")),
     pagante: txt(f, "pagante", 200), favorecido: txt(f, "favorecido", 200), dados_bancarios: txt(f, "dados_bancarios", 1000), observacoes: txt(f, "observacoes", 4000),
+    conta: txt(f, "conta", 60),
   };
 }
 
@@ -188,10 +207,11 @@ async function apoioForm(env) {
   const [base, clientes, ls, cats] = await Promise.all([
     listasApoio(env),
     env.DB.prepare("SELECT id, nome FROM clientes ORDER BY nome COLLATE NOCASE").all(),
-    obterListas(env, ["forma_pagamento"]),
+    obterListas(env, ["forma_pagamento", "conta_bancaria"]),
     categoriasFinanceiras(env),
   ]);
-  return { ...base, clientes: clientes.results.map((c) => [c.id, c.nome]), categorias: cats, formas: ls.forma_pagamento };
+  return { ...base, clientes: clientes.results.map((c) => [c.id, c.nome]), categorias: cats, formas: ls.forma_pagamento,
+    contas: ls.conta_bancaria, favorecidos: await listaFavorecidos(env) };
 }
 
 // ---------- Saldo da conta ----------
@@ -364,7 +384,10 @@ export async function financeiro(req, env, sessao, id) {
   if (erro) return tela({ ...(existente || {}), ...l }, { erro });
   if (l.pago && !l.data_pagamento) l.data_pagamento = hoje;
   if (!l.pago) l.data_pagamento = null;
-  if (!l.cliente_id && l.processo_id) l.cliente_id = (await env.DB.prepare("SELECT cliente_id FROM processos WHERE id = ?").bind(l.processo_id).first())?.cliente_id ?? null;
+  if (l.processo_id) {
+    const cliDoProc = (await env.DB.prepare("SELECT cliente_id FROM processos WHERE id = ?").bind(l.processo_id).first())?.cliente_id ?? null;
+    if (cliDoProc) l.cliente_id = cliDoProc; // o processo define o cliente
+  }
 
   let anexoId = existente?.anexo_id ?? null;
   try {
@@ -382,12 +405,12 @@ export async function financeiro(req, env, sessao, id) {
 
   const [bancEnc, obsEnc] = await Promise.all([cifrar(env, l.dados_bancarios), cifrar(env, l.observacoes)]);
   const t = agora();
-  const comuns = [l.tipo, l.categoria, l.descricao, l.processo_id, l.cliente_id, l.forma_pagamento, l.responsavel, l.pagante, l.favorecido, bancEnc, obsEnc, anexoId];
+  const comuns = [l.tipo, l.categoria, l.descricao, l.processo_id, l.cliente_id, l.forma_pagamento, l.responsavel, l.pagante, l.favorecido, bancEnc, obsEnc, anexoId, l.conta];
 
   if (!novo) {
     await env.DB.prepare(`UPDATE financeiro SET tipo=?1, categoria=?2, descricao=?3, processo_id=?4, cliente_id=?5, forma_pagamento=?6, responsavel=?7,
-      pagante=?8, favorecido=?9, dados_bancarios_enc=?10, observacoes_enc=?11, anexo_id=?12, valor=?13, vencimento=?14, pago=?15, data_pagamento=?16,
-      atualizado_em=?17 WHERE id=?18`).bind(...comuns, l.valor, l.vencimento, l.pago, l.data_pagamento, t, existente.id).run();
+      pagante=?8, favorecido=?9, dados_bancarios_enc=?10, observacoes_enc=?11, anexo_id=?12, conta=?13, valor=?14, vencimento=?15, pago=?16, data_pagamento=?17,
+      atualizado_em=?18 WHERE id=?19`).bind(...comuns, l.valor, l.vencimento, l.pago, l.data_pagamento, t, existente.id).run();
     await auditar(env, req, sessao.usuario_id, "financeiro_alterado", `lançamento ${existente.id}`);
     return redirecionar(`/sistema/financeiro/${existente.id}?salvo=1`);
   }
@@ -395,8 +418,8 @@ export async function financeiro(req, env, sessao, id) {
   const parcelas = gerarParcelas(l);
   const grupo = parcelas.length > 1 ? `g_${tokenAleatorio(9)}` : null;
   const stmts = parcelas.map((p, i) => env.DB.prepare(`INSERT INTO financeiro (tipo, categoria, descricao, processo_id, cliente_id, forma_pagamento, responsavel,
-      pagante, favorecido, dados_bancarios_enc, observacoes_enc, anexo_id, valor, vencimento, pago, data_pagamento, condicao, grupo, parcela, parcelas,
-      criado_por, criado_em, atualizado_em) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?22)`)
+      pagante, favorecido, dados_bancarios_enc, observacoes_enc, anexo_id, conta, valor, vencimento, pago, data_pagamento, condicao, grupo, parcela, parcelas,
+      criado_por, criado_em, atualizado_em) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?23)`)
     .bind(...comuns, p.valor, p.vencimento, i === 0 ? l.pago : 0, i === 0 ? l.data_pagamento : null, l.condicao, grupo, p.parcela, p.parcelas, sessao.usuario_id, t));
   const res = await env.DB.batch(stmts);
   await auditar(env, req, sessao.usuario_id, "financeiro_criado", `${parcelas.length} lançamento(s)${grupo ? ` grupo ${grupo}` : ""}`);

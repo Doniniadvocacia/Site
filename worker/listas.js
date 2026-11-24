@@ -54,6 +54,7 @@ export const DEFINICOES = [
     "Honorários Conciliador", "Honorários Diligência", "Honorários Mensais", "Honorários Periciais", "Honorários Sucumbenciais", "Internet",
     "Mensalidades", "Móveis e Utensílios", "Outros Serviços", "Pagamento Acordo", "Pagamento Condenação", "Preparo Agravo de Instrumento",
     "Preparo Recurso de Apelação", "Pró-Labore", "Reembolso Despesa", "Sistemas e Softwares"] },
+  { chave: "conta_bancaria", nome: "Contas do escritório", grupo: "Financeiro", padrao: ["Itaú", "Banrisul", "Nubank", "Asaas", "InfinityPay"] },
   { chave: "forma_pagamento", nome: "Formas de pagamento", grupo: "Financeiro", padrao: [
     "Boleto", "Cartão de Débito", "Cartão de Crédito", "Transferência", "Dinheiro", "Crédito em Conta", "Débito em Conta", "Pix"] },
   { chave: "cargo", nome: "Cargos / funções", grupo: "Usuários", padrao: [

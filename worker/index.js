@@ -19,6 +19,8 @@ import { servirAnexo } from "./anexos.js";
 import { editarCadastro } from "./rotas/conta.js";
 import { consultarCep } from "./rotas/cep.js";
 import { listas } from "./rotas/listas.js";
+import { favorecidos } from "./rotas/favorecidos.js";
+import { opcoesBusca } from "./rotas/opcoes.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -57,6 +59,7 @@ function configuracoes(sessao) {
     ${item("/sistema/oabs", "OABs e DJEN", "Inscrições monitoradas e captura de intimações")}
     ${item("/sistema/feriados", "Feriados", "Feriados locais e suspensões de expediente")}
     ${item("/sistema/listas", "Listas", "Incluir e excluir opções dos campos de seleção")}
+    ${item("/sistema/favorecidos", "Favorecidos", "Quem recebe pagamentos e repasses do escritório")}
     ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
     ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
   </div>` }));
@@ -91,6 +94,10 @@ async function sistema(req, env) {
   if (caminho === "/sistema") return painel(req, env, sessao);
   if (caminho === "/sistema/busca") return busca(req, env, sessao);
   if (caminho === "/sistema/busca/sugestoes") return buscaSugestoes(req, env);
+  if (caminho === "/sistema/busca/opcoes") return opcoesBusca(req, env);
+  // Favorecidos: administradores e quem tem acesso ao Financeiro.
+  if (caminho === "/sistema/favorecidos") return sessao.perfil === "admin" || sessao.financeiro ? favorecidos(req, env, sessao)
+    : resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1>` }), 403);
   let m;
   if (caminho === "/sistema/clientes/novo") return cadastroCliente(req, env, sessao, null);
   if ((m = caminho.match(/^\/sistema\/clientes\/(\d+)\/editar$/))) return cadastroCliente(req, env, sessao, m[1]);

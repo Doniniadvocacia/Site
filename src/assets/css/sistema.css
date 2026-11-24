@@ -547,3 +547,17 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .tabela-prazos-padrao td { vertical-align: middle; }
 .form-incluir-item:has(.campo-dias) { grid-template-columns: 1fr auto auto; }
 .campo-dias { display: grid; gap: .3rem; }
+/* Novo lançamento */
+.form-lancamento[data-condicao="À Vista"] .so-parcelas, .form-lancamento[data-condicao="À Vista"] .so-entrada,
+.form-lancamento[data-condicao="Parcelado"] .so-entrada, .form-lancamento[data-condicao="Recorrente"] .so-entrada { display: none; }
+.campo-busca { position: relative; }
+.campo-busca-caixa { position: relative; display: block; }
+.campo-busca-caixa .busca-texto { width: 100%; box-sizing: border-box; padding-right: 2rem; }
+.campo-busca.selecionado .busca-texto { background: #f4f7fb; border-color: #9fb0c8; color: var(--navy); font-weight: 500; }
+.busca-limpar { position: absolute; right: .3rem; top: 50%; transform: translateY(-50%); width: 1.6rem; height: 1.6rem; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--suave); font-size: 1.1rem; line-height: 1; }
+.busca-limpar:hover { background: #eef1f6; color: var(--navy); }
+.busca-opcoes { left: 0; right: auto; width: 100%; min-width: 320px; }
+.link-pequeno { font-size: .72rem; margin-left: .3rem; }
+
+.rotulo-linha { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.rotulo-linha .link-pequeno { margin: 0; }

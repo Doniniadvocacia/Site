@@ -135,7 +135,7 @@ export async function painel(req, env, sessao) {
 const normalizar = (v) => String(v ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const digitos = (v) => String(v ?? "").replace(/\D/g, "");
 
-function criarFiltro(q) {
+export function criarFiltro(q) {
   const palavras = normalizar(q).split(/\s+/).filter(Boolean);
   return (...campos) => {
     const texto = normalizar(campos.join(" "));
