@@ -3,7 +3,7 @@
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { opcoes, csrfOk, txt, dataValida, numeroBR } from "./comum.js";
+import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnpj, formatarFone, formatarCep, enderecoTexto } from "./comum.js";
 
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ").map((u) => [u, u]);
 const lista = (...v) => v.map((x) => [x, x]);
@@ -24,23 +24,31 @@ function formularioCliente(sessao, c, acao, sugestoes) {
     ${campoCsrf(sessao)}
     <label class="largo">Nome<input name="nome" required maxlength="200" value="${c.nome || ""}"></label>
     <label>Tipo<select name="tipo">${opcoes(lista("Pessoa Física", "Pessoa Jurídica"), c.tipo)}</select></label>
-    <label>CPF/CNPJ<input name="documento" maxlength="30" value="${c.documento || ""}" inputmode="numeric"></label>
+    <label>CPF/CNPJ<input name="documento" maxlength="18" value="${c.documento || ""}" inputmode="numeric" data-mascara="documento"></label>
     <label>Nascimento/fundação<input name="data_nascimento" maxlength="20" value="${c.data_nascimento || ""}" placeholder="dd/mm/aaaa"></label>
     <label>Posição<input name="posicao" maxlength="60" value="${c.posicao || ""}" list="posicoes"></label>
     <label>E-mail<input name="email" type="email" maxlength="200" value="${c.email || ""}"></label>
-    <label>Telefone<input name="telefone" maxlength="40" value="${c.telefone || ""}" inputmode="tel"></label>
+    <label>Telefone<input name="telefone" maxlength="15" value="${c.telefone || ""}" inputmode="tel" data-mascara="fone" placeholder="(XX) XXXXX-XXXX"></label>
     <label>Profissão<input name="profissao" maxlength="100" value="${c.profissao || ""}"></label>
     <label>Estado civil<select name="estado_civil">${opcoes(lista("Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Viúvo(a)"), c.estado_civil)}</select></label>
     <label>Gênero<select name="genero">${opcoes(lista("Masculino", "Feminino", "Outro"), c.genero)}</select></label>
-    <label class="largo">Endereço (rua, número, bairro, CEP)<input name="endereco" maxlength="400" value="${c.endereco || ""}"></label>
-    <label>Cidade<input name="cidade" maxlength="100" value="${c.cidade || ""}"></label>
-    <label>UF<select name="estado">${opcoes(UFS, c.estado)}</select></label>
+    <fieldset class="largo grade-form grupo-form grupo-endereco"><legend>Endereço</legend>
+      ${c.endereco_antigo ? html`<p class="dica largo">Endereço registrado anteriormente: <strong>${c.endereco_antigo}</strong>. Preencha os campos abaixo para atualizar.</p>` : ""}
+      <label>CEP <small>(preenche o endereço)</small><input name="cep" maxlength="9" inputmode="numeric" data-mascara="cep" data-endereco="cep" value="${c.cep || ""}" placeholder="XXXXX-XXX"></label>
+      <label class="duplo">Rua<input name="rua" maxlength="150" data-endereco="rua" value="${c.rua || ""}"></label>
+      <label>Número<input name="numero" maxlength="15" data-endereco="numero" value="${c.numero || ""}"></label>
+      <label>Complemento<input name="complemento" maxlength="80" data-endereco="complemento" value="${c.complemento || ""}" placeholder="Apto, sala, bloco"></label>
+      <label>Bairro<input name="bairro" maxlength="80" data-endereco="bairro" value="${c.bairro || ""}"></label>
+      <label>Cidade<input name="cidade" maxlength="100" data-endereco="cidade" value="${c.cidade || ""}"></label>
+      <label>Estado<select name="estado" data-endereco="uf">${opcoes(UFS, c.estado)}</select></label>
+    </fieldset>
     <label>Data de cadastro<input type="date" name="data_cadastro" value="${c.data_cadastro || ""}"></label>
     <label class="largo">Observações<textarea name="observacoes" rows="3" maxlength="4000">${c.observacoes || ""}</textarea></label>
     <div class="largo botoes-form"><button type="submit">Salvar cliente</button></div>
     ${datalist("posicoes", sugestoes.posicoes)}
   </form>
-  <p class="dica">CPF/CNPJ, nascimento, contatos, endereço e observações são gravados cifrados.</p>`;
+  <p class="dica">CPF/CNPJ, nascimento, contatos, endereço e observações são gravados cifrados.</p>
+  <script src="/assets/js/mascaras.js" defer></script><script src="/assets/js/cep.js" defer></script>`;
 }
 
 export async function cadastroCliente(req, env, sessao, id) {
@@ -59,6 +67,10 @@ export async function cadastroCliente(req, env, sessao, id) {
     const c = { ...existente };
     const dec = await Promise.all(CAMPOS_CLIENTE_ENC.map((k) => decifrar(env, existente[`${k}_enc`])));
     CAMPOS_CLIENTE_ENC.forEach((k, i) => (c[k] = dec[i]));
+    let dados = {};
+    try { dados = JSON.parse((await decifrar(env, existente.endereco_dados_enc)) || "{}"); } catch { /* sem endereço estruturado */ }
+    Object.assign(c, dados);
+    if (!Object.keys(dados).length && c.endereco) c.endereco_antigo = c.endereco;
     return tela(c);
   }
   const { f, ok } = await csrfOk(req, sessao);
@@ -68,20 +80,36 @@ export async function cadastroCliente(req, env, sessao, id) {
     data_cadastro: dataValida(txt(f, "data_cadastro")),
   };
   CAMPOS_CLIENTE_ENC.forEach((k) => (c[k] = txt(f, k, k === "observacoes" ? 4000 : 400)));
+  Object.assign(c, { cep: txt(f, "cep", 9), rua: txt(f, "rua", 150), numero: txt(f, "numero", 15), complemento: txt(f, "complemento", 80), bairro: txt(f, "bairro", 80) });
   if (!ok) return tela(c, "Sessão expirada. Tente novamente.");
   if (!c.nome) return tela(c, "Informe o nome do cliente.");
+  // Documento: valida CPF/CNPJ quando informado ou alterado (registros antigos fora do padrão continuam aceitos se não forem mexidos).
+  const docAntigo = existente ? await decifrar(env, existente.documento_enc) : "";
+  if (c.documento && c.documento !== docAntigo) {
+    const d = soDigitos(c.documento);
+    if (d.length === 11 && cpfValido(d)) c.documento = formatarCpf(d);
+    else if (d.length === 14 && cnpjValido(d)) c.documento = formatarCnpj(d);
+    else return tela(c, "CPF ou CNPJ inválido.");
+  }
+  if (c.telefone) { const d = soDigitos(c.telefone); if (d.length !== 10 && d.length !== 11) return tela(c, "Telefone: use (XX) XXXX-XXXX ou (XX) XXXXX-XXXX."); c.telefone = formatarFone(d); }
+  if (c.cep) { const d = soDigitos(c.cep); if (d.length !== 8) return tela(c, "CEP: use XXXXX-XXX."); c.cep = formatarCep(d); }
+  const enderecoDados = Object.fromEntries(["rua", "numero", "complemento", "bairro", "cep"].filter((k) => c[k]).map((k) => [k, c[k]]));
+  if (Object.keys(enderecoDados).length) c.endereco = enderecoTexto({ ...enderecoDados, cidade: c.cidade, uf: c.estado });
   const enc = await Promise.all(CAMPOS_CLIENTE_ENC.map((k) => cifrar(env, c[k])));
+  let endDadosEnc = null;
+  if (Object.keys(enderecoDados).length) endDadosEnc = await cifrar(env, JSON.stringify(enderecoDados));
+  else if (existente && !existente.endereco_dados_enc) enc[CAMPOS_CLIENTE_ENC.indexOf("endereco")] = existente.endereco_enc; // mantém o endereço antigo (texto)
   const t = agora();
   const v = [c.nome, c.tipo, c.posicao, c.genero, c.estado_civil, c.profissao, c.cidade, c.estado, ...enc, c.data_cadastro, t];
   let novoId = existente?.id;
   if (existente) {
     await env.DB.prepare(`UPDATE clientes SET nome=?1, tipo=?2, posicao=?3, genero=?4, estado_civil=?5, profissao=?6, cidade=?7, estado=?8,
       documento_enc=?9, data_nascimento_enc=?10, email_enc=?11, telefone_enc=?12, endereco_enc=?13, observacoes_enc=?14, data_cadastro=?15,
-      atualizado_em=?16, editado_local=1 WHERE id=?17`).bind(...v, existente.id).run();
+      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18 WHERE id=?17`).bind(...v, existente.id, endDadosEnc).run();
   } else {
     const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado, documento_enc,
-      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local)
-      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1)`).bind(...v).run();
+      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc)
+      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17)`).bind(...v, endDadosEnc).run();
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "cliente_alterado" : "cliente_criado", `cliente ${novoId}`);

@@ -88,6 +88,14 @@ export async function importar(req, env, sessao) {
         txt(c.dataCadastro), t));
     }
     for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
+    // Endereço estruturado (rua, bairro, CEP) para o formulário com busca por CEP.
+    const end = [];
+    for (const c of clientes) {
+      const dados = Object.fromEntries([["rua", txt(c.endereco)], ["bairro", txt(c.bairro)], ["cep", txt(c.cep)]].filter(([, v]) => v));
+      if (!Object.keys(dados).length) continue;
+      end.push(env.DB.prepare("UPDATE clientes SET endereco_dados_enc = ? WHERE wix_id = ? AND editado_local = 0").bind(await cifrar(env, JSON.stringify(dados)), c._id));
+    }
+    for (let i = 0; i < end.length; i += 50) await env.DB.batch(end.slice(i, i + 50));
 
     const { results: mapa } = await env.DB.prepare("SELECT id, wix_id FROM clientes WHERE wix_id IS NOT NULL").all();
     const idCliente = Object.fromEntries(mapa.map((m) => [m.wix_id, m.id]));

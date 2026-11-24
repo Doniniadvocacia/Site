@@ -499,3 +499,7 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .menu-conta > summary { overflow: hidden; }
 .menu-conta > summary .seta-conta { flex: 0 0 auto; }
 .menu-usuario-nome { overflow: hidden; text-overflow: ellipsis; }
+.aviso-cep { display: block; font-size: .75rem; color: var(--ok); min-height: 1em; }
+.aviso-cep.erro-cep { color: var(--erro); }
+.grade-form > label > input:not([type=checkbox]):not([type=radio]), .grade-form > label > select, .grade-form > label > textarea { width: 100%; box-sizing: border-box; }
+.grupo-endereco > label { align-self: end; }

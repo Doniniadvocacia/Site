@@ -1,4 +1,4 @@
-// Máscaras de digitação: data-mascara="celular" (XX) XXXXX-XXXX, "telefone" (XX) XXXX-XXXX, "cep" XXXXX-XXX, "cpf" XXX.XXX.XXX-XX.
+// Máscaras de digitação: celular (XX) XXXXX-XXXX, telefone (XX) XXXX-XXXX, fone (um ou outro), cep XXXXX-XXX, cpf, documento (CPF ou CNPJ).
 (function () {
   "use strict";
   var formatos = {
@@ -7,6 +7,12 @@
     cep: { max: 8, f: function (d) { return d.length > 5 ? d.slice(0, 5) + "-" + d.slice(5) : d; } },
     cpf: { max: 11, f: function (d) { return d.length > 9 ? d.slice(0, 3) + "." + d.slice(3, 6) + "." + d.slice(6, 9) + "-" + d.slice(9) : d.length > 6 ? d.slice(0, 3) + "." + d.slice(3, 6) + "." + d.slice(6) : d.length > 3 ? d.slice(0, 3) + "." + d.slice(3) : d; } },
   };
+  // Telefone que pode ser fixo ou celular, e documento que pode ser CPF ou CNPJ.
+  formatos.fone = { max: 11, f: function (d) { return d.length > 10 ? formatos.celular.f(d) : formatos.telefone.f(d); } };
+  formatos.documento = { max: 14, f: function (d) {
+    if (d.length <= 11) return formatos.cpf.f(d);
+    return d.slice(0, 2) + "." + d.slice(2, 5) + "." + d.slice(5, 8) + "/" + d.slice(8, 12) + (d.length > 12 ? "-" + d.slice(12) : "");
+  } };
   function aplicar(el) {
     var m = formatos[el.getAttribute("data-mascara")];
     if (!m) return;

@@ -17,6 +17,7 @@ import { adicionarHistorico, excluirHistorico, editarHistorico } from "./rotas/h
 import { financeiro } from "./rotas/financeiro.js";
 import { servirAnexo } from "./anexos.js";
 import { editarCadastro } from "./rotas/conta.js";
+import { consultarCep } from "./rotas/cep.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -67,6 +68,7 @@ async function sistema(req, env) {
   if (metodo === "POST" && !origemValida(req)) return new Response("Origem inválida", { status: 403 });
 
   const sessao = await lerSessao(env, req);
+  let m0;
 
   // Rotas que não exigem sessão completa
   if (caminho === "/sistema/configurar") return configurar(req, env);
@@ -81,6 +83,7 @@ async function sistema(req, env) {
   if (caminho === "/sistema/conta/senha") return trocarSenha(req, env, sessao);
   if (sessao.trocar_senha) return redirecionar("/sistema/conta/senha");
   if (caminho === "/sistema/conta/cadastro") return editarCadastro(req, env, sessao);
+  if ((m0 = caminho.match(/^\/sistema\/cep\/(\d{5}-?\d{3})$/))) return consultarCep(env, m0[1]);
   sessao.pendentes = (await env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first())?.n || 0;
 
   if (caminho === "/sistema") return painel(req, env, sessao);

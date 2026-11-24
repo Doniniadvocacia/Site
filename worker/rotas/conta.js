@@ -42,13 +42,13 @@ export async function editarCadastro(req, env, sessao) {
             <label>Telefone fixo<input name="telefone" maxlength="14" inputmode="tel" data-mascara="telefone" value="${v.telefone || ""}" placeholder="(XX) XXXX-XXXX"></label>
           </fieldset>
           <fieldset class="largo grade-form grupo-form grupo-endereco"><legend>Endereço</legend>
-            <label class="duplo">Rua<input name="rua" maxlength="150" value="${v.rua || ""}" autocomplete="address-line1"></label>
-            <label>Número<input name="numero" maxlength="15" value="${v.numero || ""}"></label>
-            <label>Complemento<input name="complemento" maxlength="80" value="${v.complemento || ""}" placeholder="Apto, sala, bloco" autocomplete="address-line2"></label>
-            <label>Bairro<input name="bairro" maxlength="80" value="${v.bairro || ""}"></label>
-            <label>Cidade<input name="cidade" maxlength="80" value="${v.cidade || ""}" autocomplete="address-level2"></label>
-            <label>Estado<select name="uf" autocomplete="address-level1"><option value="">—</option>${UFS.map((x) => html`<option value="${x}"${x === v.uf ? html` selected` : ""}>${x}</option>`)}</select></label>
-            <label>CEP<input name="cep" maxlength="9" inputmode="numeric" data-mascara="cep" value="${v.cep || ""}" placeholder="XXXXX-XXX" autocomplete="postal-code"></label>
+            <label>CEP <small>(preenche o endereço)</small><input name="cep" data-endereco="cep" maxlength="9" inputmode="numeric" data-mascara="cep" value="${v.cep || ""}" placeholder="XXXXX-XXX" autocomplete="postal-code"></label>
+            <label class="duplo">Rua<input name="rua" data-endereco="rua" maxlength="150" value="${v.rua || ""}" autocomplete="address-line1"></label>
+            <label>Número<input name="numero" data-endereco="numero" maxlength="15" value="${v.numero || ""}"></label>
+            <label>Complemento<input name="complemento" data-endereco="complemento" maxlength="80" value="${v.complemento || ""}" placeholder="Apto, sala, bloco" autocomplete="address-line2"></label>
+            <label>Bairro<input name="bairro" data-endereco="bairro" maxlength="80" value="${v.bairro || ""}"></label>
+            <label>Cidade<input name="cidade" data-endereco="cidade" maxlength="80" value="${v.cidade || ""}" autocomplete="address-level2"></label>
+            <label>Estado<select name="uf" data-endereco="uf" autocomplete="address-level1"><option value="">—</option>${UFS.map((x) => html`<option value="${x}"${x === v.uf ? html` selected` : ""}>${x}</option>`)}</select></label>
           </fieldset>
           <fieldset class="largo grade-form grupo-form"><legend>Dados profissionais</legend>
             <label class="duplo">Cargo / função<input name="cargo" maxlength="80" value="${v.cargo || ""}" list="l-cargos"></label>
@@ -62,7 +62,7 @@ export async function editarCadastro(req, env, sessao) {
         </form>
         <p class="dica">CPF, data de nascimento, telefones e endereço são gravados cifrados.</p>
       </section>
-      <script src="/assets/js/mascaras.js" defer></script>`,
+      <script src="/assets/js/mascaras.js" defer></script><script src="/assets/js/cep.js" defer></script>`,
   }), status);
 
   if (req.method === "GET") {
