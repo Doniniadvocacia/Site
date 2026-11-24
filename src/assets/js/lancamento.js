@@ -40,13 +40,20 @@
   form.querySelectorAll("input[name=tipo]").forEach(function (r) { r.addEventListener("change", function () { aplicarTipo(false); }); });
   aplicarTipo(true);
 
-  // Favorecido escolhido: preenche os dados bancários cadastrados (se o campo estiver vazio).
+  // Favorecido escolhido: os dados bancários acompanham o favorecido (e ficam vazios se ele não tiver).
+  // Só um texto digitado à mão no campo é preservado.
   var fav = form.querySelector("select[name=favorecido]");
   var banc = form.querySelector("textarea[name=dados_bancarios]");
-  if (fav && banc) fav.addEventListener("change", function () {
-    var f = favorecidos.filter(function (x) { return x.nome === fav.value; })[0];
-    if (f && f.dados && (!banc.value || banc.getAttribute("data-auto") === "1")) { banc.value = f.dados; banc.setAttribute("data-auto", "1"); }
-  });
+  var dadosDe = function (nome) { var f = favorecidos.filter(function (x) { return x.nome === nome; })[0]; return f ? f.dados || "" : ""; };
+  if (fav && banc) {
+    if (banc.value && banc.value === dadosDe(fav.value)) banc.setAttribute("data-auto", "1");
+    banc.addEventListener("input", function () { banc.removeAttribute("data-auto"); });
+    fav.addEventListener("change", function () {
+      if (banc.value && banc.getAttribute("data-auto") !== "1") return;
+      banc.value = dadosDe(fav.value);
+      if (banc.value) banc.setAttribute("data-auto", "1"); else banc.removeAttribute("data-auto");
+    });
+  }
 
   // Valor e condição: mostra só os campos que a condição usa.
   var condicao = form.querySelector("select[name=condicao]");
