@@ -40,9 +40,7 @@ export async function cartaoHistorico(env, sessao, processoId, req = null) {
       <div class="linha-tempo-data">${dataBR(h.data)}</div>
       <div class="linha-tempo-texto">${textoAndamento(h.descricao)}${linkAnexo(h)}
         <div class="linha-tempo-rodape"><small class="dica">${h.autor ? `por ${h.autor}` : h.wix_id ? "importado do Wix" : ""}</small>
-        ${podeAlterar(h) ? html`<a class="icone-acao" href="/sistema/historico/${String(h.id)}" title="Editar" aria-label="Editar andamento">✎</a>
-          <form method="post" action="/sistema/historico/${String(h.id)}/excluir" class="form-linha form-excluir">${campoCsrf(sessao)}
-          <label class="confirmar"><input type="checkbox" name="confirmar" value="1" required> confirmar</label><button type="submit" class="botao-pequeno botao-secundario">Excluir</button></form>` : ""}</div>
+        ${podeAlterar(h) ? html`<a class="icone-acao" href="/sistema/historico/${String(h.id)}" title="Editar" aria-label="Editar andamento">✎</a>` : ""}</div>
       </div></li>`)}</ol>` : html`<p class="vazio">Nenhum andamento registrado.</p>`;
   const nav = paginas > 1 ? html`<nav class="paginacao" aria-label="Páginas do histórico">
       ${pag > 1 ? html`<a href="?hp=${String(pag - 1)}#historico" aria-label="Anterior">‹</a>` : html`<span>‹</span>`}
@@ -65,7 +63,11 @@ export async function editarHistorico(req, env, sessao, id) {
         ${anexosDisponiveis(env) ? html`<label class="largo">${h.anexo_id ? "Substituir arquivo" : "Arquivo (até 20 MB)"}<input type="file" name="arquivo"></label>` : ""}
         ${h.anexo_id ? html`<p class="largo">Arquivo atual:${linkAnexo(h)} <label class="opcao-linha"><input type="checkbox" name="remover_anexo" value="1"> remover</label></p>` : ""}
         <div class="largo botoes-form"><button type="submit">Salvar</button><a class="botao-link botao-secundario" href="/sistema/processos/${String(h.processo_id)}#historico">Cancelar</a></div>
-      </form></section>`,
+      </form>
+      ${sessao.perfil === "admin" ? html`<form method="post" action="/sistema/historico/${String(h.id)}/excluir" class="form-excluir-andamento"
+          data-confirmar="Excluir este andamento${h.anexo_id ? " e o arquivo anexado" : ""}? Esta ação não pode ser desfeita.">${campoCsrf(sessao)}
+          <input type="hidden" name="confirmar" value="1"><button type="submit" class="botao-perigo">Excluir andamento</button></form>` : ""}</section>
+      <script src="/assets/js/confirmar.js" defer></script>`,
   }));
   if (req.method === "GET") return tela({ data: h.data, descricao: textoDeHtml(h.descricao) });
   const { f, ok } = await csrfOk(req, sessao);
@@ -103,8 +105,9 @@ export async function excluirHistorico(req, env, sessao, id) {
   const { f, ok } = await csrfOk(req, sessao);
   if (!h) return redirecionar("/sistema/processos");
   const volta = (codigo) => redirecionar(`/sistema/processos/${h.processo_id}?msg=${codigo}#historico`);
-  if (!ok || f.get("confirmar") !== "1") return volta("confirmar");
-  if (sessao.perfil !== "admin" && h.criado_por !== sessao.usuario_id && h.criado_por) return volta("sem_permissao");
+  if (!ok || f.get("confirmar") !== "1") return volta("sessao");
+  // Exclusão de andamento: somente administradores (feita pela tela de edição, com confirmação).
+  if (sessao.perfil !== "admin") return volta("sem_permissao");
   await env.DB.prepare("DELETE FROM historico WHERE id = ?").bind(h.id).run();
   await excluirAnexo(env, h.anexo_id);
   await auditar(env, req, sessao.usuario_id, "historico_excluido", `historico ${h.id} do processo ${h.processo_id}`);
@@ -118,7 +121,6 @@ export const MENSAGENS = {
   anexo_grande: ["erro", "O arquivo passa de 20 MB."],
   anexo_indisponivel: ["erro", "Os anexos ainda não estão ativados (R2 do Cloudflare)."],
   hist_ok: ["aviso", "Andamento registrado."],
-  confirmar: ["erro", "Marque “confirmar” para excluir."],
   sem_permissao: ["erro", "Você não tem permissão para essa ação."],
   hist_excluido: ["aviso", "Andamento excluído."],
   hist_salvo: ["aviso", "Andamento atualizado."],

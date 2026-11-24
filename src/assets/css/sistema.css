@@ -733,3 +733,6 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .arquivo-dados small a { color: var(--suave); }
 .selo-arquivo-hist { background: #eef1f6; color: var(--navy); margin-left: 0; }
 .selo-arquivo-fin { background: #e5f2ea; color: var(--ok); margin-left: 0; }
+.form-excluir-andamento { margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid var(--linha); display: flex; justify-content: flex-end; }
+.botao-perigo { background: var(--branco); color: var(--erro); border: 1px solid #e3b4b4; }
+.botao-perigo:hover { background: #fbeaea; color: var(--erro); }
