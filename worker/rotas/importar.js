@@ -214,13 +214,16 @@ export async function importar(req, env, sessao) {
     });
     for (let i = 0; i < sh.length; i += 50) for (const r of await env.DB.batch(sh.slice(i, i + 50))) novos.historico += r.meta.changes;
 
-    const sf = [];
+    const sf = [], contasWix = [];
     for (const x of fin) {
       const venc = normalizarData(x.vencimento) || normalizarData(x.data) || normalizarData(x.dataPagamento);
       const valor = Number(x.valor);
       if (!venc || !Number.isFinite(valor)) { semData++; continue; }
       const pid = acharProcesso(txt(x.numeroProcesso), txt(x.pasta));
-      const banco = [["Banco", x.banco], ["Agência", x.agencia], ["Conta", x.conta], ["Pix", x.chavePix], ["Conta de origem", x.contaOrigem]]
+      // No Wix, "banco" e "contaOrigem" guardam a conta do escritório (Asaas, Banrisul, Itaú...): vão para o campo Conta.
+      const contaEscritorio = txt(x.banco) || txt(x.contaOrigem);
+      if (contaEscritorio) contasWix.push([contaEscritorio.slice(0, 80), x._id]);
+      const banco = [["Agência", x.agencia], ["Conta", x.conta], ["Pix", x.chavePix]]
         .filter(([, v]) => txt(v)).map(([k, v]) => `${k}: ${txt(v)}`).join("\n");
       const parcelas = Number(txt(x.numeroParcelas)) || Number(txt(x.tipoRecorrencia)) || null;
       sf.push(env.DB.prepare(`INSERT INTO financeiro (wix_id, tipo, categoria, descricao, processo_id, cliente_id, valor, vencimento, pago, data_pagamento,
@@ -234,6 +237,9 @@ export async function importar(req, env, sessao) {
           idAnexo.get(txt(x.arquivo)) ?? null, t, t));
     }
     for (let i = 0; i < sf.length; i += 50) for (const r of await env.DB.batch(sf.slice(i, i + 50))) novos.financeiro += r.meta.changes;
+    // Conta do escritório: preenche também os lançamentos já importados que ainda estão sem conta (não mexe no que foi editado aqui).
+    const sc = contasWix.map(([conta, wid]) => env.DB.prepare("UPDATE financeiro SET conta = ? WHERE wix_id = ? AND COALESCE(conta, '') = ''").bind(conta, wid));
+    for (let i = 0; i < sc.length; i += 50) await env.DB.batch(sc.slice(i, i + 50));
 
     // Favorecidos e recebedores do Wix (só nomes) entram no cadastro de favorecidos.
     const nomesFav = [...new Set([...(await lerColecao(env, "Favorecidos")), ...(await lerColecao(env, "Recebedores"))].map((x) => txt(x.nome)).filter(Boolean))];

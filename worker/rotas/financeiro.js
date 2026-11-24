@@ -77,6 +77,7 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
         <p class="lanc-vencimento">Data de vencimento: <strong class="${atrasado ? "atrasado" : ""}">${dataBR(l.vencimento)}</strong>${atrasado ? html` <span class="selo selo-vencido">Em atraso</span>` : ""}</p>
         ${mostrarProcesso && (quem || l.processo_id) ? html`<p class="lanc-cliente">${l.processo_id ? html`<a href="/sistema/processos/${String(l.processo_id)}">${quem || rotuloProcesso(l)}</a>` : quem}</p>` : ""}
         <p class="lanc-categoria">${l.categoria || ""}</p>
+        <p class="lanc-conta">${l.conta ? html`${l.tipo === "receita" ? "Crédito" : "Débito"}: ${l.conta}` : html`<span class="selo selo-sem-conta">Sem conta</span>`}</p>
       </div>
       <div class="lanc-descricao">
         <a href="/sistema/financeiro/${String(l.id)}">${l.descricao}</a>${rotuloParcela(l) ? html` <span class="parcela">${rotuloParcela(l)}</span>` : ""}
@@ -264,6 +265,7 @@ export async function financeiro(req, env, sessao, id) {
     const sit = ["aberto", "pago", "atrasado"].includes(sp.get("situacao")) ? sp.get("situacao") : "";
     const categoria = (sp.get("categoria") || "").slice(0, 80);
     const clienteId = Number(sp.get("cliente")) || null;
+    const conta = (sp.get("conta") || "").slice(0, 80);
     let de = dataValida(sp.get("de") || ""), ate = dataValida(sp.get("ate") || "");
     if (de && ate && de > ate) [de, ate] = [ate, de];
     const periodo = Boolean(de || ate);
@@ -272,7 +274,11 @@ export async function financeiro(req, env, sessao, id) {
     const onde = ["f.vencimento >= ?", "f.vencimento < ?"], args = [periodo ? (de || "0000-01-01") : ini, periodo ? somarDias(ate || "9999-12-30", 1) : fimMes];
     if (categoria) { onde.push("f.categoria = ?"); args.push(categoria); }
     if (clienteId) { onde.push("COALESCE(f.cliente_id, pr.cliente_id) = ?"); args.push(clienteId); }
-    const [{ results: doPeriodo }, atraso, saldo, cats, clis] = await Promise.all([
+    if (conta === "__sem__") onde.push("COALESCE(TRIM(f.conta), '') = ''");
+    else if (conta) { onde.push("f.conta = ?"); args.push(conta); }
+    // "Sem conta" vale para todos os meses: sem período escolhido, mostra todos os lançamentos sem conta.
+    if (conta === "__sem__" && !periodo) { args[0] = "0000-01-01"; args[1] = "9999-12-31"; }
+    const [{ results: doPeriodo }, atraso, saldo, cats, clis, contasUsadas, semConta] = await Promise.all([
       env.DB.prepare(`${SELECT_LANC} WHERE ${onde.join(" AND ")} ORDER BY f.vencimento, f.id LIMIT 2000`).bind(...args).all(),
       env.DB.prepare(`SELECT SUM(CASE WHEN tipo = 'receita' THEN valor ELSE 0 END) AS receber, SUM(CASE WHEN tipo = 'despesa' THEN valor ELSE 0 END) AS pagar,
         COUNT(*) AS n FROM financeiro WHERE pago = 0 AND vencimento < ?`).bind(hoje).first(),
@@ -280,16 +286,18 @@ export async function financeiro(req, env, sessao, id) {
       env.DB.prepare("SELECT DISTINCT categoria FROM financeiro WHERE COALESCE(categoria, '') != '' ORDER BY categoria").all(),
       env.DB.prepare(`SELECT DISTINCT c.id, c.nome FROM financeiro f LEFT JOIN processos pr ON pr.id = f.processo_id
         JOIN clientes c ON c.id = COALESCE(f.cliente_id, pr.cliente_id) ORDER BY c.nome COLLATE NOCASE`).all(),
+      env.DB.prepare("SELECT DISTINCT conta FROM financeiro WHERE COALESCE(TRIM(conta), '') != '' ORDER BY conta").all(),
+      env.DB.prepare("SELECT COUNT(*) AS n, SUM(pago) AS pagos FROM financeiro WHERE COALESCE(TRIM(conta), '') = ''").first(),
     ]);
     const soma = (fn) => doPeriodo.filter(fn).reduce((s, l) => s + l.valor, 0);
     const rec = soma((l) => l.tipo === "receita"), recPago = soma((l) => l.tipo === "receita" && l.pago);
     const desp = soma((l) => l.tipo === "despesa"), despPago = soma((l) => l.tipo === "despesa" && l.pago);
     const linhas = doPeriodo.filter((l) => (!tipo || l.tipo === tipo) && (!sit || (sit === "pago" ? l.pago : sit === "aberto" ? !l.pago : !l.pago && l.vencimento < hoje)));
-    const filtrando = Boolean(tipo || sit || categoria || clienteId || periodo);
+    const filtrando = Boolean(tipo || sit || categoria || clienteId || periodo || conta);
     const [a, m] = mes.split("-").map(Number);
     const sufixo = periodo ? "do período" : "do mês";
     // Navegação de mês preserva os demais filtros.
-    const url = (o) => { const q = new URLSearchParams({ mes, tipo, situacao: sit, categoria, cliente: clienteId ? String(clienteId) : "", ...o }); for (const [k, v] of [...q]) if (!v) q.delete(k); return `/sistema/financeiro?${q}`; };
+    const url = (o) => { const q = new URLSearchParams({ mes, tipo, situacao: sit, categoria, cliente: clienteId ? String(clienteId) : "", conta, ...o }); for (const [k, v] of [...q]) if (!v) q.delete(k); return `/sistema/financeiro?${q}`; };
     const op = (lista, atual) => lista.map(([v, r]) => html`<option value="${v}"${String(atual ?? "") === String(v) ? html` selected` : ""}>${r}</option>`);
     return resposta(pagina({
       titulo: "Financeiro", sessao,
@@ -317,11 +325,14 @@ export async function financeiro(req, env, sessao, id) {
           <div class="cartao-resumo"><span>Resultado ${sufixo}</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${valor(recPago - despPago)}</strong><small>Previsto ${valor(rec - desp)}</small></div>
           <div class="cartao-resumo alerta"><span>Em atraso (todos os meses)</span><strong>${valor(atraso?.receber || 0)}</strong><small>a receber · ${valor(atraso?.pagar || 0)} a pagar</small></div>
         </div>
+        ${semConta?.n && conta !== "__sem__" ? html`<p class="alerta-conta">⚠ ${String(semConta.n)} lançamento(s) sem conta de crédito/débito indicada (${String(semConta.pagos || 0)} já pago(s)/recebido(s)). <a href="/sistema/financeiro?conta=__sem__">Ver e corrigir</a></p>` : ""}
+        ${conta === "__sem__" ? html`<p class="alerta-conta">Mostrando lançamentos sem conta de crédito/débito${periodo ? " no período" : " de todos os meses"}. Abra cada um e escolha a conta.</p>` : ""}
         <form method="get" action="/sistema/financeiro" class="filtros-financeiro" role="search" aria-label="Filtrar lançamentos">
           ${periodo ? "" : html`<input type="hidden" name="mes" value="${mes}">`}
           <label>Receita/despesa<select name="tipo">${op([["", "Todas"], ["receita", "Receitas"], ["despesa", "Despesas"]], tipo)}</select></label>
           <label>Tipo de lançamento<select name="categoria">${op([["", "Todos"], ...cats.results.map((c) => [c.categoria, c.categoria])], categoria)}</select></label>
           <label class="filtro-cliente">Cliente<select name="cliente">${op([["", "Todos"], ...clis.results.map((c) => [c.id, c.nome])], clienteId)}</select></label>
+          <label>Conta<select name="conta">${op([["", "Todas"], ...contasUsadas.results.map((c) => [c.conta, c.conta]), ["__sem__", "Sem conta indicada"]], conta)}</select></label>
           <label>Situação<select name="situacao">${op([["", "Todas"], ["aberto", "Em aberto"], ["atrasado", "Em atraso"], ["pago", "Pagas"]], sit)}</select></label>
           <label>Data inicial<input type="date" name="de" value="${de || ""}"></label>
           <label>Data final<input type="date" name="ate" value="${ate || ""}"></label>
