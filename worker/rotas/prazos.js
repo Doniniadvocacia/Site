@@ -3,6 +3,8 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
+import { TIPOS_PRAZO, TIPOS_COMPROMISSO, tiposDa } from "../listas.js";
+import { seguro, h } from "../html.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda, dataTravada } from "./comum.js";
 
 const SITUACOES = [["aberto", "Aberto"], ["cumprido", "Cumprido"], ["cancelado", "Cancelado"]];
@@ -10,14 +12,22 @@ const CONTAGENS = [["uteis", "Dias úteis"], ["corridos", "Dias corridos"]];
 const CATEGORIAS = [["Prazo", "Prazo"], ["Compromisso", "Compromisso"]];
 export const ehCompromisso = (p) => p?.categoria === "Compromisso";
 
-// Formulário de prazo, reaproveitado na triagem de intimações.
-export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, extraTopo = "", botaoSalvar = "Salvar prazo", extraBotoes = "" }) {
-  return html`<form method="post" action="${acao}" class="formulario grade-form">
+// Opções do campo Tipo conforme a categoria (valor antigo fora da lista continua selecionável).
+function opcoesTipo(p) {
+  const lista = tiposDa(p.categoria);
+  const extra = p.tipo && !lista.includes(p.tipo) ? [p.tipo] : [];
+  return seguro(`<option value="">Selecione…</option>` + [...extra, ...lista].map((t) =>
+    `<option value="${h(t)}"${t === p.tipo ? " selected" : ""}>${h(t)}${extra.includes(t) ? " (registro antigo)" : ""}</option>`).join(""));
+}
+
+// Formulário de agendamento (prazo ou compromisso), reaproveitado na triagem de intimações.
+export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, extraTopo = "", botaoSalvar = "Salvar", extraBotoes = "" }) {
+  return html`<form method="post" action="${acao}" class="formulario grade-form form-agendamento${p.categoria === "Compromisso" ? " form-compromisso" : ""}">
     ${campoCsrf(sessao)}${extraTopo}
-    <label>Categoria<select name="categoria">${opcoes(CATEGORIAS, p.categoria || "Prazo", "Prazo")}</select></label>
+    <label>Categoria<select name="categoria" data-categoria>${seguro(CATEGORIAS.map(([v, r]) => `<option value="${v}"${(p.categoria || "Prazo") === v ? " selected" : ""}>${r}</option>`).join(""))}</select></label>
+    <label>Tipo<select name="tipo" required data-tipos-prazo="${JSON.stringify(TIPOS_PRAZO)}" data-tipos-compromisso="${JSON.stringify(TIPOS_COMPROMISSO)}">${opcoesTipo(p)}</select></label>
     <label class="duplo">Processo<select name="processo_id">${opcoes(apoio.processos, p.processo_id, "Sem processo vinculado")}</select></label>
-    <label class="largo">Título<input name="titulo" required maxlength="200" value="${p.titulo || ""}" placeholder="Ex.: Contestação, Réplica, Recurso de apelação"></label>
-    <label>Tipo<input name="tipo" maxlength="100" value="${p.tipo || ""}" list="tipos-prazo"></label>
+    <label class="largo">Título <small>(opcional; se vazio, usa o tipo)</small><input name="titulo" maxlength="200" value="${p.titulo && p.titulo !== p.tipo ? p.titulo : ""}" placeholder="Ex.: Réplica à contestação da seguradora"></label>
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, p.responsavel)}</select></label>
     <fieldset class="largo calculo">
       <legend>Cálculo</legend>
@@ -38,7 +48,7 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
     <label>Audiência (hora)<input type="time" name="hora_audiencia" value="${p.hora_audiencia || ""}"></label>
     <label class="largo">Descrição<textarea name="descricao" rows="${String(Math.min(16, Math.max(3, String(p.descricao || "").split("\n").length + 1)))}" maxlength="20000">${p.descricao || ""}</textarea></label>
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">${botaoSalvar}</button>${extraBotoes}</div>
-    <datalist id="tipos-prazo"><option value="Manifestação"><option value="Contestação"><option value="Réplica"><option value="Recurso"><option value="Contrarrazões"><option value="Embargos de declaração"><option value="Audiência"><option value="Cumprimento de sentença"><option value="Acompanhamento Processual"><option value="Monitorar Citação"><option value="Monitorar Trânsito em Julgado"><option value="Monitorar Expedição Alvará"><option value="Monitorar Precatório/RPV"><option value="Sessão de Julgamento"><option value="Cumprir Diligência"></datalist>
+    <script src="/assets/js/agendamento.js" defer></script>
   </form>`;
 }
 
@@ -46,7 +56,7 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
 export async function lerPrazo(env, f) {
   const p = {
     processo_id: Number(f.get("processo_id")) || null,
-    titulo: txt(f, "titulo", 200), tipo: txt(f, "tipo", 100), responsavel: txt(f, "responsavel", 120),
+    titulo: txt(f, "titulo", 200) || txt(f, "tipo", 100), tipo: txt(f, "tipo", 100), responsavel: txt(f, "responsavel", 120),
     categoria: f.get("categoria") === "Compromisso" ? "Compromisso" : "Prazo",
     data_inicio: dataValida(txt(f, "data_inicio")), dias: Number(f.get("dias")) || null,
     contagem: f.get("contagem") === "corridos" ? "corridos" : "uteis",
@@ -171,9 +181,9 @@ export async function prazos(req, env, sessao, id) {
   const apoio = await listasApoio(env);
   const acao = novo ? "/sistema/prazos/novo" : `/sistema/prazos/${id}`;
   const tela = (p, { erro, aviso, calculo } = {}) => resposta(pagina({
-    titulo: novo ? (ehCompromisso(p) ? "Novo compromisso" : "Novo prazo") : p.titulo, sessao, erro, aviso,
-    corpo: html`<p class="trilha"><a href="/sistema/agenda?visao=${ehCompromisso(p) ? "lista" : "prazos"}">Agenda › ${ehCompromisso(p) ? "Compromissos" : "Prazos"}</a></p>
-      <h1>${novo ? (ehCompromisso(p) ? "Novo compromisso" : "Novo prazo") : p.titulo}</h1>
+    titulo: novo ? "Novo agendamento" : p.titulo, sessao, erro, aviso,
+    corpo: html`<p class="trilha">${novo ? html`<a href="/sistema/agenda">Agenda</a>` : html`<a href="/sistema/agenda?visao=${ehCompromisso(p) ? "lista" : "prazos"}">Agenda › ${ehCompromisso(p) ? "Compromissos" : "Prazos"}</a>`}</p>
+      <h1>${novo ? "Novo agendamento" : p.titulo}</h1>
       ${existente?.publicacao_id ? html`<p class="subtitulo">Criado a partir de <a href="/sistema/publicacoes/${String(existente.publicacao_id)}">intimação do DJEN</a></p>` : ""}
       <section class="cartao">${formularioPrazo({ sessao, p, apoio, acao, calculo })}</section>`,
   }));
@@ -182,6 +192,8 @@ export async function prazos(req, env, sessao, id) {
     const sp = new URL(req.url).searchParams;
     let base = existente || { processo_id: Number(sp.get("processo")) || null, situacao: "aberto", contagem: "uteis",
       categoria: sp.get("categoria") === "Compromisso" ? "Compromisso" : "Prazo", antecedencia: sp.get("categoria") === "Compromisso" ? 0 : 2 };
+    const dataSugerida = dataValida(sp.get("data") || "");
+    if (!existente && dataSugerida) { base.prazo_interno = dataSugerida; base.prazo_fatal = dataSugerida; }
     // Prazos antigos gerados de intimação, ainda sem descrição: sugere o teor da intimação.
     if (existente && !existente.descricao && existente.publicacao_id) {
       const pub = await env.DB.prepare("SELECT * FROM publicacoes WHERE id = ?").bind(existente.publicacao_id).first();
@@ -198,7 +210,8 @@ export async function prazos(req, env, sessao, id) {
   }
   if (f.get("acao") === "calcular") return tela(p, calculo ? { calculo } : { erro: "Para calcular, informe a data da publicação e o número de dias." });
   if (ehCompromisso(p) && !p.prazo_fatal && p.prazo_interno) p.prazo_fatal = p.prazo_interno;
-  if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: ehCompromisso(p) ? "Informe o título e a data do compromisso." : "Informe o título e o prazo fatal (ou a data da publicação e os dias para calcular)." });
+  if (!p.tipo || (!tiposDa(p.categoria).includes(p.tipo) && p.tipo !== existente?.tipo)) return tela(p, { erro: `Escolha um tipo da lista de ${ehCompromisso(p) ? "compromissos" : "prazos"}.` });
+  if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: ehCompromisso(p) ? "Informe o tipo e a data do compromisso." : "Informe o tipo e o prazo fatal (ou a data da publicação e os dias para calcular)." });
   const novoId = await gravarPrazo(env, p, { id: novo ? null : existente.id, usuarioId: sessao.usuario_id });
   await auditar(env, req, sessao.usuario_id, novo ? "prazo_criado" : "prazo_alterado", `prazo ${novoId}`);
   return redirecionar(`/sistema/prazos/${novoId}?salvo=1`);

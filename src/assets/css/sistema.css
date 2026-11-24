@@ -477,3 +477,6 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .selo-compromisso { background: #f3ecdf; color: #7a5b22; margin-left: 0; }
 .etiqueta.travado { cursor: default; }
 .etiqueta.travado::before { content: "🔒 "; font-size: .7em; }
+.form-compromisso .calculo { display: none; }
+.formulario label small { font-size: .72rem; color: var(--suave); text-transform: none; letter-spacing: 0; }
+.form-agendamento select, .form-agendamento input:not([type=checkbox]):not([type=radio]), .form-agendamento textarea { width: 100%; box-sizing: border-box; }

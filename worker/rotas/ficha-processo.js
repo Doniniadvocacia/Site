@@ -69,8 +69,7 @@ export async function fichaProcesso(req, env, sessao, id) {
     </tr>` })),
   ].sort((a, b) => a.ordem - b.ordem || String(b.data).localeCompare(String(a.data)));
 
-  const acoesAgenda = html`<a class="botao-link botao-pequeno" href="/sistema/prazos/novo?processo=${String(p.id)}">Novo prazo</a>
-    <a class="botao-link botao-pequeno botao-secundario" href="/sistema/prazos/novo?categoria=Compromisso&processo=${String(p.id)}">Novo compromisso</a>`;
+  const acoesAgenda = html`<a class="botao-link botao-pequeno" href="/sistema/prazos/novo?processo=${String(p.id)}">Novo agendamento</a>`;
 
   return resposta(pagina({
     titulo: p.numero || `Pasta ${p.pasta}`, sessao, ...mensagemDaUrl(req),

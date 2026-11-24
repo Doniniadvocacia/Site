@@ -124,7 +124,7 @@ async function agendaDoDia(req, env, sessao, data) {
     titulo: `Agenda ${d}/${m}/${a}`, sessao,
     corpo: html`<p class="trilha"><a href="/sistema/agenda?mes=${a}-${m}">Agenda</a></p>
       <h1>${d}/${m}/${a}${feriados.get(data) ? html` <small class="subtitulo">· ${feriados.get(data)}</small>` : ""}</h1>
-      <div class="titulo-acoes"><span></span><span><a class="botao-link" href="/sistema/agenda/novo">Novo compromisso</a></span></div>
+      <div class="titulo-acoes"><span></span><span><a class="botao-link" href="/sistema/prazos/novo?data=${data}">Novo agendamento</a></span></div>
       <section class="cartao">${itens.length ? html`<div class="lista-etiquetas">${itens.map(etiqueta)}</div>` : html`<p>Nada marcado para este dia.</p>`}</section>`,
   }));
 }
