@@ -11,7 +11,7 @@ import { prazos } from "./rotas/prazos.js";
 import { publicacoes } from "./rotas/publicacoes.js";
 import { agenda } from "./rotas/agenda.js";
 import { oabs, feriados } from "./rotas/configuracoes.js";
-import { capturarDjen } from "./djen.js";
+import { capturarDjen, capturaPendente } from "./djen.js";
 import { cadastroCliente, cadastroProcesso } from "./rotas/cadastro.js";
 import { adicionarHistorico, excluirHistorico, editarHistorico } from "./rotas/historico.js";
 import { financeiro } from "./rotas/financeiro.js";
@@ -68,7 +68,7 @@ function configuracoes(sessao) {
   </div>` }));
 }
 
-async function sistema(req, env) {
+async function sistema(req, env, ctx) {
   const url = new URL(req.url);
   const caminho = url.pathname.replace(/\/+$/, "") || "/";
   const metodo = req.method;
@@ -96,6 +96,7 @@ async function sistema(req, env) {
   if ((m0 = caminho.match(/^\/sistema\/notificacoes(?:\/(lidas|\d+))?$/))) return notificacoes(req, env, sessao, m0[1]);
   // Sino de notificações: só nas páginas (GET), não nas consultas de apoio.
   if (metodo === "GET" && !/^\/sistema\/(busca\/|anexos\/|cep\/)/.test(caminho)) {
+    if (ctx && (await capturaPendente(env))) ctx.waitUntil(capturarDjen(env, "acesso").catch((e) => console.error(e)));
     sessao.notif = await carregarNotificacoes(env, sessao);
     sessao.sino = sino(sessao);
   }
@@ -152,12 +153,12 @@ async function sistema(req, env) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const { pathname } = new URL(req.url);
     if (pathname === "/sistema" || pathname.startsWith("/sistema/")) {
       if (!env.DB) return new Response("Banco de dados não configurado.", { status: 503 });
       try {
-        return await sistema(req, env);
+        return await sistema(req, env, ctx);
       } catch (e) {
         console.error(e);
         return resposta(pagina({ titulo: "Erro", corpo: html`<h1>Algo deu errado</h1><p>Tente novamente em instantes.</p>` }), 500);

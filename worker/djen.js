@@ -18,13 +18,33 @@ async function buscarOab(api, numero, uf, inicio, fim) {
     const url = `${api}?numeroOab=${encodeURIComponent(numero)}&ufOab=${encodeURIComponent(uf)}` +
       `&dataDisponibilizacaoInicio=${inicio}&dataDisponibilizacaoFim=${fim}&pagina=${pagina}&itensPorPagina=${POR_PAGINA}`;
     const r = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "Diligo/1.0 (Eduardo Donini Advocacia)" } });
-    if (!r.ok) throw new Error(`DJEN respondeu ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    if (!r.ok) {
+      const corpo = (await r.text()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+      // O DJEN fica atrás de um bloqueio de rede que recusa acessos de fora do Brasil (comum nas execuções agendadas).
+      if (r.status === 403) throw new Error("DJEN recusou o acesso (403) a partir deste servidor da Cloudflare — bloqueio de rede para acessos de fora do Brasil. A captura será refeita automaticamente quando a equipe usar o sistema.");
+      throw new Error(`DJEN respondeu ${r.status}${corpo ? `: ${corpo}` : ""}`);
+    }
     const j = await r.json();
     const lote = j.items || j.itens || j.content || [];
     itens.push(...lote);
     if (lote.length < POR_PAGINA) break;
   }
   return itens;
+}
+
+// Captura de reserva: as execuções agendadas rodam em servidores da Cloudflare que podem estar fora do Brasil,
+// e o DJEN recusa esses acessos. Quando alguém da equipe abre o sistema (a partir do Brasil) e a última captura
+// bem-sucedida é anterior ao horário programado mais recente (7h ou 13h, dias úteis), a captura é refeita em segundo plano.
+export async function capturaPendente(env) {
+  const agoraBR = new Date(Date.now() - 3 * 3600000);
+  const dia = agoraBR.getUTCDay(), hora = agoraBR.getUTCHours();
+  if (dia === 0 || dia === 6 || hora < 7) return false;
+  const marco = Date.UTC(agoraBR.getUTCFullYear(), agoraBR.getUTCMonth(), agoraBR.getUTCDate(), hora >= 13 ? 13 : 7) / 1000 + 3 * 3600;
+  const r = await env.DB.prepare(`SELECT MAX(CASE WHEN erro IS NULL THEN criado_em END) AS ok, MAX(criado_em) AS tentativa,
+      (SELECT COUNT(*) FROM oabs WHERE ativo = 1) AS oabs FROM capturas`).first();
+  if (!r?.oabs) return false;
+  const ultimaOk = r?.ok || 0, ultimaTentativa = r?.tentativa || 0;
+  return ultimaOk < marco && agora() - ultimaTentativa > 20 * 60; // no máximo uma tentativa a cada 20 minutos
 }
 
 // Executa a captura de todas as OABs ativas. Retorna um resumo por OAB.

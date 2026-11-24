@@ -59,7 +59,7 @@ export async function oabs(req, env, sessao) {
       </section>
       <section class="cartao"><div class="titulo-acoes"><h2>Capturas recentes</h2>
         <form method="post">${campoCsrf(sessao)}<button type="submit" name="acao" value="buscar">Buscar agora</button></form></div>
-        ${capturas.length ? html`<ul class="lista-simples">${capturas.map((c) => html`<li><span>${quando(c.criado_em)} · ${c.origem} · ${c.oab}</span>
+        ${capturas.length ? html`<ul class="lista-simples">${capturas.map((c) => html`<li><span>${quando(c.criado_em)} · ${({ acesso: "automática (ao abrir o sistema)" })[c.origem] || c.origem} · ${c.oab}</span>
           <span>${c.erro ? html`<span class="alerta-texto">${c.erro}</span>` : `${c.encontradas} encontrada(s), ${c.novas} nova(s)`}</span></li>`)}</ul>` : html`<p>Nenhuma captura ainda.</p>`}
       </section>`,
   }));
