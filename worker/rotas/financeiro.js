@@ -70,7 +70,6 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
         <span class="etiqueta-tipo ${l.tipo}">${l.tipo === "receita" ? "Receita" : "Despesa"}</span>
         <span class="lanc-acoes">
           <a class="icone-acao" href="/sistema/financeiro/${String(l.id)}" title="Editar" aria-label="Editar lançamento">${seguro(ICONE_LAPIS)}</a>
-          <a class="icone-acao" href="/sistema/financeiro/${String(l.id)}#excluir" title="Excluir" aria-label="Excluir lançamento">${seguro(ICONE_LIXEIRA)}</a>
         </span>
       </div>
       <div class="lanc-dados">
@@ -94,7 +93,6 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
   })}</ul>`;
 }
 const ICONE_LAPIS = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z M14 6l4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
-const ICONE_LIXEIRA = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 
 const SELECT_LANC = `SELECT f.*, COALESCE(c.nome, c2.nome) AS cliente_nome, pr.pasta, pr.numero, a.nome AS anexo_nome, (a.chave IS NULL) AS anexo_pendente
   FROM financeiro f LEFT JOIN processos pr ON pr.id = f.processo_id LEFT JOIN clientes c ON c.id = f.cliente_id
@@ -167,12 +165,13 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
       ${l.anexo_id ? html`<p class="largo">Anexo atual:${linkAnexo(l)} <label class="opcao-linha"><input type="checkbox" name="remover_anexo" value="1"> remover</label></p>` : ""}` : ""}
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">Salvar</button></div>
   </form>
-  ${novo ? "" : html`<form method="post" action="${acao}" class="formulario form-excluir-lanc" id="excluir">${campoCsrf(sessao)}
-    <label class="opcao-linha"><input type="checkbox" name="confirmar" value="1" required> Confirmo a exclusão</label>
+  ${novo || sessao.perfil !== "admin" ? "" : html`<form method="post" action="${acao}" class="formulario form-excluir-lanc form-excluir-andamento" id="excluir"
+      data-confirmar="Excluir este lançamento${l.anexo_id ? " e o arquivo anexado" : ""}? Esta ação não pode ser desfeita.">${campoCsrf(sessao)}
+    <input type="hidden" name="confirmar" value="1">
     ${grupoQtd > 1 ? html`<label class="opcao-linha"><input type="checkbox" name="grupo" value="1"> Excluir também as outras ${String(grupoQtd - 1)} parcela(s) em aberto deste lançamento</label>` : ""}
-    <button type="submit" name="acao" value="excluir" class="botao-secundario">Excluir lançamento</button></form>`}
+    <button type="submit" name="acao" value="excluir" class="botao-perigo">Excluir lançamento</button></form>`}
   <p class="dica">Dados bancários são gravados cifrados.</p>
-  <script src="/assets/js/selecao.js" defer></script><script src="/assets/js/lancamento.js" defer></script>`;
+  <script src="/assets/js/selecao.js" defer></script><script src="/assets/js/lancamento.js" defer></script><script src="/assets/js/confirmar.js" defer></script>`;
 }
 
 function lerForm(f) {
@@ -369,7 +368,9 @@ export async function financeiro(req, env, sessao, id) {
   if (!ok) return tela(existente || {}, { erro: "Sessão expirada. Tente novamente." });
 
   if (!novo && f.get("acao") === "excluir") {
-    if (f.get("confirmar") !== "1") return tela({ ...existente, valor_txt: existente.valor.toFixed(2).replace(".", ",") }, { erro: "Marque a confirmação para excluir." });
+    // Exclusão de lançamento: somente administradores, pela tela de edição, com confirmação.
+    if (sessao.perfil !== "admin") return tela({ ...existente, valor_txt: existente.valor.toFixed(2).replace(".", ",") }, { erro: "Somente administradores podem excluir lançamentos." });
+    if (f.get("confirmar") !== "1") return tela({ ...existente, valor_txt: existente.valor.toFixed(2).replace(".", ",") }, { erro: "Confirme a exclusão." });
     const alvo = f.get("grupo") === "1" && existente.grupo
       ? (await env.DB.prepare("SELECT id, anexo_id FROM financeiro WHERE grupo = ? AND (pago = 0 OR id = ?)").bind(existente.grupo, existente.id).all()).results
       : [{ id: existente.id, anexo_id: existente.anexo_id }];

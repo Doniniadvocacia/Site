@@ -22,7 +22,7 @@ const MSG = {
   salvo: ["aviso", "Salvo."], interacao: ["aviso", "Interação registrada."], tarefa: ["aviso", "Follow-up agendado."],
   concluida: ["aviso", "Follow-up atualizado."], excluida: ["aviso", "Registro excluído."], perdido: ["aviso", "Marcado como perdido."],
   reaberto: ["aviso", "Lead reaberto no funil."], etapa: ["aviso", "Etapa atualizada."], excluido: ["aviso", "Lead excluído."],
-  sessao: ["erro", "Sessão expirada. Tente novamente."], dados: ["erro", "Preencha os campos obrigatórios."], motivo: ["erro", "Informe o motivo da perda."],
+  sessao: ["erro", "Sessão expirada. Tente novamente."], permissao: ["erro", "Somente administradores podem excluir."], dados: ["erro", "Preencha os campos obrigatórios."], motivo: ["erro", "Informe o motivo da perda."],
 };
 export const mensagem = (req) => { const m = MSG[new URL(req.url).searchParams.get("msg")]; return m ? { [m[0]]: m[1] } : {}; };
 
@@ -96,8 +96,7 @@ export async function blocoRelacionamento(env, sessao, { leadId = null, clienteI
       <div class="linha-tempo-data">${dataBR(i.data)}</div>
       <div class="linha-tempo-texto"><p><span class="selo selo-interacao">${i.tipo}</span></p><p class="pre">${resumos[n] || ""}</p>
         <div class="linha-tempo-rodape"><small class="dica">${i.autor ? `por ${i.autor}` : ""}</small>
-        ${i.usuario_id === sessao.usuario_id || sessao.perfil === "admin" ? html`<form method="post" action="/sistema/crm/interacoes/${String(i.id)}/excluir" class="form-linha form-excluir">${campoCsrf(sessao)}<input type="hidden" name="voltar" value="${voltar}">
-          <label class="confirmar"><input type="checkbox" name="confirmar" value="1" required> confirmar</label><button type="submit" class="botao-pequeno botao-secundario">Excluir</button></form>` : ""}</div>
+        ${i.usuario_id === sessao.usuario_id || sessao.perfil === "admin" ? html`<a class="icone-acao" href="/sistema/crm/interacoes/${String(i.id)}?voltar=${encodeURIComponent(voltar)}" title="Editar" aria-label="Editar interação">✎</a>` : ""}</div>
       </div></li>`)}</ol>` : html`<p class="vazio">Nenhuma interação registrada.</p>`;
 
   return html`${bloco("Follow-ups", html`${listaTarefas}<details class="novo-item"><summary class="botao-link botao-pequeno">Novo follow-up</summary>${formTarefa}</details>`, { id: "followups", contagem: pendentes.length })}
@@ -242,7 +241,11 @@ export async function cadastroLead(req, env, sessao, id) {
     titulo: id ? `Editar ${existente.nome}` : "Novo potencial cliente", sessao, erro,
     corpo: html`<p class="trilha"><a href="/sistema/crm">Funil de prospecção</a>${id ? html` › <a href="/sistema/crm/leads/${id}">${existente.nome}</a>` : ""}</p>
       <h1>${id ? "Editar potencial cliente" : "Novo potencial cliente"}</h1>
-      <section class="cartao">${formularioLead(sessao, l, acao, apoio)}</section>`,
+      <section class="cartao">${formularioLead(sessao, l, acao, apoio)}
+        ${id && sessao.perfil === "admin" ? html`<form method="post" action="/sistema/crm/leads/${id}/excluir" class="form-excluir-andamento"
+          data-confirmar="${`Excluir ${existente.nome}, com interações e follow-ups do funil? Esta ação não pode ser desfeita.`}">${campoCsrf(sessao)}
+          <input type="hidden" name="confirmar" value="1"><button type="submit" class="botao-perigo">Excluir potencial cliente</button></form>` : ""}</section>
+      <script src="/assets/js/confirmar.js" defer></script>`,
   }));
   if (req.method === "GET") {
     if (!existente) return tela({ tipo: "Pessoa Física", responsavel: sessao.nome, etapa: ETAPAS[0] });
@@ -317,10 +320,7 @@ export async function fichaLead(req, env, sessao, id) {
         ${campo("Origem", l.origem)}${campo("Indicado por", l.indicado_por)}${campo("Honorários estimados", l.valor_estimado ? moeda(l.valor_estimado) : "")}
         ${campo("Responsável", l.responsavel)}${campo("Cadastrado em", new Date(l.criado_em * 1000).toISOString().slice(0, 10).split("-").reverse().join("/"))}
       </dl>${chips(l.etiquetas)}${resumo ? html`<h3>Resumo do caso</h3><p class="pre">${resumo}</p>` : ""}</section>
-      ${await blocoRelacionamento(env, sessao, { leadId: l.id, voltar })}
-      ${sessao.perfil === "admin" ? html`<details class="zona-perigo"><summary>Excluir potencial cliente</summary>
-        <form method="post" action="/sistema/crm/leads/${String(l.id)}/excluir" class="form-linha">${campoCsrf(sessao)}
-          <label class="confirmar"><input type="checkbox" name="confirmar" value="1" required> confirmo a exclusão, com interações e follow-ups</label><button type="submit" class="botao-secundario">Excluir</button></form></details>` : ""}`,
+      ${await blocoRelacionamento(env, sessao, { leadId: l.id, voltar })}`,
   }));
 }
 
@@ -421,12 +421,46 @@ export async function novaInteracao(req, env, sessao) {
   return redirecionar(comMsg(`${voltar}#interacoes`, "interacao"));
 }
 
+// Edição de uma interação (autor ou administrador). Excluir: só administradores, com confirmação.
+export async function editarInteracao(req, env, sessao, id) {
+  const i = await env.DB.prepare("SELECT i.*, l.nome AS lead_nome, c.nome AS cliente_nome FROM crm_interacoes i LEFT JOIN leads l ON l.id = i.lead_id LEFT JOIN clientes c ON c.id = i.cliente_id WHERE i.id = ?").bind(Number(id)).first();
+  if (!i) return naoEncontrado(sessao);
+  const padrao = i.cliente_id ? `/sistema/clientes/${i.cliente_id}` : `/sistema/crm/leads/${i.lead_id}`;
+  if (i.usuario_id !== sessao.usuario_id && sessao.perfil !== "admin") return redirecionar(comMsg(`${padrao}#interacoes`, "dados"));
+  const ls = await obterListas(env, ["tipo_interacao"]);
+  const hoje = hojeBR();
+  const tela = (v, voltar, erro) => resposta(pagina({
+    titulo: "Editar interação", sessao, erro,
+    corpo: html`<p class="trilha"><a href="${voltar}#interacoes">Voltar a ${i.cliente_nome || i.lead_nome || "ficha"}</a></p><h1>Editar interação</h1>
+      <section class="cartao"><form method="post" class="formulario grade-form">${campoCsrf(sessao)}<input type="hidden" name="voltar" value="${voltar}">
+        <label>Tipo<select name="tipo" required>${opcoes(comAtual(ls.tipo_interacao, v.tipo), v.tipo, "Selecione…")}</select></label>
+        <label>Data<input type="date" name="data" required value="${v.data}" max="${hoje}"></label>
+        <label class="largo">Anotação<textarea name="resumo" rows="6" maxlength="4000" required>${v.resumo || ""}</textarea></label>
+        <div class="largo botoes-form"><button type="submit">Salvar</button><a class="botao-link botao-secundario" href="${voltar}#interacoes">Cancelar</a></div>
+      </form>
+      ${sessao.perfil === "admin" ? html`<form method="post" action="/sistema/crm/interacoes/${String(i.id)}/excluir" class="form-excluir-andamento"
+          data-confirmar="Excluir esta interação? Esta ação não pode ser desfeita.">${campoCsrf(sessao)}<input type="hidden" name="voltar" value="${voltar}">
+          <input type="hidden" name="confirmar" value="1"><button type="submit" class="botao-perigo">Excluir interação</button></form>` : ""}</section>
+      <script src="/assets/js/confirmar.js" defer></script>`,
+  }));
+  if (req.method === "GET") return tela({ tipo: i.tipo, data: i.data, resumo: await decifrar(env, i.resumo_enc) }, destinoSeguro(new URL(req.url).searchParams.get("voltar"), padrao));
+  const { f, ok } = await csrfOk(req, sessao);
+  const voltar = destinoSeguro(f.get("voltar"), padrao);
+  const v = { tipo: txt(f, "tipo", 60), data: dataValida(txt(f, "data")), resumo: txt(f, "resumo", 4000) };
+  if (!ok) return tela(v, voltar, "Sessão expirada. Tente novamente.");
+  if (!v.tipo || !v.data || !v.resumo || v.data > hoje) return tela({ ...v, data: v.data || i.data }, voltar, "Preencha tipo, data (até hoje) e anotação.");
+  await env.DB.prepare("UPDATE crm_interacoes SET tipo = ?, data = ?, resumo_enc = ? WHERE id = ?").bind(v.tipo, v.data, await cifrar(env, v.resumo), i.id).run();
+  await auditar(env, req, sessao.usuario_id, "crm_interacao_alterada", `interação ${i.id}`);
+  return redirecionar(comMsg(`${voltar}#interacoes`, "salvo"));
+}
+
 export async function excluirInteracao(req, env, sessao, id) {
   const { f, ok } = await csrfOk(req, sessao);
   const voltar = destinoSeguro(f.get("voltar"), "/sistema/crm");
   if (!ok) return redirecionar(comMsg(voltar, "sessao"));
   const i = await env.DB.prepare("SELECT * FROM crm_interacoes WHERE id = ?").bind(Number(id)).first();
-  if (!i || f.get("confirmar") !== "1" || (i.usuario_id !== sessao.usuario_id && sessao.perfil !== "admin")) return redirecionar(comMsg(`${voltar}#interacoes`, "dados"));
+  if (sessao.perfil !== "admin") return redirecionar(comMsg(`${voltar}#interacoes`, "permissao"));
+  if (!i || f.get("confirmar") !== "1") return redirecionar(comMsg(`${voltar}#interacoes`, "dados"));
   await env.DB.prepare("DELETE FROM crm_interacoes WHERE id = ?").bind(i.id).run();
   await auditar(env, req, sessao.usuario_id, "crm_interacao_excluida", `interação ${i.id}`);
   return redirecionar(comMsg(`${voltar}#interacoes`, "excluida"));

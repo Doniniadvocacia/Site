@@ -23,7 +23,7 @@ import { favorecidos } from "./rotas/favorecidos.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
 import { carregarNotificacoes, sino, notificacoes } from "./notificacoes.js";
 import { relatorios } from "./rotas/relatorios.js";
-import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
+import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, editarInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -129,6 +129,7 @@ async function sistema(req, env, ctx) {
   if ((m = caminho.match(/^\/sistema\/crm\/leads\/(\d+)\/(etapa|converter|perder|reabrir|excluir)$/)) && metodo === "POST") return acaoLead(req, env, sessao, m[1], m[2]);
   if (caminho === "/sistema/crm/interacoes" && metodo === "POST") return novaInteracao(req, env, sessao);
   if ((m = caminho.match(/^\/sistema\/crm\/interacoes\/(\d+)\/excluir$/)) && metodo === "POST") return excluirInteracao(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/crm\/interacoes\/(\d+)$/))) return editarInteracao(req, env, sessao, m[1]);
   if (caminho === "/sistema/crm/tarefas" && metodo === "POST") return novaTarefa(req, env, sessao);
   if ((m = caminho.match(/^\/sistema\/crm\/tarefas\/(\d+)\/concluir$/)) && metodo === "POST") return concluirTarefa(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);

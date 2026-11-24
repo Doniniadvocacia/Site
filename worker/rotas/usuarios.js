@@ -91,11 +91,11 @@ async function ficha(req, env, sessao, alvo, { erro, aviso, senhaGerada, valores
       </section>
       ${proprio ? "" : html`<section class="cartao zona-perigo"><h2>Excluir usuário</h2>
         <p>Remove o acesso e o cadastro de forma definitiva. Prazos, andamentos e lançamentos criados por ele continuam no sistema, sem o nome do autor; o histórico de ações é mantido. Se a intenção é só impedir o acesso, prefira <strong>Suspender</strong>.</p>
-        <form method="post" class="formulario form-excluir-usuario">${campoCsrf(sessao)}
-          <label class="opcao-linha"><input type="checkbox" name="confirmar" value="1" required> Confirmo a exclusão definitiva de ${alvo.nome}</label>
+        <form method="post" class="formulario form-excluir-usuario" data-confirmar="${`Excluir definitivamente o usuário ${alvo.nome}? Esta ação não pode ser desfeita.`}">${campoCsrf(sessao)}
+          <input type="hidden" name="confirmar" value="1">
           <div class="botoes-form"><button type="submit" name="acao" value="excluir" class="botao-alerta">Excluir usuário</button></div>
         </form></section>`}
-      ${scriptsCadastro}`,
+      ${scriptsCadastro}<script src="/assets/js/confirmar.js" defer></script>`,
   }), status);
 }
 
@@ -151,7 +151,7 @@ export async function usuarios(req, env, sessao, id) {
   if (alvo.id === sessao.usuario_id) return responder({ erro: "Essa ação não pode ser aplicada ao próprio usuário." });
 
   if (acao === "excluir") {
-    if (f.get("confirmar") !== "1") return responder({ erro: "Marque a confirmação para excluir." });
+    if (f.get("confirmar") !== "1") return responder({ erro: "Confirme a exclusão." });
     if (alvo.perfil === "admin") {
       const admins = (await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE perfil = 'admin' AND ativo = 1 AND id != ?").bind(alvo.id).first()).n;
       if (!admins) return responder({ erro: "Não é possível excluir o único administrador ativo." });
