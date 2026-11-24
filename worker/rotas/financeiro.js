@@ -7,7 +7,7 @@ import { hojeBR, somarDias } from "../calendario.js";
 import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso, bloco } from "./comum.js";
 import { linkAnexo } from "./historico.js";
-import { obterListas } from "../listas.js";
+import { obterListas, categoriasFinanceiras } from "../listas.js";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const CONDICOES = [["À Vista", "À vista"], ["Parcelado", "Parcelado"], ["Entrada+Parcelado", "Entrada + parcelado"], ["Recorrente", "Recorrente (mensal)"]];
@@ -115,15 +115,15 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
 
 // ---------- Formulário ----------
 function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false }) {
-  const cats = apoio.categorias;
-  return html`<form method="post" action="${acao}" enctype="multipart/form-data" class="formulario grade-form">
+  const cats = apoio.categorias[l.tipo === "despesa" ? "despesa" : "receita"];
+  return html`<form method="post" action="${acao}" enctype="multipart/form-data" class="formulario grade-form form-lancamento">
     ${campoCsrf(sessao)}
     <fieldset class="largo tipo-lanc"><legend>Tipo</legend>
       <label class="opcao"><input type="radio" name="tipo" value="receita"${l.tipo !== "despesa" ? html` checked` : ""}> Receita</label>
       <label class="opcao"><input type="radio" name="tipo" value="despesa"${l.tipo === "despesa" ? html` checked` : ""}> Despesa</label>
     </fieldset>
     <label class="largo">Descrição<input name="descricao" required maxlength="300" value="${l.descricao || ""}" placeholder="Ex.: Honorários iniciais — ação regressiva"></label>
-    <label>Tipo de lançamento<select name="categoria">${opcoes([...new Set([...cats, ...(l.categoria ? [l.categoria] : [])])].map((x) => [x, x]), l.categoria, "Selecione…")}</select></label>
+    <label>Tipo de lançamento<select name="categoria" required data-categorias-receita="${JSON.stringify(apoio.categorias.receita)}" data-categorias-despesa="${JSON.stringify(apoio.categorias.despesa)}">${opcoes([...new Set([...cats, ...(l.categoria && !cats.includes(l.categoria) ? [l.categoria] : [])])].map((x) => [x, x]), l.categoria, "Selecione…")}</select></label>
     <label>Processo<select name="processo_id">${opcoes(apoio.processos, l.processo_id, "Sem processo")}</select></label>
     <label>Cliente<select name="cliente_id">${opcoes(apoio.clientes, l.cliente_id, "Do processo / nenhum")}</select></label>
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, l.responsavel)}</select></label>
@@ -153,7 +153,8 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     <label class="opcao-linha"><input type="checkbox" name="confirmar" value="1" required> Confirmo a exclusão</label>
     ${grupoQtd > 1 ? html`<label class="opcao-linha"><input type="checkbox" name="grupo" value="1"> Excluir também as outras ${String(grupoQtd - 1)} parcela(s) em aberto deste lançamento</label>` : ""}
     <button type="submit" name="acao" value="excluir" class="botao-secundario">Excluir lançamento</button></form>`}
-  <p class="dica">Dados bancários e observações são gravados cifrados.</p>`;
+  <p class="dica">Dados bancários e observações são gravados cifrados.</p>
+  <script src="/assets/js/lancamento.js" defer></script>`;
 }
 
 function lerForm(f) {
@@ -184,12 +185,13 @@ function validar(l, novo) {
 }
 
 async function apoioForm(env) {
-  const [base, clientes, ls] = await Promise.all([
+  const [base, clientes, ls, cats] = await Promise.all([
     listasApoio(env),
     env.DB.prepare("SELECT id, nome FROM clientes ORDER BY nome COLLATE NOCASE").all(),
-    obterListas(env, ["categoria_financeira", "forma_pagamento"]),
+    obterListas(env, ["forma_pagamento"]),
+    categoriasFinanceiras(env),
   ]);
-  return { ...base, clientes: clientes.results.map((c) => [c.id, c.nome]), categorias: ls.categoria_financeira, formas: ls.forma_pagamento };
+  return { ...base, clientes: clientes.results.map((c) => [c.id, c.nome]), categorias: cats, formas: ls.forma_pagamento };
 }
 
 // ---------- Saldo da conta ----------
@@ -354,7 +356,11 @@ export async function financeiro(req, env, sessao, id) {
   }
 
   const l = lerForm(f);
-  const erro = validar(l, novo);
+  let erro = validar(l, novo);
+  if (!erro && !l.categoria) erro = "Escolha o tipo de lançamento.";
+  if (!erro && l.categoria !== existente?.categoria && !apoio.categorias[l.tipo].includes(l.categoria)) {
+    erro = `“${l.categoria}” não é um tipo de ${l.tipo === "receita" ? "receita" : "despesa"}. Escolha um da lista.`;
+  }
   if (erro) return tela({ ...(existente || {}), ...l }, { erro });
   if (l.pago && !l.data_pagamento) l.data_pagamento = hoje;
   if (!l.pago) l.data_pagamento = null;

@@ -2,9 +2,12 @@
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { auditar } from "../sessao.js";
 import { csrfOk, txt } from "./comum.js";
-import { DEFINICOES, DEF, obterLista, prazosPadrao } from "../listas.js";
+import { DEFINICOES, DEF, obterLista, prazosPadrao, categoriasFinanceiras } from "../listas.js";
 
-const MSG = { padrao: ["aviso", "Prazo padrão atualizado."], incluido: ["aviso", "Item incluído."], excluido: ["aviso", "Item excluído da lista. Registros que já usam esse valor não são alterados."],
+const APLICACOES = [["receita", "Receita"], ["despesa", "Despesa"], ["ambos", "Receita e despesa"]];
+const opAplicacao = (atual) => APLICACOES.map(([v, r]) => html`<option value="${v}"${v === (atual || "despesa") ? html` selected` : ""}>${r}</option>`);
+const lerAplicacao = (f) => (APLICACOES.some(([v]) => v === f.get("aplicacao")) ? f.get("aplicacao") : "despesa");
+const MSG = { aplicacao: ["aviso", "Classificação atualizada."], padrao: ["aviso", "Prazo padrão atualizado."], incluido: ["aviso", "Item incluído."], excluido: ["aviso", "Item excluído da lista. Registros que já usam esse valor não são alterados."],
   duplicado: ["erro", "Esse item já existe na lista."], vazio: ["erro", "Digite o item a incluir."], sessao: ["erro", "Sessão expirada. Tente novamente."] };
 
 // Dias (1 a 365, vazio = sem padrão) e contagem do prazo padrão.
@@ -29,8 +32,9 @@ export async function listas(req, env, sessao) {
       if (!novos.length) return volta("vazio");
       const max = (await env.DB.prepare("SELECT COALESCE(MAX(ordem), 0) AS m FROM listas WHERE lista = ?").bind(chave).first()).m;
       const { dias, contagem } = lerPadrao(f);
-      const r = await env.DB.batch(novos.map((v, i) => env.DB.prepare("INSERT OR IGNORE INTO listas (lista, valor, ordem, dias, contagem) VALUES (?, ?, ?, ?, ?)")
-        .bind(chave, v, max + i + 1, chave === "tipo_prazo" ? dias : null, chave === "tipo_prazo" && dias ? contagem : null)));
+      const r = await env.DB.batch(novos.map((v, i) => env.DB.prepare("INSERT OR IGNORE INTO listas (lista, valor, ordem, dias, contagem, aplicacao) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(chave, v, max + i + 1, chave === "tipo_prazo" ? dias : null, chave === "tipo_prazo" && dias ? contagem : null,
+          chave === "categoria_financeira" ? lerAplicacao(f) : null)));
       const incluidos = r.reduce((s, x) => s + x.meta.changes, 0);
       if (!incluidos) return volta("duplicado");
       await auditar(env, req, sessao.usuario_id, "lista_item_incluido", `${chave}: ${novos.join("; ")}`.slice(0, 480));
@@ -41,6 +45,12 @@ export async function listas(req, env, sessao) {
       await env.DB.prepare("UPDATE listas SET dias = ?, contagem = ? WHERE lista = ? AND valor = ?").bind(dias, dias ? contagem : null, chave, valor).run();
       await auditar(env, req, sessao.usuario_id, "lista_prazo_padrao", `${valor}: ${dias ? `${dias} dias ${contagem}` : "sem padrão"}`);
       return volta("padrao");
+    }
+    if (f.get("acao") === "aplicacao" && chave === "categoria_financeira") {
+      const valor = txt(f, "valor", 120), ap = lerAplicacao(f);
+      await env.DB.prepare("UPDATE listas SET aplicacao = ? WHERE lista = ? AND valor = ?").bind(ap, chave, valor).run();
+      await auditar(env, req, sessao.usuario_id, "lista_tipo_lancamento", `${valor}: ${ap}`);
+      return volta("aplicacao");
     }
     if (f.get("acao") === "excluir") {
       const valor = txt(f, "valor", 120);
@@ -53,6 +63,7 @@ export async function listas(req, env, sessao) {
 
   const itens = await obterLista(env, chave);
   const padroes = chave === "tipo_prazo" ? await prazosPadrao(env) : {};
+  const aplicacoes = chave === "categoria_financeira" ? (await categoriasFinanceiras(env)).aplicacao : {};
   const contagens = Object.fromEntries((await env.DB.prepare("SELECT lista, COUNT(*) AS n FROM listas GROUP BY lista").all()).results.map((r) => [r.lista, r.n]));
   const m = MSG[url.searchParams.get("msg")];
   const grupos = [...new Set(DEFINICOES.map((d) => d.grupo))];
@@ -69,6 +80,7 @@ export async function listas(req, env, sessao) {
           <h2>${def.nome} <span class="contagem">${String(itens.length)}</span></h2>
           <form method="post" action="/sistema/listas?lista=${chave}" class="formulario form-incluir-item">${campoCsrf(sessao)}
             <label>Incluir item <small>(para incluir vários, um por linha)</small><textarea name="valor" rows="2" maxlength="3000" required></textarea></label>
+            ${chave === "categoria_financeira" ? html`<label class="campo-dias">Usado em<select name="aplicacao">${opAplicacao("despesa")}</select></label>` : ""}
             ${chave === "tipo_prazo" ? html`<label class="campo-dias">Prazo padrão<span class="dias-contagem"><input type="number" name="dias" min="1" max="365" placeholder="dias"><select name="contagem">${opContagem("uteis")}</select></span></label>` : ""}
             <button type="submit" name="acao" value="incluir">Incluir</button>
           </form>
@@ -82,6 +94,15 @@ export async function listas(req, env, sessao) {
               <td><form method="post" action="/sistema/listas?lista=${chave}" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="valor" value="${v}">
                 <button type="submit" name="acao" value="excluir" class="botao-pequeno botao-secundario">Excluir</button></form></td></tr>`)}</tbody></table></div>
             <p class="dica">O prazo padrão preenche automaticamente "Prazo (dias)" no agendamento e na triagem de intimações; pode ser alterado em cada prazo. Deixe em branco quando o prazo é fixado pelo juiz.</p>`
+          : chave === "categoria_financeira" && itens.length ? html`<div class="tabela-rolagem"><table class="tabela-prazos-padrao">
+            <thead><tr><th>Tipo de lançamento</th><th>Usado em</th><th></th></tr></thead>
+            <tbody>${itens.map((v) => html`<tr><td>${v}</td>
+              <td><form method="post" action="/sistema/listas?lista=${chave}" class="form-padrao">${campoCsrf(sessao)}<input type="hidden" name="valor" value="${v}">
+                <select name="aplicacao" aria-label="Uso de ${v}">${opAplicacao(aplicacoes[v])}</select>
+                <button type="submit" name="acao" value="aplicacao" class="botao-pequeno">Salvar</button></form></td>
+              <td><form method="post" action="/sistema/listas?lista=${chave}" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="valor" value="${v}">
+                <button type="submit" name="acao" value="excluir" class="botao-pequeno botao-secundario">Excluir</button></form></td></tr>`)}</tbody></table></div>
+            <p class="dica">No Financeiro, ao marcar Receita ou Despesa, o campo "Tipo de lançamento" mostra só os itens correspondentes.</p>`
           : itens.length ? html`<ul class="itens-lista">${itens.map((v) => html`<li><span>${v}</span>
             <form method="post" action="/sistema/listas?lista=${chave}" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="valor" value="${v}">
               <button type="submit" name="acao" value="excluir" class="botao-pequeno botao-secundario" title="Excluir “${v}” da lista">Excluir</button></form></li>`)}</ul>`

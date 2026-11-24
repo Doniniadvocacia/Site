@@ -80,3 +80,14 @@ export async function prazosPadrao(env) {
   const { results } = await env.DB.prepare("SELECT valor, dias, contagem FROM listas WHERE lista = 'tipo_prazo' AND dias IS NOT NULL").all();
   return Object.fromEntries(results.map((r) => [r.valor, { dias: r.dias, contagem: r.contagem === "corridos" ? "corridos" : "uteis" }]));
 }
+
+// Tipos de lançamento por aplicação: { receita: [...], despesa: [...] } (itens "ambos" entram nas duas).
+export async function categoriasFinanceiras(env) {
+  const { results } = await env.DB.prepare("SELECT valor, COALESCE(aplicacao, 'ambos') AS aplicacao FROM listas WHERE lista = 'categoria_financeira'").all();
+  const ord = (l) => l.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return {
+    receita: ord(results.filter((r) => r.aplicacao !== "despesa").map((r) => r.valor)),
+    despesa: ord(results.filter((r) => r.aplicacao !== "receita").map((r) => r.valor)),
+    aplicacao: Object.fromEntries(results.map((r) => [r.valor, r.aplicacao])),
+  };
+}
