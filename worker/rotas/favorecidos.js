@@ -7,10 +7,22 @@ import { csrfOk, txt, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnp
 const MSG = { salvo: ["aviso", "Favorecido salvo."], removido: ["aviso", "Favorecido removido da lista. Lançamentos antigos mantêm o nome."],
   duplicado: ["erro", "Já existe um favorecido com esse nome."], documento: ["erro", "CPF ou CNPJ inválido."], vazio: ["erro", "Informe o nome."], sessao: ["erro", "Sessão expirada."] };
 
-// Lista para o formulário do Financeiro: [{ id, nome, dados }]
+// Dados bancários ficam num JSON cifrado { banco, agencia, conta, pix }. Registros antigos (texto livre) caem em "banco".
+const CAMPOS_BANCO = [["banco", "Banco", 80], ["agencia", "Agência", 20], ["conta", "Conta", 30], ["pix", "Chave Pix", 140]];
+export function lerBanco(texto) {
+  const vazio = { banco: "", agencia: "", conta: "", pix: "" };
+  if (!texto) return vazio;
+  try { const j = JSON.parse(texto); if (j && typeof j === "object") return { ...vazio, ...j }; } catch { /* texto livre antigo */ }
+  return { ...vazio, banco: texto };
+}
+export function bancoTexto(b) {
+  return [b.banco && `Banco: ${b.banco}`, b.agencia && `Agência: ${b.agencia}`, b.conta && `Conta: ${b.conta}`, b.pix && `Pix: ${b.pix}`].filter(Boolean).join(" · ");
+}
+
+// Lista para o formulário do Financeiro: [{ id, nome, dados }] — dados já em texto para o lançamento.
 export async function listaFavorecidos(env) {
   const { results } = await env.DB.prepare("SELECT id, nome, dados_bancarios_enc FROM favorecidos WHERE ativo = 1 ORDER BY nome COLLATE NOCASE").all();
-  return Promise.all(results.map(async (r) => ({ id: r.id, nome: r.nome, dados: await decifrar(env, r.dados_bancarios_enc) })));
+  return Promise.all(results.map(async (r) => ({ id: r.id, nome: r.nome, dados: bancoTexto(lerBanco(await decifrar(env, r.dados_bancarios_enc))) })));
 }
 
 function lerDocumento(v) {
@@ -39,7 +51,10 @@ export async function favorecidos(req, env, sessao) {
     if (!doc.ok) return volta("documento", id);
     const dup = await env.DB.prepare("SELECT id, ativo FROM favorecidos WHERE nome = ? AND id != ?").bind(nome, id || 0).first();
     if (dup && dup.ativo) return volta("duplicado", id);
-    const [docEnc, bancEnc] = await Promise.all([cifrar(env, doc.valor), cifrar(env, txt(f, "dados_bancarios", 1000))]);
+    const [docEnc, bancEnc] = await Promise.all([cifrar(env, doc.valor), cifrar(env, (() => {
+      const b = Object.fromEntries(CAMPOS_BANCO.map(([k, , max]) => [k, txt(f, k, max) || ""]));
+      return Object.values(b).some(Boolean) ? JSON.stringify(b) : null;
+    })())]);
     if (dup && !id) {
       await env.DB.prepare("UPDATE favorecidos SET ativo = 1, documento_enc = ?, dados_bancarios_enc = ?, atualizado_em = ? WHERE id = ?").bind(docEnc, bancEnc, agora(), dup.id).run();
     } else if (id) {
@@ -51,27 +66,27 @@ export async function favorecidos(req, env, sessao) {
     return volta("salvo");
   }
   const { results } = await env.DB.prepare("SELECT * FROM favorecidos WHERE ativo = 1 ORDER BY nome COLLATE NOCASE").all();
-  const lista = await Promise.all(results.map(async (r) => ({ ...r, documento: await decifrar(env, r.documento_enc), dados: await decifrar(env, r.dados_bancarios_enc) })));
+  const lista = await Promise.all(results.map(async (r) => ({ ...r, documento: await decifrar(env, r.documento_enc), banco: lerBanco(await decifrar(env, r.dados_bancarios_enc)) })));
   const editando = lista.find((x) => x.id === Number(url.searchParams.get("editar")));
   const m = MSG[url.searchParams.get("msg")];
-  const v = editando || {};
+  const v = editando || { banco: lerBanco(null) };
   return resposta(pagina({
     titulo: "Favorecidos", sessao, ...(m ? { [m[0]]: m[1] } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/configuracoes">Configurações</a></p>
       <h1>Favorecidos</h1>
       <p class="dica">Pessoas e empresas que recebem pagamentos do escritório ou repasses. Aparecem no campo "Favorecido" dos lançamentos; os dados bancários preenchem o lançamento automaticamente.</p>
       <section class="cartao"><h2>${editando ? `Editar ${editando.nome}` : "Novo favorecido"}</h2>
-        <form method="post" class="formulario grade-form">${campoCsrf(sessao)}${editando ? html`<input type="hidden" name="id" value="${String(editando.id)}">` : ""}
-          <label class="duplo">Nome<input name="nome" required maxlength="150" value="${v.nome || ""}"></label>
-          <label>CPF/CNPJ <small>(opcional)</small><input name="documento" maxlength="18" inputmode="numeric" data-mascara="documento" value="${v.documento || ""}"></label>
-          <label class="largo">Dados bancários / Pix <small>(opcional)</small><textarea name="dados_bancarios" rows="2" maxlength="1000" placeholder="Banco, agência, conta ou chave Pix">${v.dados || ""}</textarea></label>
+        <form method="post" class="formulario grade-form grade-favorecido">${campoCsrf(sessao)}${editando ? html`<input type="hidden" name="id" value="${String(editando.id)}">` : ""}
+          <label class="fav-nome">Nome<input name="nome" required maxlength="150" value="${v.nome || ""}"></label>
+          <label>CPF/CNPJ<input name="documento" maxlength="18" inputmode="numeric" data-mascara="documento" value="${v.documento || ""}"></label>
+          ${CAMPOS_BANCO.map(([k, rot, max]) => html`<label>${rot}<input name="${k}" maxlength="${String(max)}" value="${v.banco[k] || ""}"${k === "pix" ? html` placeholder="CPF, CNPJ, e-mail, celular ou chave aleatória"` : ""}></label>`)}
           <div class="largo botoes-form"><button type="submit">${editando ? "Salvar alterações" : "Cadastrar favorecido"}</button>${editando ? html`<a class="botao-link botao-secundario" href="/sistema/favorecidos">Cancelar</a>` : ""}</div>
         </form>
-        <p class="dica">CPF/CNPJ e dados bancários são gravados cifrados.</p>
+        <p class="dica">Só o nome é obrigatório. CPF/CNPJ e dados bancários são gravados cifrados.</p>
       </section>
       <section class="cartao"><h2>Cadastrados <span class="contagem">${String(lista.length)}</span></h2>
-        ${lista.length ? html`<div class="tabela-rolagem"><table><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Dados bancários / Pix</th><th></th></tr></thead>
-          <tbody>${lista.map((x) => html`<tr><td>${x.nome}</td><td>${x.documento || "—"}</td><td class="pre">${x.dados || "—"}</td>
+        ${lista.length ? html`<div class="tabela-rolagem"><table><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Banco</th><th>Agência</th><th>Conta</th><th>Chave Pix</th><th></th></tr></thead>
+          <tbody>${lista.map((x) => html`<tr><td>${x.nome}</td><td>${x.documento || "—"}</td>${CAMPOS_BANCO.map(([k]) => html`<td>${x.banco[k] || "—"}</td>`)}
             <td class="acoes-linha"><a class="botao-link botao-pequeno botao-secundario" href="/sistema/favorecidos?editar=${String(x.id)}">Editar</a>
               <form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="id" value="${String(x.id)}"><button class="botao-pequeno botao-secundario" name="acao" value="remover">Remover</button></form></td></tr>`)}</tbody></table></div>`
           : html`<p class="vazio">Nenhum favorecido cadastrado.</p>`}

@@ -561,3 +561,7 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 
 .rotulo-linha { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 .rotulo-linha .link-pequeno { margin: 0; }
+
+.grade-favorecido { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
+.grade-favorecido .fav-nome { grid-column: span 3; }
+@media (max-width: 720px) { .grade-favorecido { grid-template-columns: 1fr 1fr; } .grade-favorecido .fav-nome { grid-column: 1 / -1; } }
