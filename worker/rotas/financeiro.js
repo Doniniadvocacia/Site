@@ -169,18 +169,17 @@ async function apoioForm(env) {
 }
 
 // ---------- Saldo da conta ----------
-// Saldo atual = saldo informado na data de referência + recebimentos − pagamentos feitos a partir dessa data.
+// Mesmo padrão do Diligo no Wix: receitas pagas − despesas pagas, de todo o período, até hoje.
 async function saldoConta(env, hoje) {
-  const { results } = await env.DB.prepare("SELECT chave, valor FROM configuracoes WHERE chave IN ('saldo_valor', 'saldo_data')").all();
-  const cfg = Object.fromEntries(results.map((r) => [r.chave, r.valor]));
-  const base = Number(cfg.saldo_valor || 0), data = cfg.saldo_data || "0000-01-01";
   const fimMes = somarMeses(`${hoje.slice(0, 7)}-01`, 1);
   const r = await env.DB.prepare(`SELECT
-      SUM(CASE WHEN pago = 1 AND data_pagamento >= ?1 AND data_pagamento <= ?2 THEN (CASE tipo WHEN 'receita' THEN valor ELSE -valor END) ELSE 0 END) AS movimento,
-      SUM(CASE WHEN pago = 0 AND vencimento < ?3 THEN (CASE tipo WHEN 'receita' THEN valor ELSE -valor END) ELSE 0 END) AS pendente
-    FROM financeiro`).bind(data, hoje, fimMes).first();
-  const atual = Math.round((base + (r?.movimento || 0)) * 100) / 100;
-  return { atual, projetado: Math.round((atual + (r?.pendente || 0)) * 100) / 100, configurado: Boolean(cfg.saldo_data), data: cfg.saldo_data, base };
+      SUM(CASE WHEN pago = 1 AND tipo = 'receita' AND COALESCE(data_pagamento, vencimento) <= ?1 THEN valor ELSE 0 END) AS recebido,
+      SUM(CASE WHEN pago = 1 AND tipo = 'despesa' AND COALESCE(data_pagamento, vencimento) <= ?1 THEN valor ELSE 0 END) AS pago,
+      SUM(CASE WHEN pago = 0 AND vencimento < ?2 THEN (CASE tipo WHEN 'receita' THEN valor ELSE -valor END) ELSE 0 END) AS pendente
+    FROM financeiro`).bind(hoje, fimMes).first();
+  const recebido = r?.recebido || 0, pago = r?.pago || 0;
+  const atual = Math.round((recebido - pago) * 100) / 100;
+  return { atual, recebido, pago, projetado: Math.round((atual + (r?.pendente || 0)) * 100) / 100 };
 }
 
 // ---------- Rotas ----------
@@ -199,26 +198,6 @@ export async function financeiro(req, env, sessao, id) {
     const ref = req.headers.get("Referer");
     return redirecionar(ref && new URL(ref).pathname.startsWith("/sistema/") ? new URL(ref).pathname + new URL(ref).search : "/sistema/financeiro");
   }
-
-  // Ajuste do saldo de referência
-  if (id === "saldo" && req.method === "POST") {
-    const { f, ok } = await csrfOk(req, sessao);
-    const valor = numeroBR(f.get("saldo_valor")), data = dataValida(txt(f, "saldo_data")) || hoje;
-    if (ok && valor !== null && !Number.isNaN(valor) && data <= hoje) {
-      // Pagamentos já registrados no próprio dia de referência entram no saldo informado.
-      const doDia = await env.DB.prepare(`SELECT SUM(CASE tipo WHEN 'receita' THEN valor ELSE -valor END) AS v FROM financeiro WHERE pago = 1 AND data_pagamento = ?`).bind(data).first();
-      const base = Math.round((valor - (doDia?.v || 0)) * 100) / 100;
-      const t = agora();
-      await env.DB.batch([
-        env.DB.prepare("INSERT INTO configuracoes (chave, valor, atualizado_por, atualizado_em) VALUES ('saldo_valor', ?1, ?2, ?3) ON CONFLICT(chave) DO UPDATE SET valor = ?1, atualizado_por = ?2, atualizado_em = ?3").bind(String(base), sessao.usuario_id, t),
-        env.DB.prepare("INSERT INTO configuracoes (chave, valor, atualizado_por, atualizado_em) VALUES ('saldo_data', ?1, ?2, ?3) ON CONFLICT(chave) DO UPDATE SET valor = ?1, atualizado_por = ?2, atualizado_em = ?3").bind(data, sessao.usuario_id, t),
-      ]);
-      await auditar(env, req, sessao.usuario_id, "saldo_ajustado", `saldo em ${data}: ${valor.toFixed(2)}`);
-      return redirecionar(`/sistema/financeiro?saldo=ok`);
-    }
-    return redirecionar(`/sistema/financeiro?saldo=erro`);
-  }
-  if (id === "saldo") return redirecionar("/sistema/financeiro");
 
   // Lista mensal
   if (!id) {
@@ -240,9 +219,8 @@ export async function financeiro(req, env, sessao, id) {
     const [a, m] = mes.split("-").map(Number);
     const url = (o) => { const q = new URLSearchParams({ mes, ...(tipo && { tipo }), ...(sit && { situacao: sit }), ...o }); for (const [k, v] of [...q]) if (!v) q.delete(k); return `/sistema/financeiro?${q}`; };
     const aba = (chave, valor, rotulo, atual) => html`<a href="${url({ [chave]: valor })}" class="${atual === valor ? "ativa" : ""}">${rotulo}</a>`;
-    const msgSaldo = sp.get("saldo") === "ok" ? { aviso: "Saldo da conta atualizado." } : sp.get("saldo") === "erro" ? { erro: "Informe um valor de saldo válido e uma data que não seja futura." } : {};
     return resposta(pagina({
-      titulo: "Financeiro", sessao, ...msgSaldo,
+      titulo: "Financeiro", sessao,
       corpo: html`
         <div class="titulo-acoes"><h1>Financeiro</h1><a class="botao-link" href="/sistema/financeiro/novo">Novo lançamento</a></div>
         <div class="navegacao-mes">
@@ -255,15 +233,8 @@ export async function financeiro(req, env, sessao, id) {
           <div class="cartao-resumo saldo-conta">
             <span>Saldo atual da conta</span>
             <strong class="${saldo.atual < 0 ? "despesa" : ""}">${moeda(saldo.atual)}</strong>
-            <small>${saldo.configurado ? `Projetado até o fim do mês ${moeda(saldo.projetado)}` : "Informe o saldo do extrato para começar"}</small>
-            <details class="ajustar-saldo"${saldo.configurado ? "" : html` open`}><summary>${saldo.configurado ? `Ajustar (referência ${dataBR(saldo.data)})` : "Informar saldo"}</summary>
-              <form method="post" action="/sistema/financeiro/saldo" class="formulario">${campoCsrf(sessao)}
-                <label>Saldo no extrato (R$)<input name="saldo_valor" inputmode="decimal" required placeholder="0,00"></label>
-                <label>Em<input type="date" name="saldo_data" value="${hoje}" max="${hoje}"></label>
-                <button type="submit" class="botao-pequeno">Salvar saldo</button>
-              </form>
-              <p class="dica">Depois disso, cada recebimento ou pagamento marcado no sistema atualiza o saldo automaticamente.</p>
-            </details>
+            <small>Recebido ${moeda(saldo.recebido)} · pago ${moeda(saldo.pago)}</small>
+            <small>Projetado até o fim do mês ${moeda(saldo.projetado)}</small>
           </div>
           <div class="cartao-resumo receita"><span>Receitas do mês</span><strong>${moeda(rec)}</strong><small>Recebido ${moeda(recPago)}</small></div>
           <div class="cartao-resumo despesa"><span>Despesas do mês</span><strong>${moeda(desp)}</strong><small>Pago ${moeda(despPago)}</small></div>
