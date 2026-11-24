@@ -22,6 +22,7 @@ import { listas } from "./rotas/listas.js";
 import { favorecidos } from "./rotas/favorecidos.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
 import { carregarNotificacoes, sino, notificacoes } from "./notificacoes.js";
+import { relatorios } from "./rotas/relatorios.js";
 import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
@@ -114,6 +115,8 @@ async function sistema(req, env) {
   if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/historico$/)) && metodo === "POST") return adicionarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)$/))) return editarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)\/excluir$/)) && metodo === "POST") return excluirHistorico(req, env, sessao, m[1]);
+  if (caminho === "/sistema/financeiro/relatorios") return sessao.financeiro ? relatorios(req, env, sessao)
+    : resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1>` }), 403);
   if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/(?:baixar|estornar))?))?$/))) return financeiro(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/anexos\/(\d+)$/))) return servirAnexo(env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);

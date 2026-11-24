@@ -294,7 +294,7 @@ export async function financeiro(req, env, sessao, id) {
     return resposta(pagina({
       titulo: "Financeiro", sessao,
       corpo: html`
-        <div class="titulo-acoes"><h1>Financeiro</h1><a class="botao-link" href="/sistema/financeiro/novo">Novo lançamento</a></div>
+        <div class="titulo-acoes"><h1>Financeiro</h1><span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/financeiro/relatorios">Relatórios contábeis</a><a class="botao-link" href="/sistema/financeiro/novo">Novo lançamento</a></span></div>
         ${periodo ? html`<div class="navegacao-mes"><strong class="periodo">Período: ${de && ate ? `${dataBR(de)} a ${dataBR(ate)}` : de ? `a partir de ${dataBR(de)}` : `até ${dataBR(ate)}`}</strong></div>` : html`
         <div class="navegacao-mes">
           <a href="${url({ mes: somarMeses(ini, -1).slice(0, 7) })}" aria-label="Mês anterior">‹</a>
