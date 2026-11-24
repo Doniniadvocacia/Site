@@ -169,17 +169,16 @@ async function apoioForm(env) {
 }
 
 // ---------- Saldo da conta ----------
-// Mesmo padrão do Diligo no Wix: receitas pagas − despesas pagas, de todo o período, até hoje.
+// Mesmo padrão do Diligo no Wix: receitas pagas − despesas pagas, de todo o período.
+// Saldo atual: até hoje. Saldo do mês anterior: até o último dia do mês anterior (fechamento).
 async function saldoConta(env, hoje) {
-  const fimMes = somarMeses(`${hoje.slice(0, 7)}-01`, 1);
+  const inicioMes = `${hoje.slice(0, 7)}-01`;
   const r = await env.DB.prepare(`SELECT
-      SUM(CASE WHEN pago = 1 AND tipo = 'receita' AND COALESCE(data_pagamento, vencimento) <= ?1 THEN valor ELSE 0 END) AS recebido,
-      SUM(CASE WHEN pago = 1 AND tipo = 'despesa' AND COALESCE(data_pagamento, vencimento) <= ?1 THEN valor ELSE 0 END) AS pago,
-      SUM(CASE WHEN pago = 0 AND vencimento < ?2 THEN (CASE tipo WHEN 'receita' THEN valor ELSE -valor END) ELSE 0 END) AS pendente
-    FROM financeiro`).bind(hoje, fimMes).first();
-  const recebido = r?.recebido || 0, pago = r?.pago || 0;
-  const atual = Math.round((recebido - pago) * 100) / 100;
-  return { atual, recebido, pago, projetado: Math.round((atual + (r?.pendente || 0)) * 100) / 100 };
+      SUM(CASE WHEN COALESCE(data_pagamento, vencimento) <= ?1 THEN (CASE tipo WHEN 'receita' THEN valor ELSE -valor END) ELSE 0 END) AS atual,
+      SUM(CASE WHEN COALESCE(data_pagamento, vencimento) < ?2 THEN (CASE tipo WHEN 'receita' THEN valor ELSE -valor END) ELSE 0 END) AS anterior
+    FROM financeiro WHERE pago = 1`).bind(hoje, inicioMes).first();
+  const arred = (v) => Math.round((v || 0) * 100) / 100;
+  return { atual: arred(r?.atual), anterior: arred(r?.anterior) };
 }
 
 // ---------- Rotas ----------
@@ -233,8 +232,11 @@ export async function financeiro(req, env, sessao, id) {
           <div class="cartao-resumo saldo-conta">
             <span>Saldo atual da conta</span>
             <strong class="${saldo.atual < 0 ? "despesa" : ""}">${moeda(saldo.atual)}</strong>
-            <small>Recebido ${moeda(saldo.recebido)} · pago ${moeda(saldo.pago)}</small>
-            <small>Projetado até o fim do mês ${moeda(saldo.projetado)}</small>
+          </div>
+          <div class="cartao-resumo saldo-anterior">
+            <span>Saldo do mês anterior</span>
+            <strong class="${saldo.anterior < 0 ? "despesa" : ""}">${moeda(saldo.anterior)}</strong>
+            <small>em ${dataBR(new Date(Date.UTC(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10))}</small>
           </div>
           <div class="cartao-resumo receita"><span>Receitas do mês</span><strong>${moeda(rec)}</strong><small>Recebido ${moeda(recPago)}</small></div>
           <div class="cartao-resumo despesa"><span>Despesas do mês</span><strong>${moeda(desp)}</strong><small>Pago ${moeda(despPago)}</small></div>

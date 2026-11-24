@@ -406,3 +406,5 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .ajustar-saldo input { padding: .4rem .5rem; font-size: .85rem; }
 .ajustar-saldo .dica { margin: .4rem 0 0; font-size: .75rem; }
 .resumo-financeiro { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }
+.cartao-resumo.saldo-anterior { border-top-color: #8a7a5c; }
+@media (min-width: 641px) { .resumo-financeiro { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); } }
