@@ -508,3 +508,13 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .aviso-cep { position: absolute; left: 0; top: 100%; margin-top: .15rem; white-space: nowrap; line-height: 1.2; min-height: 0; }
 .aviso-cep:empty { display: none; }
 .grupo-endereco { row-gap: 1.3rem; }
+.botao-alerta { background: var(--erro) !important; border-color: var(--erro) !important; color: var(--branco) !important; }
+.botao-alerta:hover { background: #7d1515 !important; }
+.zona-perigo { border-color: #ecc8c8; }
+.zona-perigo h2 { color: var(--erro); }
+.acoes-usuario .botoes-form { gap: .5rem; }
+.formulario fieldset.grade-form > label.opcao-linha { display: flex; align-self: end; padding-bottom: .6rem; }
+.formulario.em-linha > label { min-width: 0; }
+.formulario.em-linha > label > input, .formulario.em-linha > label > select { width: 100%; box-sizing: border-box; }
+.formulario.em-linha > label.opcao-linha { display: flex; align-self: end; padding-bottom: .6rem; white-space: nowrap; }
+td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }

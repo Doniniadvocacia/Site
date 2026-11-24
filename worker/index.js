@@ -106,6 +106,10 @@ async function sistema(req, env) {
   if ((m = caminho.match(/^\/sistema\/agenda(?:\/(novo|\d+(?:\/mover)?|dia\/\d{4}-\d{2}-\d{2}))?$/))) return agenda(req, env, sessao, m[1]);
 
   const admin = sessao.perfil === "admin";
+  // Configurações e tudo o que fica dentro delas: somente administradores.
+  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados)(\/|$)/.test(caminho)) {
+    return resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1><p>Esta área é exclusiva para administradores.</p>` }), 403);
+  }
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);
   if (caminho === "/sistema/importar" && admin) return importar(req, env, sessao);
   if (caminho === "/sistema/status" && admin) return status(env);
