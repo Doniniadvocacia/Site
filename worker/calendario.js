@@ -39,7 +39,7 @@ export function feriadosNacionais(ano) {
   return [...fixos, ...moveis].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-const emRecesso = (s) => { const md = s.slice(5); return md >= "12-20" || md <= "01-20"; };
+export const emRecesso = (s) => { const md = s.slice(5); return md >= "12-20" || md <= "01-20"; };
 
 // locais: Set de datas AAAA-MM-DD cadastradas na tabela feriados
 export function criarCalendario(locais = new Set()) {

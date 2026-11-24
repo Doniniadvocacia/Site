@@ -2,7 +2,7 @@
 import { html, pagina, resposta, redirecionar, campoCsrf, seguro } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { hojeBR, somarDias, feriadosNacionais } from "../calendario.js";
+import { hojeBR, somarDias, feriadosNacionais, emRecesso } from "../calendario.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, dataBR, cabecalhoAgenda, dataTravada } from "./comum.js";
 import { listaPrazos } from "./prazos.js";
 
@@ -84,9 +84,10 @@ async function calendarioMensal(req, env, sessao) {
     const dow = i % 7;
     const itens = porDia.get(d) || [];
     const feriado = feriados.get(d);
-    const classes = ["dia", d.slice(0, 7) !== mes ? "fora" : "", dow === 0 || dow === 6 || feriado ? "nao-util" : "", d === hoje ? "hoje" : ""].filter(Boolean).join(" ");
+    const recesso = emRecesso(d);
+    const classes = ["dia", d.slice(0, 7) !== mes ? "fora" : "", dow === 0 || dow === 6 || feriado ? "nao-util" : "", recesso ? "recesso" : "", d === hoje ? "hoje" : ""].filter(Boolean).join(" ");
     celulas.push(html`<div class="${classes}" data-data="${d}">
-      <div class="dia-topo">${feriado ? html`<span class="feriado-nome">${feriado}</span>` : ""}<a class="dia-num" href="/sistema/agenda/dia/${d}">${String(Number(d.slice(8)))}</a></div>
+      <div class="dia-topo">${feriado ? html`<span class="feriado-nome">${feriado}</span>` : recesso && dow !== 0 && dow !== 6 ? html`<span class="feriado-nome recesso-nome">Recesso forense</span>` : ""}<a class="dia-num" href="/sistema/agenda/dia/${d}">${String(Number(d.slice(8)))}</a></div>
       <div class="dia-itens">${itens.slice(0, MAX_POR_DIA).map(etiqueta)}
         ${itens.length > MAX_POR_DIA ? html`<a class="ver-mais" href="/sistema/agenda/dia/${d}">ver mais ${String(itens.length - MAX_POR_DIA)}...</a>` : ""}</div>
     </div>`);
@@ -111,6 +112,7 @@ async function calendarioMensal(req, env, sessao) {
         <span><i class="cor-compromisso"></i>Compromisso</span>
         ${tipos.map((t) => html`<span><i class="${corDoTipo(t)}"></i>${t}</span>`)}
         <span><i class="feito-amostra"></i>Cumprido</span>
+        <span><i class="recesso-amostra"></i>Recesso forense (20/12 a 20/01): prazos suspensos</span>
       </div>
       <script src="/assets/js/agenda.js" defer></script>`,
   }));

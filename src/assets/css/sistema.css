@@ -521,3 +521,7 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .feriados-subtitulo { margin: 1rem 0 .3rem; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dourado); font-weight: 600; }
 .feriados-cadastrados li { align-items: center; }
 .feriados-cadastrados .feriado-desc { flex: 1; color: var(--texto) !important; }
+.dia.recesso { background-image: repeating-linear-gradient(135deg, rgba(176,141,87,.07) 0 8px, transparent 8px 16px); }
+.recesso-nome { color: #8a6a2f; }
+.recesso-amostra { background-image: repeating-linear-gradient(135deg, rgba(176,141,87,.35) 0 4px, transparent 4px 8px); border: 1px solid #e3d6bf; }
+.linha-recesso span { color: #8a6a2f !important; font-weight: 500; }

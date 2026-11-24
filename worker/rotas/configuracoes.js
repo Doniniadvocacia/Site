@@ -94,7 +94,7 @@ export async function feriados(req, env, sessao) {
     titulo: "Feriados", sessao, aviso, erro,
     corpo: html`
       <h1>Feriados e dias sem expediente</h1>
-      <p class="dica">Os feriados nacionais, o Carnaval, a Sexta-feira Santa, o Corpus Christi e a suspensão de 20/12 a 20/01 já entram no cálculo automaticamente. Cadastre aqui os feriados estaduais, municipais e as suspensões de expediente dos tribunais.</p>
+      <p class="dica">Os feriados nacionais, o Carnaval, a Sexta-feira Santa, o Corpus Christi e o recesso forense de 20/12 a 20/01 (CPC, art. 220: prazos suspensos, sem contagem e sem vencimento no período) já entram no cálculo automaticamente. Cadastre aqui os feriados estaduais, municipais e as suspensões de expediente dos tribunais.</p>
       <section class="cartao"><h2>Cadastrar feriado</h2>
         <form method="post" class="formulario em-linha">${campoCsrf(sessao)}
           <label>Data<input type="date" name="data" required></label>
@@ -108,7 +108,8 @@ export async function feriados(req, env, sessao) {
           const doAno = locais.filter((x) => x.data.startsWith(`${a}-`));
           return html`<div class="feriados-ano"><h3>${String(a)}</h3>
             <p class="feriados-subtitulo">Nacionais (automáticos)</p>
-            <ul class="lista-simples">${feriadosNacionais(a).map(([d, n]) => html`<li><span>${dataBR(d)}</span><span>${n}</span></li>`)}</ul>
+            <ul class="lista-simples">${feriadosNacionais(a).map(([d, n]) => html`<li><span>${dataBR(d)}</span><span>${n}</span></li>`)}
+              <li class="linha-recesso"><span>20/12/${String(a)} a 20/01/${String(a + 1)}</span><span>Recesso forense: prazos suspensos (CPC, art. 220)</span></li></ul>
             <p class="feriados-subtitulo">Cadastrados</p>
             ${doAno.length ? html`<ul class="lista-simples feriados-cadastrados">${doAno.map((x) => html`<li>
               <span>${dataBR(x.data)}</span><span class="feriado-desc">${x.descricao}${x.abrangencia ? html` <small>(${x.abrangencia})</small>` : ""}</span>${remover(x)}</li>`)}</ul>`
