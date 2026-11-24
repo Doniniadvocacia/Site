@@ -69,7 +69,7 @@ export async function painel(req, env, sessao) {
     corpo: html`
       <div class="titulo-painel">
         <div><h1>Visão Geral</h1><p>Acompanhe a visão geral dos processos e clientes aqui!</p></div>
-        <div class="botoes-pilula"><a href="/sistema/prazos/novo">Novo Prazo</a><a href="/sistema/agenda/novo">Novo Compromisso</a></div>
+        <div class="botoes-pilula"><a href="/sistema/prazos/novo">Novo Agendamento</a></div>
       </div>
 
       <div class="destaques">
