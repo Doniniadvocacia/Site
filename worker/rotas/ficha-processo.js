@@ -43,6 +43,18 @@ export async function fichaProcesso(req, env, sessao, id) {
     cartaoHistorico(env, sessao, p.id, req),
     cartaoFinanceiro(env, sessao, { processoId: p.id }),
   ]);
+  // Arquivos do processo: anexos do histórico e, para quem tem acesso ao Financeiro, dos lançamentos.
+  const { results: arquivos } = await env.DB.prepare(`
+      SELECT a.id AS id, a.nome, a.tipo_mime, a.tamanho, a.chave, h.data AS data, 'Histórico' AS origem, h.descricao AS referencia, '#historico' AS ancora
+        FROM historico h JOIN anexos a ON a.id = h.anexo_id WHERE h.processo_id = ?1
+      ${sessao.financeiro ? `UNION ALL
+      SELECT a.id AS id, a.nome, a.tipo_mime, a.tamanho, a.chave, COALESCE(f.data_pagamento, f.vencimento) AS data, 'Financeiro' AS origem, f.descricao AS referencia, '/sistema/financeiro/' || f.id AS ancora
+        FROM financeiro f JOIN anexos a ON a.id = f.anexo_id WHERE f.processo_id = ?1` : ""}
+      ORDER BY data DESC, id DESC`).bind(p.id).all();
+  const vistos = new Set();
+  const listaArquivos = arquivos.filter((a) => (vistos.has(a.id) ? false : vistos.add(a.id)));
+  const tamanho = (b) => (!b ? "" : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1048576).toFixed(1).replace(".", ",")} MB`);
+  const extensao = (n) => ((n || "").includes(".") ? n.split(".").pop().toUpperCase().slice(0, 4) : "ARQ");
   const ligados = vinculados.filter((v) => basePasta(v.pasta) === base);
 
   const decisao = (r, d) => (r || d ? [r, d && dataBR(d)].filter(Boolean).join(" · ") : null);
@@ -106,6 +118,15 @@ export async function fichaProcesso(req, env, sessao, id) {
         { aberto: Boolean(p.resultado_primeira || p.resultado_segunda || p.resultado_superior || p.resultado_atual) })}
 
       ${bloco("Observações", observacoes ? html`<p class="pre">${observacoes}</p>` : html`<p class="vazio">Sem observações.</p>`, { aberto: Boolean(observacoes) })}
+
+      ${bloco("Arquivos do Processo", listaArquivos.length ? html`<ul class="lista-arquivos">${listaArquivos.map((a) => html`<li>
+          <span class="${`tipo-arquivo ${extensao(a.nome) === "PDF" ? "pdf" : /^(JPG|JPEG|PNG|WEBP|GIF)$/.test(extensao(a.nome)) ? "imagem" : ""}`}">${extensao(a.nome)}</span>
+          <div class="arquivo-dados">
+            ${a.chave ? html`<a class="arquivo-nome" href="/sistema/anexos/${String(a.id)}" target="_blank" rel="noopener">${a.nome}</a>` : html`<span class="arquivo-nome">${a.nome}</span> <small class="dica">(ainda não copiado do Wix)</small>`}
+            <small><span class="selo ${a.origem === "Financeiro" ? "selo-arquivo-fin" : "selo-arquivo-hist"}">${a.origem}</span> ${dataBR(a.data)}${a.tamanho ? ` · ${tamanho(a.tamanho)}` : ""} · <a href="${a.ancora}">${a.referencia.length > 80 ? a.referencia.slice(0, 80) + "…" : a.referencia}</a></small>
+          </div></li>`)}</ul>`
+        : html`<p class="vazio">Nenhum arquivo. Os arquivos anexados no histórico${sessao.financeiro ? " e nos lançamentos financeiros" : ""} deste processo aparecem aqui.</p>`,
+        { id: "arquivos", contagem: listaArquivos.length, aberto: listaArquivos.length > 0 })}
 
       ${hist}
 
