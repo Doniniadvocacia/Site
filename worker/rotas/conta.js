@@ -3,10 +3,10 @@ import { html, pagina, resposta, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar, conferirSenha } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { csrfOk, txt, dataValida, cpfValido, soDigitos, formatarCpf } from "./comum.js";
+import { obterLista } from "../listas.js";
 
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
 export const PERFIS = { admin: "Administrador", advogado: "Advogado", colaborador: "Colaborador" };
-const CARGOS = ["Advogado(a) titular", "Advogado(a) associado(a)", "Advogado(a)", "Estagiário(a)", "Assistente jurídico(a)", "Secretário(a)", "Financeiro", "Administrativo"];
 const ENC = ["celular", "telefone", "cpf", "nascimento"];
 const END = ["rua", "numero", "complemento", "bairro", "cidade", "uf", "cep"];
 const fmt = {
@@ -25,7 +25,7 @@ export async function lerCadastro(env, u) {
 }
 
 // Campos do formulário; com admin = true inclui perfil e acesso ao Financeiro.
-export function camposCadastro(v, { admin = false, proprio = true } = {}) {
+export function camposCadastro(v, { admin = false, proprio = true, cargos = [] } = {}) {
   return html`
     <fieldset class="largo grade-form grupo-form"><legend>Dados pessoais</legend>
       <label class="duplo">Nome completo<input name="nome" required maxlength="120" value="${v.nome || ""}" autocomplete="${proprio ? "name" : "off"}"></label>
@@ -56,7 +56,7 @@ export function camposCadastro(v, { admin = false, proprio = true } = {}) {
         <p class="dica largo">Administradores sempre têm acesso ao Financeiro e às Configurações.</p>`
       : html`<p class="dica largo">Perfil de acesso: <strong>${PERFIS[v.perfil] || v.perfil}</strong>${v.perfil === "admin" || v.acesso_financeiro ? " · com acesso ao Financeiro" : ""}. O perfil é alterado por um administrador.</p>`}
     </fieldset>
-    <datalist id="l-cargos">${CARGOS.map((c) => html`<option value="${c}">`)}</datalist>`;
+    <datalist id="l-cargos">${cargos.map((c) => html`<option value="${c}">`)}</datalist>`;
 }
 
 // Lê e valida o formulário. Devolve { v, erro }.
@@ -99,13 +99,14 @@ export const scriptsCadastro = html`<script src="/assets/js/mascaras.js" defer><
 // "Editar cadastro" do próprio usuário.
 export async function editarCadastro(req, env, sessao) {
   const u = await env.DB.prepare("SELECT * FROM usuarios WHERE id = ?").bind(sessao.usuario_id).first();
+  const cargos = await obterLista(env, "cargo");
   const tela = (v, { erro, aviso } = {}, status = 200) => resposta(pagina({
     titulo: "Editar cadastro", sessao, erro, aviso,
     corpo: html`<h1>Editar cadastro</h1>
       <section class="cartao">
         <form method="post" class="formulario grade-form form-cadastro">
           ${campoCsrf(sessao)}
-          ${camposCadastro({ ...v, perfil: u.perfil, acesso_financeiro: u.acesso_financeiro })}
+          ${camposCadastro({ ...v, perfil: u.perfil, acesso_financeiro: u.acesso_financeiro }, { cargos })}
           <label class="duplo campo-senha-atual">Senha atual <small>(obrigatória só para trocar o e-mail)</small><input type="password" name="senha_atual" autocomplete="current-password"></label>
           <div class="largo botoes-form"><button type="submit">Salvar cadastro</button><a class="botao-link botao-secundario" href="/sistema/">Cancelar</a></div>
         </form>

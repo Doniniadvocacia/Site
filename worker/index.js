@@ -18,6 +18,7 @@ import { financeiro } from "./rotas/financeiro.js";
 import { servirAnexo } from "./anexos.js";
 import { editarCadastro } from "./rotas/conta.js";
 import { consultarCep } from "./rotas/cep.js";
+import { listas } from "./rotas/listas.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -55,6 +56,7 @@ function configuracoes(sessao) {
     ${item("/sistema/usuarios", "Usuários", "Contas da equipe, senhas provisórias e 2FA")}
     ${item("/sistema/oabs", "OABs e DJEN", "Inscrições monitoradas e captura de intimações")}
     ${item("/sistema/feriados", "Feriados", "Feriados locais e suspensões de expediente")}
+    ${item("/sistema/listas", "Listas", "Incluir e excluir opções dos campos de seleção")}
     ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
     ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
   </div>` }));
@@ -107,7 +109,7 @@ async function sistema(req, env) {
 
   const admin = sessao.perfil === "admin";
   // Configurações e tudo o que fica dentro delas: somente administradores.
-  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados)(\/|$)/.test(caminho)) {
+  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas)(\/|$)/.test(caminho)) {
     return resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1><p>Esta área é exclusiva para administradores.</p>` }), 403);
   }
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);
@@ -116,6 +118,7 @@ async function sistema(req, env) {
   if (caminho === "/sistema/configuracoes" && admin) return configuracoes(sessao);
   if (caminho === "/sistema/oabs" && admin) return oabs(req, env, sessao);
   if (caminho === "/sistema/feriados" && admin) return feriados(req, env, sessao);
+  if (caminho === "/sistema/listas" && admin) return listas(req, env, sessao);
 
   return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Página não encontrada</h1>` }), 404);
 }

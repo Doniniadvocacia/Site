@@ -525,3 +525,17 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .recesso-nome { color: #8a6a2f; }
 .recesso-amostra { background-image: repeating-linear-gradient(135deg, rgba(176,141,87,.35) 0 4px, transparent 4px 8px); border: 1px solid #e3d6bf; }
 .linha-recesso span { color: #8a6a2f !important; font-weight: 500; }
+/* Configurações › Listas */
+.listas-layout { display: grid; grid-template-columns: 250px 1fr; gap: 1.25rem; align-items: start; }
+.listas-menu { background: var(--branco); border: 1px solid var(--linha); border-radius: 8px; padding: .6rem 0; position: sticky; top: 1rem; }
+.listas-grupo { margin: .7rem 1rem .25rem; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dourado); font-weight: 600; }
+.listas-menu a { display: flex; justify-content: space-between; gap: .5rem; padding: .4rem 1rem; color: var(--texto); text-decoration: none; font-size: .88rem; border-left: 3px solid transparent; }
+.listas-menu a span { color: var(--suave); font-size: .78rem; }
+.listas-menu a:hover { background: var(--creme); }
+.listas-menu a.ativa { border-left-color: var(--dourado); background: var(--creme); color: var(--navy); font-weight: 600; }
+.listas-conteudo { margin: 0; }
+.form-incluir-item { grid-template-columns: 1fr auto; align-items: end; margin-bottom: 1rem; }
+.form-incluir-item textarea { width: 100%; box-sizing: border-box; }
+.itens-lista { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 2rem; }
+.itens-lista li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .35rem 0; border-bottom: 1px solid #f0ece4; break-inside: avoid; }
+@media (max-width: 800px) { .listas-layout { grid-template-columns: 1fr; } .listas-menu { position: static; } .itens-lista { columns: 1; } }

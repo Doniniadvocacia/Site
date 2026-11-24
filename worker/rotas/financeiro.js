@@ -7,13 +7,9 @@ import { hojeBR, somarDias } from "../calendario.js";
 import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso, bloco } from "./comum.js";
 import { linkAnexo } from "./historico.js";
+import { obterListas } from "../listas.js";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-const CATEGORIAS = {
-  receita: ["Honorários Contratuais", "Honorários Sucumbenciais", "Pró-Labore", "Alvará Judicial", "Pagamento Acordo", "Pagamento Condenação", "Reembolso de Custas", "Outras Receitas"],
-  despesa: ["Custas Processuais", "Sistemas e Softwares", "Anuidade OAB", "Aluguel", "Impostos", "Salários", "Pró-Labore", "Repasse a Cliente", "Outras Despesas"],
-};
-const FORMAS = ["Pix", "Transferência", "Crédito em Conta", "Boleto", "Cartão de Crédito", "Dinheiro", "Alvará"].map((x) => [x, x]);
 const CONDICOES = [["À Vista", "À vista"], ["Parcelado", "Parcelado"], ["Entrada+Parcelado", "Entrada + parcelado"], ["Recorrente", "Recorrente (mensal)"]];
 
 // Valor monetário que pode ser ocultado pelo botão do olho (assets/js/valores.js).
@@ -119,7 +115,7 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
 
 // ---------- Formulário ----------
 function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false }) {
-  const cats = [...new Set([...CATEGORIAS.receita, ...CATEGORIAS.despesa, ...apoio.categorias])];
+  const cats = apoio.categorias;
   return html`<form method="post" action="${acao}" enctype="multipart/form-data" class="formulario grade-form">
     ${campoCsrf(sessao)}
     <fieldset class="largo tipo-lanc"><legend>Tipo</legend>
@@ -127,7 +123,7 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
       <label class="opcao"><input type="radio" name="tipo" value="despesa"${l.tipo === "despesa" ? html` checked` : ""}> Despesa</label>
     </fieldset>
     <label class="largo">Descrição<input name="descricao" required maxlength="300" value="${l.descricao || ""}" placeholder="Ex.: Honorários iniciais — ação regressiva"></label>
-    <label>Categoria<input name="categoria" maxlength="80" value="${l.categoria || ""}" list="l-categorias"></label>
+    <label>Tipo de lançamento<select name="categoria">${opcoes([...new Set([...cats, ...(l.categoria ? [l.categoria] : [])])].map((x) => [x, x]), l.categoria, "Selecione…")}</select></label>
     <label>Processo<select name="processo_id">${opcoes(apoio.processos, l.processo_id, "Sem processo")}</select></label>
     <label>Cliente<select name="cliente_id">${opcoes(apoio.clientes, l.cliente_id, "Do processo / nenhum")}</select></label>
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, l.responsavel)}</select></label>
@@ -142,7 +138,7 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
       <label>Valor (R$)<input name="valor" required inputmode="decimal" value="${l.valor_txt ?? ""}"></label>
       <label>Vencimento<input type="date" name="vencimento" required value="${l.vencimento || ""}"></label>
       ${l.grupo ? html`<p class="dica largo">${rotuloParcela(l) ? `Parcela ${rotuloParcela(l)} · ` : ""}${l.condicao || ""}. A alteração vale só para este lançamento.</p>` : ""}`}
-    <label>Forma de pagamento<select name="forma_pagamento">${opcoes(FORMAS, l.forma_pagamento)}</select></label>
+    <label>Forma de pagamento<select name="forma_pagamento">${opcoes([...new Set([...apoio.formas, ...(l.forma_pagamento ? [l.forma_pagamento] : [])])].map((x) => [x, x]), l.forma_pagamento)}</select></label>
     <label class="opcao-linha"><input type="checkbox" name="pago" value="1"${l.pago ? html` checked` : ""}> Já ${l.tipo === "despesa" ? "pago" : "recebido"}${novo ? " (1ª parcela)" : ""}</label>
     <label>Data do pagamento<input type="date" name="data_pagamento" value="${l.data_pagamento || ""}"></label>
     <label>Pagante<input name="pagante" maxlength="200" value="${l.pagante || ""}"></label>
@@ -152,7 +148,6 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     ${anexos ? html`<label class="largo">${l.anexo_id ? "Substituir anexo" : "Anexo (comprovante, nota, contrato)"}<input type="file" name="arquivo"></label>
       ${l.anexo_id ? html`<p class="largo">Anexo atual:${linkAnexo(l)} <label class="opcao-linha"><input type="checkbox" name="remover_anexo" value="1"> remover</label></p>` : ""}` : ""}
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">Salvar</button></div>
-    <datalist id="l-categorias">${cats.map((c) => html`<option value="${c}">`)}</datalist>
   </form>
   ${novo ? "" : html`<form method="post" action="${acao}" class="formulario form-excluir-lanc" id="excluir">${campoCsrf(sessao)}
     <label class="opcao-linha"><input type="checkbox" name="confirmar" value="1" required> Confirmo a exclusão</label>
@@ -189,12 +184,12 @@ function validar(l, novo) {
 }
 
 async function apoioForm(env) {
-  const [base, clientes, cats] = await Promise.all([
+  const [base, clientes, ls] = await Promise.all([
     listasApoio(env),
     env.DB.prepare("SELECT id, nome FROM clientes ORDER BY nome COLLATE NOCASE").all(),
-    env.DB.prepare("SELECT DISTINCT categoria FROM financeiro WHERE COALESCE(categoria, '') != '' ORDER BY 1").all(),
+    obterListas(env, ["categoria_financeira", "forma_pagamento"]),
   ]);
-  return { ...base, clientes: clientes.results.map((c) => [c.id, c.nome]), categorias: cats.results.map((c) => c.categoria) };
+  return { ...base, clientes: clientes.results.map((c) => [c.id, c.nome]), categorias: ls.categoria_financeira, formas: ls.forma_pagamento };
 }
 
 // ---------- Saldo da conta ----------

@@ -2,6 +2,7 @@
 import { html, pagina, resposta, campoCsrf, dataBR } from "../html.js";
 import { agora, hashSenha, tokenAleatorio, iguais } from "../seguranca.js";
 import { encerrarTodas, auditar } from "../sessao.js";
+import { obterLista } from "../listas.js";
 import { camposCadastro, lerCadastro, lerFormulario, gravarCadastro, emailEmUso, scriptsCadastro } from "./conta.js";
 
 const PERFIS = { admin: "Administrador", advogado: "Advogado", colaborador: "Colaborador" };
@@ -83,7 +84,7 @@ async function ficha(req, env, sessao, alvo, { erro, aviso, senhaGerada, valores
       </div><p class="dica">Suspender impede o acesso e encerra as sessões abertas, mantendo o cadastro e o histórico. Pode ser desfeito a qualquer momento.</p></section>`}
       <section class="cartao"><h2>Cadastro</h2>
         <form method="post" class="formulario grade-form form-cadastro">${campoCsrf(sessao)}
-          ${camposCadastro(v, { admin: !proprio, proprio: false })}
+          ${camposCadastro(v, { admin: !proprio, proprio: false, cargos: await obterLista(env, "cargo") })}
           <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">Salvar alterações</button><a class="botao-link botao-secundario" href="/sistema/usuarios">Voltar</a></div>
         </form>
         <p class="dica">CPF, data de nascimento, telefones e endereço são gravados cifrados.${proprio ? " Para alterar o próprio perfil de acesso, peça a outro administrador." : ""}</p>

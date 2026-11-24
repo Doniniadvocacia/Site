@@ -3,10 +3,13 @@
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
+import { obterListas } from "../listas.js";
 import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnpj, formatarFone, formatarCep, enderecoTexto } from "./comum.js";
 
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ").map((u) => [u, u]);
 const lista = (...v) => v.map((x) => [x, x]);
+// Opções da lista, mantendo o valor atual do registro mesmo que tenha saído da lista.
+const comAtual = (valores, atual) => [...new Set([...(valores || []), ...(atual ? [atual] : [])])].map((x) => [x, x]);
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const datalist = (id, valores) => html`<datalist id="${id}">${valores.map((v) => html`<option value="${v}">`)}</datalist>`;
 
@@ -23,15 +26,15 @@ function formularioCliente(sessao, c, acao, sugestoes) {
   return html`<form method="post" action="${acao}" class="formulario grade-form">
     ${campoCsrf(sessao)}
     <label class="largo">Nome<input name="nome" required maxlength="200" value="${c.nome || ""}"></label>
-    <label>Tipo<select name="tipo">${opcoes(lista("Pessoa Física", "Pessoa Jurídica"), c.tipo)}</select></label>
+    <label>Tipo<select name="tipo">${opcoes(comAtual(sugestoes.tipos, c.tipo), c.tipo)}</select></label>
     <label>CPF/CNPJ<input name="documento" maxlength="18" value="${c.documento || ""}" inputmode="numeric" data-mascara="documento"></label>
     <label>Nascimento/fundação<input name="data_nascimento" maxlength="20" value="${c.data_nascimento || ""}" placeholder="dd/mm/aaaa"></label>
     <label>Posição<input name="posicao" maxlength="60" value="${c.posicao || ""}" list="posicoes"></label>
     <label>E-mail<input name="email" type="email" maxlength="200" value="${c.email || ""}"></label>
     <label>Telefone<input name="telefone" maxlength="15" value="${c.telefone || ""}" inputmode="tel" data-mascara="fone" placeholder="(XX) XXXXX-XXXX"></label>
     <label>Profissão<input name="profissao" maxlength="100" value="${c.profissao || ""}"></label>
-    <label>Estado civil<select name="estado_civil">${opcoes(lista("Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Viúvo(a)"), c.estado_civil)}</select></label>
-    <label>Gênero<select name="genero">${opcoes(lista("Masculino", "Feminino", "Outro"), c.genero)}</select></label>
+    <label>Estado civil<select name="estado_civil">${opcoes(comAtual(sugestoes.estadosCivis, c.estado_civil), c.estado_civil)}</select></label>
+    <label>Gênero<select name="genero">${opcoes(comAtual(sugestoes.generos, c.genero), c.genero)}</select></label>
     <fieldset class="largo grade-form grupo-form grupo-endereco"><legend>Endereço</legend>
       ${c.endereco_antigo ? html`<p class="dica largo">Endereço registrado anteriormente: <strong>${c.endereco_antigo}</strong>. Preencha os campos abaixo para atualizar.</p>` : ""}
       <label>CEP<input name="cep" maxlength="9" inputmode="numeric" data-mascara="cep" data-endereco="cep" value="${c.cep || ""}" placeholder="XXXXX-XXX"></label>
@@ -55,7 +58,8 @@ export async function cadastroCliente(req, env, sessao, id) {
   const existente = id ? await env.DB.prepare("SELECT * FROM clientes WHERE id = ?").bind(Number(id)).first() : null;
   if (id && !existente) return naoEncontrado(sessao);
   const acao = id ? `/sistema/clientes/${id}/editar` : "/sistema/clientes/novo";
-  const sugestoes = { posicoes: [...new Set(["Autor", "Réu", ...(await usados(env, "clientes", "posicao"))])] };
+  const ls = await obterListas(env, ["tipo_cadastro", "genero", "estado_civil", "posicao_cliente"]);
+  const sugestoes = { posicoes: ls.posicao_cliente, tipos: ls.tipo_cadastro, generos: ls.genero, estadosCivis: ls.estado_civil };
   const tela = (c, erro) => resposta(pagina({
     titulo: id ? `Editar ${existente.nome}` : "Novo cliente", sessao, erro,
     corpo: html`<p class="trilha"><a href="/sistema/clientes">Clientes</a>${id ? html` › <a href="/sistema/clientes/${id}">${existente.nome}</a>` : ""}</p>
@@ -118,9 +122,6 @@ export async function cadastroCliente(req, env, sessao, id) {
 
 // ---------- Processos ----------
 // Opções iguais às do Diligo no Wix; valores já usados no banco também são sugeridos.
-const FASES = ["Aguarda Citação", "Conhecimento", "Instrução", "Sentencial", "Recursal", "Cumprimento de Sentença", "Suspenso", "Aguarda Arquivamento", "Arquivado"];
-const RESULTADOS = ["Procedente", "Parcialmente Procedente", "Improcedente", "Extinto sem Resolução do Mérito", "Acordo Homologado", "Recurso Provido", "Recurso Parcialmente Provido", "Recurso não Provido"];
-const MOTIVOS = ["Procedência da Ação", "Parcial Procedência da Ação", "Improcedência da Ação", "Acordo", "Pagamento Condenação", "Extinto S/ Resolução do Mérito", "Desistência", "Revogação de Mandato"];
 const TEXTOS_PROC = {
   pasta: 20, numero: 40, tipo_acao: 150, rito: 60, fase: 60, instancia: 40, situacao: 60, competencia: 60, comarca: 100, vara: 120, numero_vara: 20, uf: 2,
   posicao_cliente: 60, parte_contraria: 200, advogado_parte_contraria: 200, oab_parte_contraria: 30, advogado_responsavel: 120, ajg_deferida: 20,
@@ -144,7 +145,7 @@ function formularioProcesso(sessao, p, acao, apoio) {
       ${s("ajg_deferida", "AJG deferida", ["Sim", "Não", "Pendente"])}
       <label class="duplo">Parte contrária<input name="parte_contraria" maxlength="200" value="${p.parte_contraria || ""}"></label>
       ${d("data_cadastro", "Data de cadastro")}
-      ${t("tipo_acao", "Tipo de ação", { list: "l-acao" })}
+      ${s("tipo_acao", "Tipo de ação", apoio.acoes)}
       ${s("situacao", "Status da pasta", apoio.situacoes)}`)}
     ${grupo("Dados do Processo", html`
       <label class="duplo">Número do processo (CNJ)<input name="numero" maxlength="40" value="${p.numero || ""}" placeholder="0000000-00.0000.0.00.0000"></label>
@@ -175,7 +176,7 @@ function formularioProcesso(sessao, p, acao, apoio) {
       ${s("resultado_atual", "Resultado atual", apoio.resultados)}${d("data_decisao_final", "Data da decisão")}`, "grupo-decisoes")}
     <label class="largo">Observações<textarea name="observacoes" rows="4" maxlength="4000" placeholder="Ex.: Honorários de êxito: 10%">${p.observacoes || ""}</textarea></label>
     <div class="largo botoes-form"><button type="submit">Salvar</button><a class="botao-link botao-secundario" href="${p.id ? `/sistema/processos/${p.id}` : "/sistema/processos"}">Cancelar</a></div>
-    ${datalist("l-acao", apoio.acoes)}${datalist("l-advogado", apoio.advogados)}${datalist("l-orgao", apoio.orgaos)}${datalist("l-comarca", apoio.comarcas)}
+    ${datalist("l-advogado", apoio.advogados)}${datalist("l-orgao", apoio.orgaos)}${datalist("l-comarca", apoio.comarcas)}
   </form>
   <p class="dica">Telefone, e-mail da parte contrária e observações são gravados cifrados.</p>`;
 }
@@ -184,20 +185,18 @@ export async function cadastroProcesso(req, env, sessao, id) {
   const existente = id ? await env.DB.prepare("SELECT * FROM processos WHERE id = ?").bind(Number(id)).first() : null;
   if (id && !existente) return naoEncontrado(sessao);
   const acao = id ? `/sistema/processos/${id}/editar` : "/sistema/processos/novo";
-  const [clientes, acoes, ritos, fases, instancias, situacoes, competencias, posicoes, advogados, resultados, orgaos, comarcas, motivos] = await Promise.all([
+  const [clientes, ls, advogados, orgaos, comarcas] = await Promise.all([
     env.DB.prepare("SELECT id, nome FROM clientes ORDER BY nome COLLATE NOCASE").all(),
-    ...["tipo_acao", "rito", "fase", "instancia", "situacao", "competencia", "posicao_cliente", "advogado_responsavel", "resultado_atual", "vara", "comarca", "motivo_encerramento"]
-      .map((c) => usados(env, "processos", c)),
+    obterListas(env, ["tipo_acao", "rito", "fase", "instancia", "status_pasta", "competencia", "posicao_cliente", "resultado", "motivo_encerramento"]),
+    ...["advogado_responsavel", "vara", "comarca"].map((c) => usados(env, "processos", c)),
   ]);
   const juntar = (...l) => [...new Set(l.flat().filter(Boolean))];
   const apoio = {
-    clientes: clientes.results.map((c) => [c.id, c.nome]), acoes, advogados: juntar("Eduardo Donini", advogados), orgaos, comarcas,
-    ritos: juntar("Ordinário", "Sumaríssimo", "Especial", ritos), instancias: juntar("1º Grau", "2º Grau", "Instâncias Superiores", instancias),
-    competencias: juntar("Estadual", "Federal", "Trabalhista", "Juizado Especial Cível", "Juizado Especial Federal", competencias),
-    fases: juntar(FASES, fases), situacoes: juntar("Ativa", "Suspensa", "Encerrada", situacoes),
-    posicoes: juntar("Autor", "Réu", "Reclamante", "Reclamado", "Exequente", "Executado", "Requerente", "Requerido", posicoes),
-    resultados: juntar(RESULTADOS, resultados), motivos: juntar(MOTIVOS, motivos),
+    clientes: clientes.results.map((c) => [c.id, c.nome]), acoes: ls.tipo_acao, advogados: juntar("Eduardo Donini", advogados), orgaos, comarcas,
+    ritos: ls.rito, instancias: ls.instancia, competencias: ls.competencia, fases: ls.fase, situacoes: ls.status_pasta,
+    posicoes: ls.posicao_cliente, resultados: ls.resultado, motivos: ls.motivo_encerramento,
   };
+
   const titulo = existente ? (existente.numero || `Pasta ${existente.pasta}`) : "Novo processo";
   const tela = (p, erro) => resposta(pagina({
     titulo: id ? `Editar ${titulo}` : titulo, sessao, erro,

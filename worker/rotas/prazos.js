@@ -3,7 +3,6 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
-import { TIPOS_PRAZO, TIPOS_COMPROMISSO, tiposDa } from "../listas.js";
 import { seguro, h } from "../html.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda, dataTravada } from "./comum.js";
 
@@ -13,8 +12,8 @@ const CATEGORIAS = [["Prazo", "Prazo"], ["Compromisso", "Compromisso"]];
 export const ehCompromisso = (p) => p?.categoria === "Compromisso";
 
 // Opções do campo Tipo conforme a categoria (valor antigo fora da lista continua selecionável).
-function opcoesTipo(p) {
-  const lista = tiposDa(p.categoria);
+function opcoesTipo(p, tipos) {
+  const lista = tipos[p.categoria === "Compromisso" ? "Compromisso" : "Prazo"] || [];
   const extra = p.tipo && !lista.includes(p.tipo) ? [p.tipo] : [];
   return seguro(`<option value="">Selecione…</option>` + [...extra, ...lista].map((t) =>
     `<option value="${h(t)}"${t === p.tipo ? " selected" : ""}>${h(t)}${extra.includes(t) ? " (registro antigo)" : ""}</option>`).join(""));
@@ -25,7 +24,7 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
   return html`<form method="post" action="${acao}" class="formulario grade-form form-agendamento${p.categoria === "Compromisso" ? " form-compromisso" : ""}">
     ${campoCsrf(sessao)}${extraTopo}
     <label>Categoria<select name="categoria" data-categoria>${seguro(CATEGORIAS.map(([v, r]) => `<option value="${v}"${(p.categoria || "Prazo") === v ? " selected" : ""}>${r}</option>`).join(""))}</select></label>
-    <label>Tipo<select name="tipo" required data-tipos-prazo="${JSON.stringify(TIPOS_PRAZO)}" data-tipos-compromisso="${JSON.stringify(TIPOS_COMPROMISSO)}">${opcoesTipo(p)}</select></label>
+    <label>Tipo<select name="tipo" required data-tipos-prazo="${JSON.stringify(apoio.tipos.Prazo)}" data-tipos-compromisso="${JSON.stringify(apoio.tipos.Compromisso)}">${opcoesTipo(p, apoio.tipos)}</select></label>
     <label class="duplo">Processo<select name="processo_id">${opcoes(apoio.processos, p.processo_id, "Sem processo vinculado")}</select></label>
     <label class="largo">Título <small>(opcional; se vazio, usa o tipo)</small><input name="titulo" maxlength="200" value="${p.titulo && p.titulo !== p.tipo ? p.titulo : ""}" placeholder="Ex.: Réplica à contestação da seguradora"></label>
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, p.responsavel)}</select></label>
@@ -210,7 +209,7 @@ export async function prazos(req, env, sessao, id) {
   }
   if (f.get("acao") === "calcular") return tela(p, calculo ? { calculo } : { erro: "Para calcular, informe a data da publicação e o número de dias." });
   if (ehCompromisso(p) && !p.prazo_fatal && p.prazo_interno) p.prazo_fatal = p.prazo_interno;
-  if (!p.tipo || (!tiposDa(p.categoria).includes(p.tipo) && p.tipo !== existente?.tipo)) return tela(p, { erro: `Escolha um tipo da lista de ${ehCompromisso(p) ? "compromissos" : "prazos"}.` });
+  if (!p.tipo || (!apoio.tipos[ehCompromisso(p) ? "Compromisso" : "Prazo"].includes(p.tipo) && p.tipo !== existente?.tipo)) return tela(p, { erro: `Escolha um tipo da lista de ${ehCompromisso(p) ? "compromissos" : "prazos"}.` });
   if (!p.titulo || !p.prazo_fatal) return tela(p, { erro: ehCompromisso(p) ? "Informe o tipo e a data do compromisso." : "Informe o tipo e o prazo fatal (ou a data da publicação e os dias para calcular)." });
   const novoId = await gravarPrazo(env, p, { id: novo ? null : existente.id, usuarioId: sessao.usuario_id });
   await auditar(env, req, sessao.usuario_id, novo ? "prazo_criado" : "prazo_alterado", `prazo ${novoId}`);
