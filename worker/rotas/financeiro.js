@@ -140,7 +140,6 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
       <label class="opcao"><input type="radio" name="tipo" value="receita"${!despesa ? html` checked` : ""}> Receita</label>
       <label class="opcao"><input type="radio" name="tipo" value="despesa"${despesa ? html` checked` : ""}> Despesa</label>
     </fieldset>
-    <label class="largo">Descrição<input name="descricao" required maxlength="300" value="${l.descricao || ""}" placeholder="Ex.: Honorários iniciais — ação regressiva"></label>
     <label>Tipo de lançamento<select name="categoria" required data-categorias-receita="${JSON.stringify(apoio.categorias.receita)}" data-categorias-despesa="${JSON.stringify(apoio.categorias.despesa)}">${opcoes([...new Set([...cats, ...(l.categoria && !cats.includes(l.categoria) ? [l.categoria] : [])])].map((x) => [x, x]), l.categoria, "Selecione…")}</select></label>
     ${campoBusca({ tipo: "cliente", rotulo: "Cliente", nome: "cliente_id", id: l.cliente_id, texto: nomeCliente, placeholder: "Buscar por nome, processo ou pasta" })}
     ${campoBusca({ tipo: "processo", rotulo: "Processo", nome: "processo_id", id: l.processo_id, texto: nomeProcesso, placeholder: "Buscar por parte, nº do processo ou pasta", cliente: l.cliente_id })}
@@ -163,7 +162,7 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     <label>Pagante<input name="pagante" maxlength="200" value="${l.pagante || (novo && despesa ? NOME_ESCRITORIO : "")}"${novo && despesa && !l.pagante ? html` data-auto="1"` : ""}></label>
     <label><span class="rotulo-linha">Favorecido <a class="link-pequeno" href="/sistema/favorecidos" target="_blank" rel="noopener">cadastrar</a></span><select name="favorecido">${opcoes(favs, l.favorecido, "Selecione…")}</select></label>
     <label class="largo">Dados bancários / Pix<textarea name="dados_bancarios" rows="2" maxlength="1000" placeholder="Banco, agência, conta ou chave Pix">${l.dados_bancarios || ""}</textarea></label>
-    <label class="largo">Observações<textarea name="observacoes" rows="2" maxlength="4000">${l.observacoes || ""}</textarea></label>
+    <label class="largo">Descrição<textarea name="descricao" rows="2" maxlength="300" required placeholder="Ex.: Honorários iniciais — ação regressiva">${l.descricao || ""}</textarea></label>
     ${anexos ? html`<label class="largo">${l.anexo_id ? "Substituir anexo" : "Anexo (comprovante, nota, contrato)"}<input type="file" name="arquivo"></label>
       ${l.anexo_id ? html`<p class="largo">Anexo atual:${linkAnexo(l)} <label class="opcao-linha"><input type="checkbox" name="remover_anexo" value="1"> remover</label></p>` : ""}` : ""}
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">Salvar</button></div>
@@ -172,14 +171,14 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     <label class="opcao-linha"><input type="checkbox" name="confirmar" value="1" required> Confirmo a exclusão</label>
     ${grupoQtd > 1 ? html`<label class="opcao-linha"><input type="checkbox" name="grupo" value="1"> Excluir também as outras ${String(grupoQtd - 1)} parcela(s) em aberto deste lançamento</label>` : ""}
     <button type="submit" name="acao" value="excluir" class="botao-secundario">Excluir lançamento</button></form>`}
-  <p class="dica">Dados bancários e observações são gravados cifrados.</p>
+  <p class="dica">Dados bancários são gravados cifrados.</p>
   <script src="/assets/js/selecao.js" defer></script><script src="/assets/js/lancamento.js" defer></script>`;
 }
 
 function lerForm(f) {
   return {
     tipo: f.get("tipo") === "despesa" ? "despesa" : "receita",
-    descricao: txt(f, "descricao", 300), categoria: txt(f, "categoria", 80),
+    descricao: (txt(f, "descricao", 300) || "").replace(/\s+/g, " ").trim() || null, categoria: txt(f, "categoria", 80),
     processo_id: Number(f.get("processo_id")) || null, cliente_id: Number(f.get("cliente_id")) || null,
     responsavel: txt(f, "responsavel", 120), condicao: CONDICOES.some(([v]) => v === f.get("condicao")) ? f.get("condicao") : "À Vista",
     valor_txt: txt(f, "valor", 30), entrada_txt: txt(f, "entrada", 30), valor: numeroBR(f.get("valor")), entrada: numeroBR(f.get("entrada")),
@@ -414,7 +413,8 @@ export async function financeiro(req, env, sessao, id) {
     }
   } catch (e) { return tela({ ...(existente || {}), ...l }, { erro: e.message }); }
 
-  const [bancEnc, obsEnc] = await Promise.all([cifrar(env, l.dados_bancarios), cifrar(env, l.observacoes)]);
+  // Observações saíram do formulário: o que já estava gravado é mantido.
+  const [bancEnc, obsEnc] = await Promise.all([cifrar(env, l.dados_bancarios), existente ? existente.observacoes_enc : null]);
   const t = agora();
   const comuns = [l.tipo, l.categoria, l.descricao, l.processo_id, l.cliente_id, l.forma_pagamento, l.responsavel, l.pagante, l.favorecido, bancEnc, obsEnc, anexoId, l.conta];
 
