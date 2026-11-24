@@ -3,6 +3,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
+import { prazosPadrao } from "../listas.js";
 import { seguro, h } from "../html.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda, dataTravada } from "./comum.js";
 
@@ -24,14 +25,14 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
   return html`<form method="post" action="${acao}" class="formulario grade-form form-agendamento${p.categoria === "Compromisso" ? " form-compromisso" : ""}">
     ${campoCsrf(sessao)}${extraTopo}
     <label>Categoria<select name="categoria" data-categoria>${seguro(CATEGORIAS.map(([v, r]) => `<option value="${v}"${(p.categoria || "Prazo") === v ? " selected" : ""}>${r}</option>`).join(""))}</select></label>
-    <label>Tipo<select name="tipo" required data-tipos-prazo="${JSON.stringify(apoio.tipos.Prazo)}" data-tipos-compromisso="${JSON.stringify(apoio.tipos.Compromisso)}">${opcoesTipo(p, apoio.tipos)}</select></label>
+    <label>Tipo<select name="tipo" required data-tipos-prazo="${JSON.stringify(apoio.tipos.Prazo)}" data-tipos-compromisso="${JSON.stringify(apoio.tipos.Compromisso)}" data-padroes="${JSON.stringify(apoio.padroes || {})}">${opcoesTipo(p, apoio.tipos)}</select></label>
     <label class="duplo">Processo<select name="processo_id">${opcoes(apoio.processos, p.processo_id, "Sem processo vinculado")}</select></label>
     <label class="largo">Título <small>(opcional; se vazio, usa o tipo)</small><input name="titulo" maxlength="200" value="${p.titulo && p.titulo !== p.tipo ? p.titulo : ""}" placeholder="Ex.: Réplica à contestação da seguradora"></label>
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, p.responsavel)}</select></label>
     <fieldset class="largo calculo">
       <legend>Cálculo</legend>
       <label>Data da publicação/intimação<input type="date" name="data_inicio" value="${p.data_inicio || ""}"></label>
-      <label>Prazo (dias)<input type="number" name="dias" min="1" max="365" value="${p.dias ?? ""}"></label>
+      <label>Prazo (dias)<input type="number" name="dias" min="1" max="365" value="${p.dias ?? ""}"><small class="dica-padrao" data-dica-padrao></small></label>
       <label>Contagem<select name="contagem">${opcoes(CONTAGENS, p.contagem || "uteis", "Dias úteis")}</select></label>
       <label>Prazo interno (dias úteis antes)<input type="number" name="antecedencia" min="0" max="30" value="${p.antecedencia ?? 2}"></label>
       <button type="submit" name="acao" value="calcular" class="botao-secundario" formnovalidate>Calcular datas</button>
@@ -65,6 +66,10 @@ export async function lerPrazo(env, f) {
     data_cumprimento: dataValida(txt(f, "data_cumprimento")), data_audiencia: dataValida(txt(f, "data_audiencia")),
     hora_audiencia: txt(f, "hora_audiencia", 10), descricao: txt(f, "descricao", 20000),
   };
+  if (!p.dias && p.tipo && p.categoria !== "Compromisso") {
+    const pad = (await prazosPadrao(env))[p.tipo];
+    if (pad) { p.dias = pad.dias; p.contagem = f.get("contagem") ? p.contagem : pad.contagem; }
+  }
   let calculo = null;
   const querCalcular = f.get("acao") === "calcular" || (!p.prazo_fatal && p.data_inicio && p.dias);
   if (querCalcular && p.data_inicio && p.dias) {

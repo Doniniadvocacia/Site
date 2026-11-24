@@ -539,3 +539,11 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .itens-lista { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 2rem; }
 .itens-lista li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .35rem 0; border-bottom: 1px solid #f0ece4; break-inside: avoid; }
 @media (max-width: 800px) { .listas-layout { grid-template-columns: 1fr; } .listas-menu { position: static; } .itens-lista { columns: 1; } }
+.dica-padrao { display: block; font-size: .72rem; color: var(--ok); min-height: 1em; margin-top: .15rem; }
+.dias-contagem { display: inline-flex; gap: .35rem; align-items: center; }
+.dias-contagem input { width: 5rem; padding: .35rem .5rem; }
+.dias-contagem select { width: auto; padding: .35rem .5rem; }
+.form-padrao { display: inline-flex; gap: .5rem; align-items: center; margin: 0; }
+.tabela-prazos-padrao td { vertical-align: middle; }
+.form-incluir-item:has(.campo-dias) { grid-template-columns: 1fr auto auto; }
+.campo-dias { display: grid; gap: .3rem; }

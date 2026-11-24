@@ -74,3 +74,9 @@ export async function obterListas(env, chaves = DEFINICOES.map((d) => d.chave)) 
   return out;
 }
 export const obterLista = async (env, chave) => (await obterListas(env, [chave]))[chave];
+
+// Prazo padrão por tipo de prazo: { "Contestação": { dias: 15, contagem: "uteis" }, ... }
+export async function prazosPadrao(env) {
+  const { results } = await env.DB.prepare("SELECT valor, dias, contagem FROM listas WHERE lista = 'tipo_prazo' AND dias IS NOT NULL").all();
+  return Object.fromEntries(results.map((r) => [r.valor, { dias: r.dias, contagem: r.contagem === "corridos" ? "corridos" : "uteis" }]));
+}
