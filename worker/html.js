@@ -60,11 +60,12 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
         ${sessao.financeiro ? html`<a href="/sistema/financeiro">Financeiro</a>` : ""}
         ${sessao.perfil === "admin" ? html`<a href="/sistema/configuracoes">Configurações</a>` : ""}
         <form class="busca-menu" method="get" action="/sistema/busca" role="search">
-          <input name="q" placeholder="Parte, nº do processo ou pasta" aria-label="Buscar por nome da parte, número do processo ou pasta" required
+          <input name="q" placeholder="Parte, processo ou pasta" aria-label="Buscar por nome da parte, número do processo ou pasta" required
             autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugestoes-busca">
           <button type="submit" aria-label="Buscar" title="Buscar">⌕</button>
           <ul id="sugestoes-busca" class="sugestoes" role="listbox" aria-label="Sugestões de busca" hidden></ul>
         </form>
+        ${sessao.sino || ""}
         <details class="menu-conta">
           <summary class="menu-usuario" aria-label="Menu da conta de ${sessao.nome}" title="${sessao.nome}"><span class="menu-usuario-nome">${sessao.nome.split(" ").slice(0, 2).join(" ")}</span><span class="seta-conta" aria-hidden="true"></span></summary>
           <div class="menu-conta-lista" role="menu">

@@ -1,10 +1,16 @@
-// Menu da conta (nome do usuário): fecha ao clicar fora ou com Esc.
+// Menus suspensos da barra (notificações e conta): fecham ao clicar fora, com Esc, e um fecha o outro.
 (function () {
   "use strict";
-  var menu = document.querySelector(".menu-conta");
-  if (!menu) return;
-  document.addEventListener("click", function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
+  var menus = document.querySelectorAll(".menu-conta, .menu-notificacoes");
+  if (!menus.length) return;
+  menus.forEach(function (menu) {
+    menu.addEventListener("toggle", function () { if (menu.open) menus.forEach(function (m) { if (m !== menu) m.open = false; }); });
+  });
+  document.addEventListener("click", function (e) { menus.forEach(function (m) { if (m.open && !m.contains(e.target)) m.open = false; }); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    menus.forEach(function (m) { if (m.open) { m.open = false; m.querySelector("summary").focus(); } });
+  });
 })();
 
 // Sugestões da barra de busca do Diligo: lista os itens enquanto o usuário digita.

@@ -8,6 +8,7 @@ import { hojeBR, somarDias } from "../calendario.js";
 import { obterListas } from "../listas.js";
 import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, formatarFone, bloco } from "./comum.js";
 import { criarFiltro } from "./dados.js";
+import { notificar, idsPorNome } from "../notificacoes.js";
 
 export const ETAPAS = ["Novo contato", "Reunião agendada", "Proposta enviada", "Negociação"];
 const FINAIS = ["Contratado", "Perdido"];
@@ -272,6 +273,10 @@ export async function cadastroLead(req, env, sessao, id) {
       resumo_enc, atualizado_em, criado_em, etapa_desde, etapa) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?12,?12,?13)`).bind(...v, l.etapa).run();
     novoId = r.meta.last_row_id;
   }
+  if (l.responsavel && l.responsavel !== existente?.responsavel) {
+    await notificar(env, { destinos: await idsPorNome(env, l.responsavel), tipo: "lead", autorId: sessao.usuario_id, link: `/sistema/crm/leads/${novoId}`,
+      texto: `Potencial cliente atribuído a você: ${l.nome}${l.area ? ` · ${l.area}` : ""} (por ${sessao.nome.split(" ")[0]})` });
+  }
   await auditar(env, req, sessao.usuario_id, existente ? "lead_alterado" : "lead_criado", `lead ${novoId}`);
   return redirecionar(`/sistema/crm/leads/${novoId}?msg=salvo`);
 }
@@ -437,6 +442,12 @@ export async function novaTarefa(req, env, sessao) {
   await env.DB.prepare("INSERT INTO crm_tarefas (lead_id, cliente_id, titulo, data, responsavel, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(alvo.leadId, alvo.clienteId, titulo, data, responsavel, sessao.usuario_id, agora()).run();
   if (alvo.leadId) await env.DB.prepare("UPDATE leads SET atualizado_em = ? WHERE id = ?").bind(agora(), alvo.leadId).run();
+  if (responsavel) {
+    const nome = (await env.DB.prepare(alvo.leadId ? "SELECT nome FROM leads WHERE id = ?" : "SELECT nome FROM clientes WHERE id = ?").bind(alvo.leadId || alvo.clienteId).first())?.nome || "";
+    await notificar(env, { destinos: await idsPorNome(env, responsavel), tipo: "followup", autorId: sessao.usuario_id,
+      link: alvo.leadId ? `/sistema/crm/leads/${alvo.leadId}#followups` : `/sistema/clientes/${alvo.clienteId}#followups`,
+      texto: `Follow-up para você em ${dataBR(data)}: ${titulo} · ${nome} (por ${sessao.nome.split(" ")[0]})` });
+  }
   await auditar(env, req, sessao.usuario_id, "crm_followup", alvo.leadId ? `lead ${alvo.leadId}` : `cliente ${alvo.clienteId}`);
   return redirecionar(comMsg(`${voltar}#followups`, "tarefa"));
 }

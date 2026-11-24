@@ -21,6 +21,7 @@ import { consultarCep } from "./rotas/cep.js";
 import { listas } from "./rotas/listas.js";
 import { favorecidos } from "./rotas/favorecidos.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
+import { carregarNotificacoes, sino, notificacoes } from "./notificacoes.js";
 import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
@@ -91,6 +92,12 @@ async function sistema(req, env) {
   if (caminho === "/sistema/conta/cadastro") return editarCadastro(req, env, sessao);
   if ((m0 = caminho.match(/^\/sistema\/cep\/(\d{5}-?\d{3})$/))) return consultarCep(env, m0[1]);
   sessao.pendentes = (await env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first())?.n || 0;
+  if ((m0 = caminho.match(/^\/sistema\/notificacoes(?:\/(lidas|\d+))?$/))) return notificacoes(req, env, sessao, m0[1]);
+  // Sino de notificações: só nas páginas (GET), não nas consultas de apoio.
+  if (metodo === "GET" && !/^\/sistema\/(busca\/|anexos\/|cep\/)/.test(caminho)) {
+    sessao.notif = await carregarNotificacoes(env, sessao);
+    sessao.sino = sino(sessao);
+  }
 
   if (caminho === "/sistema") return painel(req, env, sessao);
   if (caminho === "/sistema/busca") return busca(req, env, sessao);

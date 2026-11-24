@@ -1,5 +1,6 @@
 // Captura de intimações no DJEN (Diário de Justiça Eletrônico Nacional), API pública do CNJ.
 // Busca por OAB nos últimos dias, grava só o que é novo e deixa na fila de triagem.
+import { notificar, idsPorPerfil } from "./notificacoes.js";
 import { agora, sha256 } from "./seguranca.js";
 import { calendarioDoBanco, normalizarData, somarDias, hojeBR } from "./calendario.js";
 
@@ -68,5 +69,8 @@ export async function capturarDjen(env, origem = "agendada") {
       resumo.push({ oab: rotulo, erro: e.message });
     }
   }
+  const total = resumo.reduce((n, r) => n + (r.novas || 0), 0);
+  if (total) await notificar(env, { destinos: await idsPorPerfil(env, ["admin", "advogado"]), tipo: "intimacao", link: "/sistema/publicacoes",
+    texto: `${total} nova(s) intimação(ões) do DJEN para triagem` });
   return resumo;
 }

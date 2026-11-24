@@ -4,6 +4,7 @@ import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
 import { prazosPadrao } from "../listas.js";
+import { notificar, idsPorNome, idsPorPerfil } from "../notificacoes.js";
 import { seguro, h } from "../html.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda, dataTravada } from "./comum.js";
 
@@ -80,19 +81,33 @@ export async function lerPrazo(env, f) {
   return { p, calculo };
 }
 
+// Avisa o responsável (e os administradores, em prazos novos) quando outra pessoa cadastra ou atribui o prazo.
+async function avisarPrazo(env, p, id, usuarioId, novo) {
+  const destinos = [...await idsPorNome(env, p.responsavel), ...(novo ? await idsPorPerfil(env, ["admin"]) : [])];
+  const proc = p.processo_id ? await env.DB.prepare("SELECT pasta FROM processos WHERE id = ?").bind(p.processo_id).first() : null;
+  const autor = await env.DB.prepare("SELECT nome FROM usuarios WHERE id = ?").bind(usuarioId).first();
+  const tipo = p.categoria === "Compromisso" ? "Compromisso" : "Prazo";
+  const quando = p.categoria === "Compromisso" ? dataBR(p.prazo_interno || p.prazo_fatal) : `fatal ${dataBR(p.prazo_fatal)}`;
+  const texto = `${novo ? `Novo ${tipo.toLowerCase()}` : `${tipo} atribuído a você`}: ${p.titulo}${proc?.pasta ? ` · Pasta ${proc.pasta}` : ""} · ${quando}${autor ? ` (por ${autor.nome.split(" ")[0]})` : ""}`;
+  await notificar(env, { destinos, tipo: "prazo", texto, link: `/sistema/prazos/${id}`, autorId: usuarioId });
+}
+
 export async function gravarPrazo(env, p, { id = null, usuarioId, publicacaoId = null }) {
   const t = agora();
+  const anterior = id ? await env.DB.prepare("SELECT responsavel FROM prazos WHERE id = ?").bind(id).first() : null;
   const v = [p.processo_id, p.titulo, p.tipo, p.descricao, p.data_inicio, p.dias, p.contagem, p.prazo_fatal, p.prazo_interno,
     p.hora, p.responsavel, p.situacao, p.data_cumprimento, p.data_audiencia, p.hora_audiencia, t, p.categoria || "Prazo"];
   if (id) {
     await env.DB.prepare(`UPDATE prazos SET processo_id=?1, titulo=?2, tipo=?3, descricao=?4, data_inicio=?5, dias=?6, contagem=?7,
       prazo_fatal=?8, prazo_interno=?9, hora=?10, responsavel=?11, situacao=?12, data_cumprimento=?13, data_audiencia=?14,
       hora_audiencia=?15, atualizado_em=?16, categoria=?17 WHERE id=?18`).bind(...v, id).run();
+    if (p.responsavel && p.responsavel !== anterior?.responsavel) await avisarPrazo(env, p, id, usuarioId, false);
     return id;
   }
   const r = await env.DB.prepare(`INSERT INTO prazos (processo_id, titulo, tipo, descricao, data_inicio, dias, contagem, prazo_fatal,
     prazo_interno, hora, responsavel, situacao, data_cumprimento, data_audiencia, hora_audiencia, atualizado_em, categoria, criado_em, criado_por, publicacao_id)
     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?16,?18,?19)`).bind(...v, usuarioId, publicacaoId).run();
+  await avisarPrazo(env, p, r.meta.last_row_id, usuarioId, true);
   return r.meta.last_row_id;
 }
 
