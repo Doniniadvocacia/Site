@@ -565,3 +565,58 @@ td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
 .grade-favorecido { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
 .grade-favorecido .fav-nome { grid-column: span 3; }
 @media (max-width: 720px) { .grade-favorecido { grid-template-columns: 1fr 1fr; } .grade-favorecido .fav-nome { grid-column: 1 / -1; } }
+
+/* ---------- CRM ---------- */
+.botoes-titulo { display: inline-flex; flex-wrap: wrap; gap: .5rem; }
+.filtros-crm { max-width: none; flex-wrap: wrap; }
+.filtros-crm input[name=q] { flex: 1 1 260px; }
+.funil { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 1rem; overflow-x: auto; padding-bottom: .5rem; align-items: start; }
+.coluna-funil { background: #efeae1; border-radius: 10px; padding: .7rem; min-height: 320px; transition: background .15s; }
+.coluna-funil.alvo { background: #e3dccd; outline: 2px dashed var(--dourado); outline-offset: -4px; }
+.coluna-funil > header { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.coluna-funil > header h2 { font-size: 1rem; margin: 0; }
+.coluna-funil > header small { margin-left: auto; color: var(--suave); font-size: .78rem; }
+.coluna-funil-itens { display: grid; gap: .6rem; min-height: 60px; }
+.cartao-lead { background: var(--branco); border: 1px solid var(--linha); border-left: 3px solid var(--dourado); border-radius: 8px; padding: .65rem .75rem; cursor: grab; display: grid; gap: .3rem; }
+.cartao-lead.arrastando { opacity: .45; }
+.cartao-lead-nome { font-weight: 600; text-decoration: none; color: var(--navy); }
+.cartao-lead-nome:hover { text-decoration: underline; }
+.cartao-lead-area { font-size: .8rem; color: var(--suave); }
+.cartao-lead-dados { margin: 0; display: grid; gap: .1rem; font-size: .8rem; }
+.cartao-lead-dados div { display: flex; gap: .4rem; }
+.cartao-lead-dados dt { color: var(--suave); min-width: 4.2rem; }
+.cartao-lead-dados dd { margin: 0; }
+.cartao-lead-rodape { display: flex; justify-content: space-between; gap: .4rem; flex-wrap: wrap; margin: .2rem 0 0; font-size: .75rem; }
+.proximo { color: var(--navy); font-weight: 600; }
+.proximo.sem { color: var(--suave); font-weight: 400; }
+.proximo.atrasado, .proximo.hoje { color: var(--erro); }
+.etiquetas { display: inline-flex; flex-wrap: wrap; gap: .25rem; margin-left: .4rem; vertical-align: middle; }
+.cartao-lead .etiquetas, .cartao .etiquetas { margin-left: 0; }
+.etiqueta-crm { font-size: .7rem; line-height: 1; padding: .22rem .45rem; border-radius: 999px; background: #eef1f6; color: var(--navy); }
+.selo-lead { background: #eef1f6; color: var(--navy); }
+.selo-ganho { background: #e5f2ea; color: var(--ok); }
+.selo-perdido { background: #fbeaea; color: var(--erro); }
+.selo-interacao { background: #f6efe2; color: #7a5a24; margin-left: 0; }
+.acoes-lead { display: flex; flex-wrap: wrap; align-items: end; gap: .8rem 1.2rem; }
+.acoes-lead p { margin: 0; }
+.form-etapa label { display: inline-flex; align-items: center; gap: .4rem; }
+.botao-ganho { background: var(--ok); }
+.perder > summary { list-style: none; cursor: pointer; }
+.perder > summary::-webkit-details-marker { display: none; }
+.perder[open] > form { margin-top: .6rem; }
+.perder label { display: inline-flex; align-items: center; gap: .4rem; }
+.lista-tarefas { list-style: none; margin: 0 0 1rem; padding: 0; }
+.lista-tarefas li { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem .7rem; padding: .5rem 0; border-bottom: 1px solid #f0ece4; }
+.lista-tarefas li.feita .tarefa-titulo { text-decoration: line-through; color: var(--suave); }
+.lista-tarefas li.atrasado .tarefa-data, .lista-tarefas li.hoje .tarefa-data { color: var(--erro); }
+.tarefa-data { font-weight: 600; color: var(--navy); font-size: .88rem; min-width: 5.5rem; }
+.tarefa-titulo { flex: 1 1 200px; }
+.caixa-tarefa { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 5px; border: 1.5px solid #b9c2d0; background: var(--branco); color: var(--ok); font-size: .85rem; line-height: 1; }
+.caixa-tarefa:hover { border-color: var(--ok); background: #e5f2ea; }
+.tabela-followups tr.atrasado td:nth-child(2), .tabela-followups tr.hoje td:nth-child(2) { color: var(--erro); }
+.followups-painel .lista-tarefas { padding: 0 1rem; }
+.zona-perigo { margin-top: 1.5rem; font-size: .88rem; color: var(--suave); }
+.zona-perigo summary { cursor: pointer; }
+.zona-perigo form { margin-top: .6rem; }
+@media (max-width: 900px) { .funil { grid-template-columns: repeat(4, 260px); } }
+.cartao > .etiquetas { display: flex; margin: .4rem 0 1rem; }

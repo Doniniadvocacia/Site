@@ -21,6 +21,7 @@ import { consultarCep } from "./rotas/cep.js";
 import { listas } from "./rotas/listas.js";
 import { favorecidos } from "./rotas/favorecidos.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
+import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
 
@@ -109,6 +110,16 @@ async function sistema(req, env) {
   if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/(?:baixar|estornar))?))?$/))) return financeiro(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/anexos\/(\d+)$/))) return servirAnexo(env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
+  // CRM (toda a equipe)
+  if (caminho === "/sistema/crm") return crm(req, env, sessao);
+  if (caminho === "/sistema/crm/leads/novo") return cadastroLead(req, env, sessao, null);
+  if ((m = caminho.match(/^\/sistema\/crm\/leads\/(\d+)$/))) return fichaLead(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/crm\/leads\/(\d+)\/editar$/))) return cadastroLead(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/crm\/leads\/(\d+)\/(etapa|converter|perder|reabrir|excluir)$/)) && metodo === "POST") return acaoLead(req, env, sessao, m[1], m[2]);
+  if (caminho === "/sistema/crm/interacoes" && metodo === "POST") return novaInteracao(req, env, sessao);
+  if ((m = caminho.match(/^\/sistema\/crm\/interacoes\/(\d+)\/excluir$/)) && metodo === "POST") return excluirInteracao(req, env, sessao, m[1]);
+  if (caminho === "/sistema/crm/tarefas" && metodo === "POST") return novaTarefa(req, env, sessao);
+  if ((m = caminho.match(/^\/sistema\/crm\/tarefas\/(\d+)\/concluir$/)) && metodo === "POST") return concluirTarefa(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover))?))?$/))) return prazos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1]);

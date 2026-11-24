@@ -57,6 +57,14 @@ export const DEFINICOES = [
   { chave: "conta_bancaria", nome: "Contas do escritório", grupo: "Financeiro", padrao: ["Itaú", "Banrisul", "Nubank", "Asaas", "InfinityPay"] },
   { chave: "forma_pagamento", nome: "Formas de pagamento", grupo: "Financeiro", padrao: [
     "Boleto", "Cartão de Débito", "Cartão de Crédito", "Transferência", "Dinheiro", "Crédito em Conta", "Débito em Conta", "Pix"] },
+  { chave: "origem_cliente", nome: "Origens de cliente", grupo: "CRM", padrao: [
+    "Indicação de cliente", "Indicação de parceiro", "Site", "Instagram", "Google", "WhatsApp", "Seguradora", "Cliente antigo", "Outro"] },
+  { chave: "area_interesse", nome: "Áreas de interesse", grupo: "CRM", padrao: [
+    "Sub-rogação securitária", "Direito médico", "Empresarial", "Contratos", "Família", "Sucessões", "Consumidor", "Trabalhista", "Outro"] },
+  { chave: "tipo_interacao", nome: "Tipos de interação", grupo: "CRM", ordenada: true, padrao: [
+    "Ligação", "Reunião presencial", "Reunião online", "WhatsApp", "E-mail", "Proposta enviada", "Outro"] },
+  { chave: "motivo_perda", nome: "Motivos de perda", grupo: "CRM", ordenada: true, padrao: [
+    "Preço / honorários", "Escolheu outro escritório", "Desistiu da ação", "Caso inviável", "Sem retorno", "Fora da área de atuação", "Outro"] },
   { chave: "cargo", nome: "Cargos / funções", grupo: "Usuários", padrao: [
     "Advogado(a) titular", "Advogado(a) associado(a)", "Advogado(a)", "Estagiário(a)", "Assistente jurídico(a)", "Secretário(a)", "Financeiro", "Administrativo"] },
 ];

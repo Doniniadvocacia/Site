@@ -4,6 +4,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { obterListas } from "../listas.js";
+import { normalizarEtiquetas, etiquetasUsadas, datalistEtiquetas } from "./crm.js";
 import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnpj, formatarFone, formatarCep, enderecoTexto } from "./comum.js";
 
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ").map((u) => [u, u]);
@@ -46,9 +47,11 @@ function formularioCliente(sessao, c, acao, sugestoes) {
       <label>Estado<select name="estado" data-endereco="uf">${opcoes(UFS, c.estado)}</select></label>
     </fieldset>
     <label>Data de cadastro<input type="date" name="data_cadastro" value="${c.data_cadastro || ""}"></label>
+    <label>Origem<select name="origem">${opcoes(comAtual(sugestoes.origens, c.origem), c.origem)}</select></label>
+    <label class="duplo">Etiquetas<input name="etiquetas" maxlength="400" list="etiquetas-usadas" value="${c.etiquetas || ""}" placeholder="Separe por vírgula: VIP, seguradora, empresa"></label>
     <label class="largo">Observações<textarea name="observacoes" rows="3" maxlength="4000">${c.observacoes || ""}</textarea></label>
     <div class="largo botoes-form"><button type="submit">Salvar cliente</button></div>
-    ${datalist("posicoes", sugestoes.posicoes)}
+    ${datalist("posicoes", sugestoes.posicoes)}${datalistEtiquetas(sugestoes.etiquetas)}
   </form>
   <p class="dica">CPF/CNPJ, nascimento, contatos, endereço e observações são gravados cifrados.</p>
   <script src="/assets/js/mascaras.js" defer></script><script src="/assets/js/cep.js" defer></script>`;
@@ -58,10 +61,12 @@ export async function cadastroCliente(req, env, sessao, id) {
   const existente = id ? await env.DB.prepare("SELECT * FROM clientes WHERE id = ?").bind(Number(id)).first() : null;
   if (id && !existente) return naoEncontrado(sessao);
   const acao = id ? `/sistema/clientes/${id}/editar` : "/sistema/clientes/novo";
-  const ls = await obterListas(env, ["tipo_cadastro", "genero", "estado_civil", "posicao_cliente"]);
-  const sugestoes = { posicoes: ls.posicao_cliente, tipos: ls.tipo_cadastro, generos: ls.genero, estadosCivis: ls.estado_civil };
+  const [ls, etiquetas] = await Promise.all([obterListas(env, ["tipo_cadastro", "genero", "estado_civil", "posicao_cliente", "origem_cliente"]), etiquetasUsadas(env)]);
+  const sugestoes = { posicoes: ls.posicao_cliente, tipos: ls.tipo_cadastro, generos: ls.genero, estadosCivis: ls.estado_civil, origens: ls.origem_cliente, etiquetas };
+  const convertido = new URL(req.url).searchParams.get("convertido") === "1";
   const tela = (c, erro) => resposta(pagina({
     titulo: id ? `Editar ${existente.nome}` : "Novo cliente", sessao, erro,
+    ...(convertido && !erro ? { aviso: "Contrato fechado! O cliente foi criado com os dados do funil. Complete o cadastro (CPF/CNPJ, endereço) e salve." } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/clientes">Clientes</a>${id ? html` › <a href="/sistema/clientes/${id}">${existente.nome}</a>` : ""}</p>
       <h1>${id ? "Editar cliente" : "Novo cliente"}</h1>
       <section class="cartao">${formularioCliente(sessao, c, acao, sugestoes)}</section>`,
@@ -82,6 +87,7 @@ export async function cadastroCliente(req, env, sessao, id) {
     nome: txt(f, "nome", 200), tipo: txt(f, "tipo", 40), posicao: txt(f, "posicao", 60), genero: txt(f, "genero", 30),
     estado_civil: txt(f, "estado_civil", 40), profissao: txt(f, "profissao", 100), cidade: txt(f, "cidade", 100), estado: txt(f, "estado", 2),
     data_cadastro: dataValida(txt(f, "data_cadastro")),
+    origem: txt(f, "origem", 100), etiquetas: normalizarEtiquetas(txt(f, "etiquetas", 400)),
   };
   CAMPOS_CLIENTE_ENC.forEach((k) => (c[k] = txt(f, k, k === "observacoes" ? 4000 : 400)));
   Object.assign(c, { cep: txt(f, "cep", 9), rua: txt(f, "rua", 150), numero: txt(f, "numero", 15), complemento: txt(f, "complemento", 80), bairro: txt(f, "bairro", 80) });
@@ -109,11 +115,11 @@ export async function cadastroCliente(req, env, sessao, id) {
   if (existente) {
     await env.DB.prepare(`UPDATE clientes SET nome=?1, tipo=?2, posicao=?3, genero=?4, estado_civil=?5, profissao=?6, cidade=?7, estado=?8,
       documento_enc=?9, data_nascimento_enc=?10, email_enc=?11, telefone_enc=?12, endereco_enc=?13, observacoes_enc=?14, data_cadastro=?15,
-      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18 WHERE id=?17`).bind(...v, existente.id, endDadosEnc).run();
+      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas).run();
   } else {
     const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado, documento_enc,
-      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc)
-      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17)`).bind(...v, endDadosEnc).run();
+      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas)
+      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19)`).bind(...v, endDadosEnc, c.origem, c.etiquetas).run();
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "cliente_alterado" : "cliente_criado", `cliente ${novoId}`);

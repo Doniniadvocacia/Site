@@ -9,6 +9,8 @@ import { campoCsrf } from "../html.js";
 import { cartaoHistorico, mensagemDaUrl } from "./historico.js";
 import { cartaoFinanceiro } from "./financeiro.js";
 import { fichaProcesso } from "./ficha-processo.js";
+import { abasClientes, chips, etiquetasDe, blocoRelacionamento, followupsPainel, mensagem as mensagemCrm } from "./crm.js";
+import { obterListas } from "../listas.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
@@ -56,6 +58,7 @@ export async function painel(req, env, sessao) {
       FROM prazos p LEFT JOIN processos pr ON pr.id = p.processo_id LEFT JOIN clientes c ON c.id = pr.cliente_id
       WHERE p.situacao = 'aberto' ORDER BY interno, p.prazo_fatal LIMIT 25`).all(),
   ]);
+  const fup = await followupsPainel(env);
   const total = proc.total || 0, ativos = proc.ativos || 0;
   const pct = total ? Math.round((ativos / total) * 100) : 0;
   const [, mes, dia] = hoje.split("-");
@@ -101,6 +104,16 @@ export async function painel(req, env, sessao) {
         ${barras("Distribuição por fase", "Processos Ativos", fases)}
         ${barras("Distribuição por resultado", "Resultado da Ação", res)}
       </div>
+
+      ${fup.itens.length ? html`<details class="compromissos followups-painel" open>
+        <summary>Follow-ups de clientes</summary>
+        <ul class="lista-tarefas">${fup.itens.map((t) => html`<li class="${t.data < fup.hoje ? "atrasado" : t.data === fup.hoje ? "hoje" : ""}">
+          <span class="tarefa-data">${t.data < fup.hoje ? "Atrasado · " : t.data === fup.hoje ? "Hoje · " : ""}${dataBR(t.data)}</span>
+          <span class="tarefa-titulo">${t.titulo}</span>
+          <a href="${t.cliente_id ? `/sistema/clientes/${t.cliente_id}#followups` : `/sistema/crm/leads/${t.lead_id}#followups`}">${t.cliente_nome || t.lead_nome}</a>
+          <small class="dica">${t.responsavel || ""}</small></li>`)}</ul>
+        <p class="dica"><a href="/sistema/crm?visao=followups">Ver todos os follow-ups</a></p>
+      </details>` : ""}
 
       <details class="compromissos" open>
         <summary>Proximos Compromissos</summary>
@@ -199,24 +212,34 @@ export async function busca(req, env, sessao) {
 
 export async function clientes(req, env, sessao, id) {
   if (!id) {
-    const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
+    const sp = new URL(req.url).searchParams;
+    const q = (sp.get("q") || "").trim().slice(0, 100);
+    const origem = (sp.get("origem") || "").slice(0, 100), etiqueta = (sp.get("etiqueta") || "").slice(0, 40);
     const { results: todos } = await env.DB.prepare(
-      `SELECT c.id, c.nome, c.tipo, c.cidade, c.estado, COUNT(p.id) AS processos
+      `SELECT c.id, c.nome, c.tipo, c.cidade, c.estado, c.origem, c.etiquetas, COUNT(p.id) AS processos
          FROM clientes c LEFT JOIN processos p ON p.cliente_id = c.id
         GROUP BY c.id ORDER BY c.nome COLLATE NOCASE`
     ).all();
     const bate = criarFiltro(q);
-    const results = q ? todos.filter((c) => bate(c.nome)) : todos;
+    const temEtiqueta = (c) => etiquetasDe(c.etiquetas).some((e) => e.toLocaleLowerCase("pt-BR") === etiqueta.toLocaleLowerCase("pt-BR"));
+    const results = todos.filter((c) => (!q || bate(c.nome, c.etiquetas)) && (!origem || c.origem === origem) && (!etiqueta || temEtiqueta(c)));
+    const origens = (await obterListas(env, ["origem_cliente"])).origem_cliente;
+    const etiquetas = [...new Map(todos.flatMap((c) => etiquetasDe(c.etiquetas)).map((e) => [e.toLocaleLowerCase("pt-BR"), e])).values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const opc = (valores, sel, vazio) => html`<option value="">${vazio}</option>${valores.map((v) => html`<option value="${v}"${v === sel ? html` selected` : ""}>${v}</option>`)}`;
     return resposta(pagina({
       titulo: "Clientes", sessao,
       corpo: html`
-        <div class="titulo-acoes"><h1>Clientes</h1><a class="botao-link" href="/sistema/clientes/novo">Novo cliente</a></div>
-        <form class="busca" method="get"><input name="q" value="${q}" placeholder="Buscar por nome" aria-label="Buscar por nome"><button type="submit">Buscar</button></form>
+        <div class="titulo-acoes"><h1>Clientes</h1><span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/crm/leads/novo">Novo potencial cliente</a><a class="botao-link" href="/sistema/clientes/novo">Novo cliente</a></span></div>
+        ${abasClientes("clientes")}
+        <form class="busca filtros-crm" method="get"><input name="q" value="${q}" placeholder="Buscar por nome ou etiqueta" aria-label="Buscar por nome ou etiqueta">
+          <select name="origem" aria-label="Origem">${opc(origens, origem, "Todas as origens")}</select>
+          ${etiquetas.length ? html`<select name="etiqueta" aria-label="Etiqueta">${opc(etiquetas, etiqueta, "Todas as etiquetas")}</select>` : ""}
+          <button type="submit">Buscar</button>${q || origem || etiqueta ? html`<a class="botao-link botao-secundario" href="/sistema/clientes">Limpar</a>` : ""}</form>
         <div class="tabela-rolagem"><table>
-          <thead><tr><th>Nome</th><th>Tipo</th><th>Cidade</th><th>Processos</th></tr></thead>
+          <thead><tr><th>Nome</th><th>Tipo</th><th>Cidade</th><th>Origem</th><th>Processos</th></tr></thead>
           <tbody>${results.map((c) => html`<tr>
-            <td><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a></td><td>${c.tipo}</td>
-            <td>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</td><td>${String(c.processos)}</td></tr>`)}</tbody>
+            <td><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a>${chips(c.etiquetas)}</td><td>${c.tipo}</td>
+            <td>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</td><td>${c.origem || ""}</td><td>${String(c.processos)}</td></tr>`)}</tbody>
         </table></div>
         <p class="dica">${String(results.length)} cliente(s).</p>`,
     }));
@@ -229,8 +252,10 @@ export async function clientes(req, env, sessao, id) {
   const { results: procs } = await env.DB.prepare("SELECT id, pasta, numero, tipo_acao, situacao FROM processos WHERE cliente_id = ? ORDER BY pasta").bind(c.id).all();
   await auditar(env, req, sessao.usuario_id, "cliente_visualizado", `cliente ${c.id}`);
   const fin = await cartaoFinanceiro(env, sessao, { clienteId: c.id });
+  const lead = await env.DB.prepare("SELECT id FROM leads WHERE cliente_id = ? ORDER BY id DESC LIMIT 1").bind(c.id).first();
+  const relacionamento = await blocoRelacionamento(env, sessao, { clienteId: c.id, voltar: `/sistema/clientes/${c.id}` });
   return resposta(pagina({
-    titulo: c.nome, sessao, ...mensagemDaUrl(req),
+    titulo: c.nome, sessao, ...mensagemDaUrl(req), ...mensagemCrm(req),
     corpo: html`
       <p class="trilha"><a href="/sistema/clientes">Clientes</a></p>
       <div class="titulo-acoes"><h1>${c.nome}</h1><a class="botao-link botao-secundario" href="/sistema/clientes/${String(c.id)}/editar">Editar</a></div>
@@ -239,11 +264,13 @@ export async function clientes(req, env, sessao, id) {
         ${campo("E-mail", email)}${campo("Telefone", telefone)}${campo("Endereço", endereco)}
         ${campo("Cidade", [c.cidade, c.estado].filter(Boolean).join(" / "))}${campo("Profissão", c.profissao)}
         ${campo("Estado civil", c.estado_civil)}${campo("Posição", c.posicao)}${campo("Cadastro", dataBR(c.data_cadastro))}
-      </dl>${observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : ""}</section>
+        ${campo("Origem", c.origem)}${lead ? html`<div><dt>Prospecção</dt><dd><a href="/sistema/crm/leads/${String(lead.id)}">ver histórico no funil</a></dd></div>` : ""}
+      </dl>${chips(c.etiquetas)}${observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : ""}</section>
       <section class="cartao"><div class="titulo-acoes"><h2>Processos</h2><a class="botao-link" href="/sistema/processos/novo?cliente=${String(c.id)}">Novo processo</a></div>
         ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a> <span>${p.tipo_acao} ${p.situacao ? `· ${p.situacao}` : ""}</span></li>`)}</ul>` : html`<p>Nenhum processo vinculado.</p>`}
       </section>
-      ${fin}`,
+      ${fin}
+      ${relacionamento}`,
   }));
 }
 
