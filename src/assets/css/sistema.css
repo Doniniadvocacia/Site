@@ -493,3 +493,9 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .menu-conta-lista .form-sair button { color: var(--erro) !important; }
 .campo-senha-atual { max-width: 420px; }
 @media (max-width: 640px) { .menu-conta-lista { right: auto; left: 0; } }
+.grupo-endereco { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .grupo-endereco { grid-template-columns: 1fr 1fr; } }
+.menu-conta > summary { white-space: nowrap; max-width: 190px; }
+.menu-conta > summary { overflow: hidden; }
+.menu-conta > summary .seta-conta { flex: 0 0 auto; }
+.menu-usuario-nome { overflow: hidden; text-overflow: ellipsis; }

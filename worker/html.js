@@ -66,7 +66,7 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
           <ul id="sugestoes-busca" class="sugestoes" role="listbox" aria-label="Sugestões de busca" hidden></ul>
         </form>
         <details class="menu-conta">
-          <summary class="menu-usuario" aria-label="Menu da conta de ${sessao.nome}">${sessao.nome}<span class="seta-conta" aria-hidden="true"></span></summary>
+          <summary class="menu-usuario" aria-label="Menu da conta de ${sessao.nome}" title="${sessao.nome}"><span class="menu-usuario-nome">${sessao.nome.split(" ").slice(0, 2).join(" ")}</span><span class="seta-conta" aria-hidden="true"></span></summary>
           <div class="menu-conta-lista" role="menu">
             <a href="/sistema/conta/senha" role="menuitem">Alterar senha</a>
             <a href="/sistema/conta/cadastro" role="menuitem">Editar cadastro</a>

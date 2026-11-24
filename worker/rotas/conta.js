@@ -8,6 +8,13 @@ const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO R
 const PERFIS = { admin: "Administrador", advogado: "Advogado", colaborador: "Colaborador" };
 const CARGOS = ["Advogado(a) titular", "Advogado(a) associado(a)", "Advogado(a)", "Estagiário(a)", "Assistente jurídico(a)", "Secretário(a)", "Financeiro", "Administrativo"];
 const ENC = ["celular", "telefone", "cpf", "nascimento"];
+const END = ["rua", "numero", "complemento", "bairro", "cidade", "uf", "cep"];
+// Telefones e CEP: guarda formatado; aceita só a quantidade certa de dígitos.
+const fmt = {
+  celular: (d) => `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`,
+  telefone: (d) => `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`,
+  cep: (d) => `${d.slice(0, 5)}-${d.slice(5)}`,
+};
 
 function cpfValido(v) {
   const d = String(v || "").replace(/\D/g, "");
@@ -26,13 +33,22 @@ export async function editarCadastro(req, env, sessao) {
           ${campoCsrf(sessao)}
           <fieldset class="largo grade-form grupo-form"><legend>Dados pessoais</legend>
             <label class="duplo">Nome completo<input name="nome" required maxlength="120" value="${v.nome || ""}" autocomplete="name"></label>
-            <label>CPF<input name="cpf" maxlength="14" inputmode="numeric" value="${v.cpf || ""}" placeholder="000.000.000-00"></label>
+            <label>CPF<input name="cpf" maxlength="14" inputmode="numeric" data-mascara="cpf" value="${v.cpf || ""}" placeholder="000.000.000-00"></label>
             <label>Data de nascimento<input type="date" name="nascimento" value="${v.nascimento || ""}"></label>
           </fieldset>
           <fieldset class="largo grade-form grupo-form"><legend>Contato</legend>
             <label class="duplo">E-mail (usado para entrar)<input type="email" name="email" required maxlength="200" value="${v.email || ""}" autocomplete="email"></label>
-            <label>Celular / WhatsApp<input name="celular" maxlength="20" inputmode="tel" value="${v.celular || ""}" placeholder="(51) 90000-0000" autocomplete="tel"></label>
-            <label>Telefone fixo<input name="telefone" maxlength="20" inputmode="tel" value="${v.telefone || ""}"></label>
+            <label>Celular / WhatsApp<input name="celular" maxlength="15" inputmode="tel" data-mascara="celular" value="${v.celular || ""}" placeholder="(XX) XXXXX-XXXX" autocomplete="tel"></label>
+            <label>Telefone fixo<input name="telefone" maxlength="14" inputmode="tel" data-mascara="telefone" value="${v.telefone || ""}" placeholder="(XX) XXXX-XXXX"></label>
+          </fieldset>
+          <fieldset class="largo grade-form grupo-form grupo-endereco"><legend>Endereço</legend>
+            <label class="duplo">Rua<input name="rua" maxlength="150" value="${v.rua || ""}" autocomplete="address-line1"></label>
+            <label>Número<input name="numero" maxlength="15" value="${v.numero || ""}"></label>
+            <label>Complemento<input name="complemento" maxlength="80" value="${v.complemento || ""}" placeholder="Apto, sala, bloco" autocomplete="address-line2"></label>
+            <label>Bairro<input name="bairro" maxlength="80" value="${v.bairro || ""}"></label>
+            <label>Cidade<input name="cidade" maxlength="80" value="${v.cidade || ""}" autocomplete="address-level2"></label>
+            <label>Estado<select name="uf" autocomplete="address-level1"><option value="">—</option>${UFS.map((x) => html`<option value="${x}"${x === v.uf ? html` selected` : ""}>${x}</option>`)}</select></label>
+            <label>CEP<input name="cep" maxlength="9" inputmode="numeric" data-mascara="cep" value="${v.cep || ""}" placeholder="XXXXX-XXX" autocomplete="postal-code"></label>
           </fieldset>
           <fieldset class="largo grade-form grupo-form"><legend>Dados profissionais</legend>
             <label class="duplo">Cargo / função<input name="cargo" maxlength="80" value="${v.cargo || ""}" list="l-cargos"></label>
@@ -44,13 +60,15 @@ export async function editarCadastro(req, env, sessao) {
           <div class="largo botoes-form"><button type="submit">Salvar cadastro</button><a class="botao-link botao-secundario" href="/sistema/">Cancelar</a></div>
           <datalist id="l-cargos">${CARGOS.map((c) => html`<option value="${c}">`)}</datalist>
         </form>
-        <p class="dica">CPF, data de nascimento e telefones são gravados cifrados.</p>
-      </section>`,
+        <p class="dica">CPF, data de nascimento, telefones e endereço são gravados cifrados.</p>
+      </section>
+      <script src="/assets/js/mascaras.js" defer></script>`,
   }), status);
 
   if (req.method === "GET") {
     const dec = await Promise.all(ENC.map((k) => decifrar(env, u[`${k}_enc`])));
     const v = { ...u }; ENC.forEach((k, i) => (v[k] = dec[i]));
+    try { Object.assign(v, JSON.parse((await decifrar(env, u.endereco_enc)) || "{}")); } catch { /* sem endereço */ }
     return tela(v);
   }
   const { f, ok } = await csrfOk(req, sessao);
@@ -58,11 +76,19 @@ export async function editarCadastro(req, env, sessao) {
     nome: txt(f, "nome", 120), email: (txt(f, "email", 200) || "").toLowerCase(), cargo: txt(f, "cargo", 80),
     oab_numero: (txt(f, "oab_numero", 12) || "").replace(/\D/g, "") || null, oab_uf: UFS.includes(f.get("oab_uf")) ? f.get("oab_uf") : null,
     celular: txt(f, "celular", 20), telefone: txt(f, "telefone", 20), cpf: txt(f, "cpf", 14), nascimento: dataValida(txt(f, "nascimento")),
+    rua: txt(f, "rua", 150), numero: txt(f, "numero", 15), complemento: txt(f, "complemento", 80), bairro: txt(f, "bairro", 80),
+    cidade: txt(f, "cidade", 80), uf: UFS.includes(f.get("uf")) ? f.get("uf") : null, cep: txt(f, "cep", 9),
   };
   if (!ok) return tela(v, { erro: "Sessão expirada. Tente novamente." }, 403);
   if (!v.nome) return tela(v, { erro: "Informe o nome completo." }, 400);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) return tela(v, { erro: "Informe um e-mail válido." }, 400);
   if (v.cpf && !cpfValido(v.cpf)) return tela(v, { erro: "CPF inválido." }, 400);
+  for (const [campo, n, rotulo] of [["celular", 11, "Celular: use (XX) XXXXX-XXXX."], ["telefone", 10, "Telefone fixo: use (XX) XXXX-XXXX."], ["cep", 8, "CEP: use XXXXX-XXX."]]) {
+    if (!v[campo]) continue;
+    const d = v[campo].replace(/\D/g, "");
+    if (d.length !== n) return tela(v, { erro: rotulo }, 400);
+    v[campo] = fmt[campo](d);
+  }
   if (v.cpf) { const d = v.cpf.replace(/\D/g, ""); v.cpf = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`; }
   if (v.nascimento && v.nascimento > new Date().toISOString().slice(0, 10)) return tela(v, { erro: "Data de nascimento inválida." }, 400);
   const trocouEmail = v.email !== String(u.email).toLowerCase();
@@ -72,9 +98,11 @@ export async function editarCadastro(req, env, sessao) {
     if (existe) return tela(v, { erro: "Já existe um usuário com esse e-mail." }, 400);
   }
   const enc = await Promise.all(ENC.map((k) => cifrar(env, v[k])));
+  const endereco = Object.fromEntries(END.filter((k) => v[k]).map((k) => [k, v[k]]));
+  const endEnc = Object.keys(endereco).length ? await cifrar(env, JSON.stringify(endereco)) : null;
   await env.DB.prepare(`UPDATE usuarios SET nome = ?, email = ?, cargo = ?, oab_numero = ?, oab_uf = ?, celular_enc = ?, telefone_enc = ?, cpf_enc = ?,
-      nascimento_enc = ?, atualizado_em = ? WHERE id = ?`)
-    .bind(v.nome, v.email, v.cargo, v.oab_numero, v.oab_uf, ...enc, agora(), u.id).run();
+      nascimento_enc = ?, endereco_enc = ?, atualizado_em = ? WHERE id = ?`)
+    .bind(v.nome, v.email, v.cargo, v.oab_numero, v.oab_uf, ...enc, endEnc, agora(), u.id).run();
   await auditar(env, req, u.id, "cadastro_alterado", trocouEmail ? `e-mail: ${u.email} → ${v.email}` : "dados pessoais");
   sessao.nome = v.nome;
   return tela(v, { aviso: "Cadastro atualizado." });
