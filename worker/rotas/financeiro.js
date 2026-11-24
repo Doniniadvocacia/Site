@@ -60,20 +60,43 @@ function situacao(l, hoje = hojeBR()) {
   return html`<span class="selo selo-semana">Em aberto</span>`;
 }
 
+// Lançamentos em cartões, na disposição do Diligo antigo:
+// tipo e ações | vencimento, cliente e categoria | descrição | valor e "Pago".
 function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
   if (!linhas.length) return html`<p class="vazio">Nenhum lançamento.</p>`;
-  return html`<div class="tabela-rolagem"><table class="tabela-financeiro">
-    <thead><tr><th>Vencimento</th><th>Descrição</th>${mostrarProcesso ? html`<th>Cliente / processo</th>` : ""}<th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
-    <tbody>${linhas.map((l) => html`<tr>
-      <td class="nowrap">${dataBR(l.vencimento)}</td>
-      <td><a href="/sistema/financeiro/${String(l.id)}">${l.descricao}</a>${rotuloParcela(l) ? html` <small class="parcela">${rotuloParcela(l)}</small>` : ""}
-        <br><small>${l.categoria || ""}</small>${l.anexo_id ? linkAnexo(l) : ""}</td>
-      ${mostrarProcesso ? html`<td>${l.cliente_nome || ""}${l.processo_id ? html`<br><small><a href="/sistema/processos/${String(l.processo_id)}">${rotuloProcesso(l)}</a></small>` : ""}</td>` : ""}
-      <td class="num nowrap ${l.tipo}">${l.tipo === "despesa" ? "− " : ""}${valor(l.valor)}</td>
-      <td class="nowrap">${situacao(l)}</td>
-      <td>${l.pago ? "" : html`<form method="post" action="/sistema/financeiro/${String(l.id)}/baixar" class="form-linha">${campoCsrf(sessao)}<button class="botao-pequeno" type="submit">${l.tipo === "receita" ? "Recebido" : "Pago"}</button></form>`}</td>
-    </tr>`)}</tbody></table></div>`;
+  const hoje = hojeBR();
+  return html`<ul class="lancamentos">${linhas.map((l) => {
+    const atrasado = !l.pago && l.vencimento < hoje;
+    const quem = [l.cliente_nome, l.pasta].filter(Boolean).join(" · ");
+    return html`<li class="lancamento ${l.tipo}${l.pago ? " pago" : ""}">
+      <div class="lanc-tipo">
+        <span class="etiqueta-tipo ${l.tipo}">${l.tipo === "receita" ? "Receita" : "Despesa"}</span>
+        <span class="lanc-acoes">
+          <a class="icone-acao" href="/sistema/financeiro/${String(l.id)}" title="Editar" aria-label="Editar lançamento">${seguro(ICONE_LAPIS)}</a>
+          <a class="icone-acao" href="/sistema/financeiro/${String(l.id)}#excluir" title="Excluir" aria-label="Excluir lançamento">${seguro(ICONE_LIXEIRA)}</a>
+        </span>
+      </div>
+      <div class="lanc-dados">
+        <p class="lanc-vencimento">Data de vencimento: <strong class="${atrasado ? "atrasado" : ""}">${dataBR(l.vencimento)}</strong>${atrasado ? html` <span class="selo selo-vencido">Em atraso</span>` : ""}</p>
+        ${mostrarProcesso && (quem || l.processo_id) ? html`<p class="lanc-cliente">${l.processo_id ? html`<a href="/sistema/processos/${String(l.processo_id)}">${quem || rotuloProcesso(l)}</a>` : quem}</p>` : ""}
+        <p class="lanc-categoria">${l.categoria || ""}</p>
+      </div>
+      <div class="lanc-descricao">
+        <a href="/sistema/financeiro/${String(l.id)}">${l.descricao}</a>${rotuloParcela(l) ? html` <span class="parcela">${rotuloParcela(l)}</span>` : ""}
+        ${l.anexo_id ? html`<div>${linkAnexo(l)}</div>` : ""}
+      </div>
+      <div class="lanc-valor">
+        <p class="lanc-quantia"><span class="cifrao" aria-hidden="true">$</span><strong class="${l.tipo}">${l.tipo === "despesa" ? "− " : ""}${valor(l.valor)}</strong></p>
+        <form method="post" action="/sistema/financeiro/${String(l.id)}/${l.pago ? "estornar" : "baixar"}" class="lanc-pago">${campoCsrf(sessao)}
+          <span>${l.pago ? (l.tipo === "receita" ? `Recebido ${dataBR(l.data_pagamento)}` : `Pago ${dataBR(l.data_pagamento)}`) : (l.tipo === "receita" ? "Recebido" : "Pago")}</span>
+          <button type="submit" class="botao-check${l.pago ? " marcado" : ""}" title="${l.pago ? "Desmarcar pagamento" : "Marcar como pago"}" aria-label="${l.pago ? "Desmarcar pagamento" : "Marcar como pago"}" aria-pressed="${l.pago ? "true" : "false"}">${l.pago ? "✓" : ""}</button>
+        </form>
+      </div>
+    </li>`;
+  })}</ul>`;
 }
+const ICONE_LAPIS = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z M14 6l4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+const ICONE_LIXEIRA = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 
 const SELECT_LANC = `SELECT f.*, COALESCE(c.nome, c2.nome) AS cliente_nome, pr.pasta, pr.numero, a.nome AS anexo_nome, (a.chave IS NULL) AS anexo_pendente
   FROM financeiro f LEFT JOIN processos pr ON pr.id = f.processo_id LEFT JOIN clientes c ON c.id = f.cliente_id
@@ -131,7 +154,7 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">Salvar</button></div>
     <datalist id="l-categorias">${cats.map((c) => html`<option value="${c}">`)}</datalist>
   </form>
-  ${novo ? "" : html`<form method="post" action="${acao}" class="formulario form-excluir-lanc">${campoCsrf(sessao)}
+  ${novo ? "" : html`<form method="post" action="${acao}" class="formulario form-excluir-lanc" id="excluir">${campoCsrf(sessao)}
     <label class="opcao-linha"><input type="checkbox" name="confirmar" value="1" required> Confirmo a exclusão</label>
     ${grupoQtd > 1 ? html`<label class="opcao-linha"><input type="checkbox" name="grupo" value="1"> Excluir também as outras ${String(grupoQtd - 1)} parcela(s) em aberto deste lançamento</label>` : ""}
     <button type="submit" name="acao" value="excluir" class="botao-secundario">Excluir lançamento</button></form>`}
@@ -191,6 +214,18 @@ async function saldoConta(env, hoje) {
 export async function financeiro(req, env, sessao, id) {
   if (!sessao.financeiro) return negado(sessao);
   const hoje = hojeBR();
+
+  // Desmarcar pagamento (clique no círculo de um lançamento pago)
+  if (id && id.endsWith("/estornar") && req.method === "POST") {
+    const { ok } = await csrfOk(req, sessao);
+    const lid = Number(id.split("/")[0]);
+    if (ok) {
+      await env.DB.prepare("UPDATE financeiro SET pago = 0, data_pagamento = NULL, atualizado_em = ? WHERE id = ? AND pago = 1").bind(agora(), lid).run();
+      await auditar(env, req, sessao.usuario_id, "financeiro_estorno", `lançamento ${lid}`);
+    }
+    const ref = req.headers.get("Referer");
+    return redirecionar(ref && new URL(ref).pathname.startsWith("/sistema/") ? new URL(ref).pathname + new URL(ref).search : "/sistema/financeiro");
+  }
 
   // Baixa rápida
   if (id && id.endsWith("/baixar") && req.method === "POST") {

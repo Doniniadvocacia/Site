@@ -437,3 +437,36 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 }
 .filtros-financeiro select, .filtros-financeiro input { height: 2.4rem; padding-top: 0; padding-bottom: 0; }
 .botoes-filtro button, .botoes-filtro .botao-link { height: 2.4rem; display: inline-flex; align-items: center; box-sizing: border-box; }
+/* Lançamentos em cartões (disposição do Diligo antigo) */
+.lancamentos { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.lancamento { display: grid; grid-template-columns: 96px minmax(200px, 1.2fr) minmax(220px, 2fr) 190px; gap: .4rem 1.2rem; align-items: start;
+  background: var(--branco); border: 1px solid var(--linha); border-radius: 10px; padding: .85rem 1.1rem; }
+.lancamento.pago { background: #fcfdfc; }
+.lanc-tipo { display: grid; gap: .55rem; justify-items: start; }
+.etiqueta-tipo { display: inline-block; font: 700 .78rem/1 var(--sans); color: var(--branco); padding: .35rem .5rem; border-radius: 3px; }
+.etiqueta-tipo.receita { background: #1f5fbf; }
+.etiqueta-tipo.despesa { background: var(--erro); }
+.lanc-acoes { display: flex; gap: .15rem; margin-left: -.35rem; }
+.lanc-dados p, .lanc-valor p { margin: 0; }
+.lanc-vencimento { font-size: .9rem; color: var(--texto); }
+.lanc-vencimento strong { font-weight: 500; color: var(--texto); margin-left: .35rem; }
+.lanc-vencimento strong.atrasado { color: var(--erro); }
+.lanc-cliente { font-size: 1rem; margin-top: .35rem !important; }
+.lanc-cliente a { color: var(--texto); text-decoration: none; }
+.lanc-cliente a:hover { text-decoration: underline; }
+.lanc-categoria { font-size: .78rem; color: var(--suave); margin-top: .45rem !important; }
+.lanc-descricao { font-size: .9rem; line-height: 1.5; }
+.lanc-descricao > a { color: var(--texto); text-decoration: none; }
+.lanc-descricao > a:hover { text-decoration: underline; }
+.lanc-valor { display: grid; justify-items: end; gap: .9rem; }
+.lanc-quantia { display: flex; align-items: center; gap: .5rem; }
+.lanc-quantia strong { font-size: 1.05rem; color: var(--texto); }
+.lanc-quantia strong.despesa { color: var(--erro); }
+.cifrao { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 999px; background: #4a5363; color: var(--branco); font: 700 .75rem/1 var(--sans); }
+.lanc-pago { display: flex; align-items: center; gap: .6rem; margin: 0; font-size: .9rem; color: var(--texto); }
+.lanc-pago .botao-check { width: 1.6rem; height: 1.6rem; margin: 0; }
+@media (max-width: 900px) {
+  .lancamento { grid-template-columns: 90px 1fr; }
+  .lanc-descricao { grid-column: 2; }
+  .lanc-valor { grid-column: 1 / -1; grid-auto-flow: column; justify-content: space-between; align-items: center; border-top: 1px dashed var(--linha); padding-top: .6rem; }
+}

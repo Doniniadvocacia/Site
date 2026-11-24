@@ -92,7 +92,7 @@ async function sistema(req, env) {
   if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/historico$/)) && metodo === "POST") return adicionarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)$/))) return editarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)\/excluir$/)) && metodo === "POST") return excluirHistorico(req, env, sessao, m[1]);
-  if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/baixar)?))?$/))) return financeiro(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/(?:baixar|estornar))?))?$/))) return financeiro(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/anexos\/(\d+)$/))) return servirAnexo(env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/clientes(?:\/(\d+))?$/))) return clientes(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
