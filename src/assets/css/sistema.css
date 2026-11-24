@@ -518,3 +518,6 @@ fieldset.grade-form { display: grid; gap: .9rem 1rem; align-items: start; }
 .formulario.em-linha > label > input, .formulario.em-linha > label > select { width: 100%; box-sizing: border-box; }
 .formulario.em-linha > label.opcao-linha { display: flex; align-self: end; padding-bottom: .6rem; white-space: nowrap; }
 td.acoes form { display: inline-flex; gap: .35rem; margin-top: .3rem; }
+.feriados-subtitulo { margin: 1rem 0 .3rem; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dourado); font-weight: 600; }
+.feriados-cadastrados li { align-items: center; }
+.feriados-cadastrados .feriado-desc { flex: 1; color: var(--texto) !important; }

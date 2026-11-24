@@ -87,14 +87,15 @@ export async function feriados(req, env, sessao) {
   }
   const ano = Number(hojeBR().slice(0, 4));
   const { results: locais } = await env.DB.prepare("SELECT * FROM feriados WHERE data >= ? ORDER BY data").bind(`${ano}-01-01`).all();
+  // Anos exibidos: o atual, o próximo e qualquer outro com feriado cadastrado.
+  const anos = [...new Set([ano, ano + 1, ...locais.map((x) => Number(x.data.slice(0, 4)))])].sort();
+  const remover = (x) => html`<form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="id" value="${String(x.id)}"><button class="botao-pequeno botao-secundario" name="acao" value="remover">Remover</button></form>`;
   return resposta(pagina({
     titulo: "Feriados", sessao, aviso, erro,
     corpo: html`
       <h1>Feriados e dias sem expediente</h1>
       <p class="dica">Os feriados nacionais, o Carnaval, a Sexta-feira Santa, o Corpus Christi e a suspensão de 20/12 a 20/01 já entram no cálculo automaticamente. Cadastre aqui os feriados estaduais, municipais e as suspensões de expediente dos tribunais.</p>
-      <section class="cartao"><h2>Cadastrados</h2>
-        ${locais.length ? html`<ul class="lista-simples">${locais.map((x) => html`<li><span>${dataBR(x.data)} · ${x.descricao}${x.abrangencia ? ` (${x.abrangencia})` : ""}</span>
-          <form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="id" value="${String(x.id)}"><button class="botao-pequeno" name="acao" value="remover">Remover</button></form></li>`)}</ul>` : html`<p>Nenhum feriado local cadastrado.</p>`}
+      <section class="cartao"><h2>Cadastrar feriado</h2>
         <form method="post" class="formulario em-linha">${campoCsrf(sessao)}
           <label>Data<input type="date" name="data" required></label>
           <label>Descrição<input name="descricao" required maxlength="150" placeholder="Ex.: Revolução Farroupilha"></label>
@@ -102,8 +103,18 @@ export async function feriados(req, env, sessao) {
           <button type="submit" name="acao" value="adicionar">Cadastrar</button>
         </form>
       </section>
-      <section class="cartao"><h2>Nacionais (automáticos)</h2>
-        <div class="duas-colunas">${[ano, ano + 1].map((a) => html`<div><h3>${String(a)}</h3><ul class="lista-simples">${feriadosNacionais(a).map(([d, n]) => html`<li><span>${dataBR(d)}</span><span>${n}</span></li>`)}</ul></div>`)}</div>
+      <section class="cartao"><h2>Feriados</h2>
+        <div class="duas-colunas">${anos.map((a) => {
+          const doAno = locais.filter((x) => x.data.startsWith(`${a}-`));
+          return html`<div class="feriados-ano"><h3>${String(a)}</h3>
+            <p class="feriados-subtitulo">Nacionais (automáticos)</p>
+            <ul class="lista-simples">${feriadosNacionais(a).map(([d, n]) => html`<li><span>${dataBR(d)}</span><span>${n}</span></li>`)}</ul>
+            <p class="feriados-subtitulo">Cadastrados</p>
+            ${doAno.length ? html`<ul class="lista-simples feriados-cadastrados">${doAno.map((x) => html`<li>
+              <span>${dataBR(x.data)}</span><span class="feriado-desc">${x.descricao}${x.abrangencia ? html` <small>(${x.abrangencia})</small>` : ""}</span>${remover(x)}</li>`)}</ul>`
+              : html`<p class="vazio">Nenhum feriado cadastrado para ${String(a)}.</p>`}
+          </div>`;
+        })}</div>
       </section>`,
   }));
 }
