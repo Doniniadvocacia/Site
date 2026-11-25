@@ -104,7 +104,7 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
     ${erro ? html`<p class="erro" role="alert">${erro}</p>` : ""}
     ${corpo}
   </main>
-  ${sessao ? html`<script src="/assets/js/busca.js" defer></script>` : ""}
+  ${sessao ? html`<script src="/assets/js/busca.js" defer></script>${sessao.sino ? html`<script src="/assets/js/confirmar.js" defer></script>` : ""}` : ""}
   ${sessao?.financeiro ? html`<script src="/assets/js/valores.js" defer></script>` : ""}
 </body>
 </html>`;

@@ -98,9 +98,12 @@ export function sino(sessao) {
   return html`<details class="menu-notificacoes">
     <summary class="sino" aria-label="${n.total ? `Notificações: ${n.total} pendente(s)` : "Notificações"}" title="Notificações">${icoSino()}${n.total ? html`<span class="sino-contagem">${contagem}</span>` : ""}</summary>
     <div class="painel-notificacoes" role="dialog" aria-label="Notificações e pendências">
-      <div class="painel-notificacoes-topo"><strong>Notificações</strong>
-        ${n.naoLidas ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}">
-          <button type="submit" class="link-botao">Marcar todas como lidas</button></form>` : ""}</div>
+      <div class="painel-notificacoes-topo"><strong>Notificações${n.naoLidas ? html` <span class="contagem">${String(n.naoLidas)}</span>` : ""}</strong>
+        ${n.notificacoes.length ? html`<span class="acoes-notificacoes">
+          ${n.naoLidas ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}">
+            <button type="submit" class="link-botao">Ler todas</button></form>` : ""}
+          <form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar todas as notificações? As pendências continuam na lista.">
+            <input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="link-botao">Limpar</button></form></span>` : ""}</div>
       <div class="painel-notificacoes-corpo">
         ${n.notificacoes.length ? html`<ul class="lista-notificacoes">${n.notificacoes.map((x) => html`<li class="${x.lida ? "" : "nao-lida"}">
           <a href="/sistema/notificacoes/${String(x.id)}"><span class="notif-texto">${x.texto}</span><small>${tempo(x.criado_em)}</small></a></li>`)}</ul>`
@@ -121,9 +124,11 @@ export function sino(sessao) {
 const linkSeguro = (v) => (typeof v === "string" && /^\/sistema\/[\w\-/?=&.%#]*$/.test(v) && !v.includes("//") ? v : "/sistema/notificacoes");
 
 export async function notificacoes(req, env, sessao, id) {
-  if (id === "lidas" && req.method === "POST") {
+  if ((id === "lidas" || id === "limpar") && req.method === "POST") {
     const f = await req.formData();
-    if (iguais(String(f.get("csrf") || ""), sessao.csrf)) await env.DB.prepare("UPDATE notificacoes SET lida = 1 WHERE usuario_id = ? AND lida = 0").bind(sessao.usuario_id).run();
+    if (iguais(String(f.get("csrf") || ""), sessao.csrf)) {
+      await env.DB.prepare(id === "limpar" ? "DELETE FROM notificacoes WHERE usuario_id = ?" : "UPDATE notificacoes SET lida = 1 WHERE usuario_id = ? AND lida = 0").bind(sessao.usuario_id).run();
+    }
     const ref = req.headers.get("Referer");
     let volta = "/sistema/notificacoes";
     try { const u = new URL(ref); if (u.origin === new URL(req.url).origin) volta = linkSeguro(u.pathname + u.search); } catch { /* sem referer */ }
@@ -139,7 +144,8 @@ export async function notificacoes(req, env, sessao, id) {
   return resposta(pagina({
     titulo: "Notificações", sessao,
     corpo: html`<div class="titulo-acoes"><h1>Notificações</h1>
-        ${results.some((r) => !r.lida) ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="botao-secundario">Marcar todas como lidas</button></form>` : ""}</div>
+        <span class="botoes-titulo">${results.some((r) => !r.lida) ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="botao-secundario">Ler todas</button></form>` : ""}
+        ${results.length ? html`<form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar todas as notificações?"><input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="botao-secundario">Limpar notificações</button></form>` : ""}</span></div>
       ${results.length ? html`<ul class="lista-notificacoes pagina-notificacoes cartao">${results.map((x) => html`<li class="${x.lida ? "" : "nao-lida"}">
         <a href="/sistema/notificacoes/${String(x.id)}"><span class="notif-texto">${x.texto}</span><small>${tempo(x.criado_em)}</small></a></li>`)}</ul>`
         : html`<p class="vazio">Nenhuma notificação ainda.</p>`}
