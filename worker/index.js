@@ -23,6 +23,7 @@ import { favorecidos } from "./rotas/favorecidos.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
 import { carregarNotificacoes, sino, notificacoes } from "./notificacoes.js";
 import { relatorios } from "./rotas/relatorios.js";
+import { detalheJson } from "./rotas/prazo-visualizar.js";
 import { configAsaas, conciliacao, cobrancaLancamento } from "./rotas/asaas.js";
 import { receberAviso, sincronizar, asaasConfigurado } from "./asaas.js";
 import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, editarInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
@@ -142,8 +143,9 @@ async function sistema(req, env, ctx) {
   if (caminho === "/sistema/crm/tarefas" && metodo === "POST") return novaTarefa(req, env, sessao);
   if ((m = caminho.match(/^\/sistema\/crm\/tarefas\/(\d+)\/concluir$/)) && metodo === "POST") return concluirTarefa(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
-  if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover))?))?$/))) return prazos(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover|reagendar|cancelar))?))?$/))) return prazos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1]);
+  if (caminho === "/sistema/agenda/detalhe") return detalheJson(req, env);
   if ((m = caminho.match(/^\/sistema\/agenda(?:\/(novo|\d+(?:\/mover)?|dia\/\d{4}-\d{2}-\d{2}))?$/))) return agenda(req, env, sessao, m[1]);
 
   const admin = sessao.perfil === "admin";

@@ -15,6 +15,9 @@ export const DEFINICOES = [
     "Assinar Acordo", "Cálculo Condenação", "Cumprir Diligência", "Distribuir Ação", "Encaminhar Oficio", "Formulário Encerramento",
     "Intimar Testemunha", "Monitorar Citação", "Monitorar Crédito Alvará", "Monitorar Expedição Alvará", "Monitorar Precatório/RPV",
     "Monitorar Publicação Sentença", "Monitorar Trânsito em Julgado", "Retirar Carta Prectória", "Retirar Oficio", "Sessão de Julgamento"] },
+  { chave: "motivo_cancelamento_prazo", nome: "Motivos de cancelamento de prazo", grupo: "Agenda", ordenada: true, padrao: [
+    "Cadastrado em duplicidade", "Cadastrado por engano", "Intimação sem prazo ou sem providência", "Prazo suspenso ou devolvido",
+    "Acordo, desistência ou encerramento do processo", "Compromisso desmarcado", "Outro"] },
   { chave: "tipo_acao", nome: "Tipos de ação", grupo: "Processos", padrao: [
     "Precatório", "Requisição de Pequeno Valor", "Embargos à Execução", "Execução Fiscal", "Impug. ao Cump. de Sentença",
     "Execução de Título Extrajudicial", "Exceção de Pré-Executividade", "Carta Precatória", "Embargos de Terceiro", "Recurso de Revista",

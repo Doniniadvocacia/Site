@@ -16,6 +16,7 @@ export const icone = {
   seta: (t) => seguro(`<svg aria-hidden="true" width="${t || 18}" height="${t || 18}" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4l8 7-8 7v-4.2C8.5 13.8 5 15.6 2 20c1-6.2 4.8-10.4 12-11.3z"/></svg>`),
   folha: (t) => seguro(`<svg aria-hidden="true" width="${t || 18}" height="${t || 18}" viewBox="0 0 24 24" fill="currentColor"><path d="M5 2h9l5 5v15H5z" opacity=".95"/><path d="M14 2v5h5" fill="#fff" opacity=".35"/></svg>`),
   // marcas d'água dos cartões
+  olho: (t) => svg('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', t),
   balanca: (t) => svg('<path d="M12 3v17M7 21h10M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z"/>', t),
   agenda: (t) => svg('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>', t),
   alerta: (t) => svg('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/>', t),

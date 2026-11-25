@@ -5,6 +5,7 @@ import { auditar } from "../sessao.js";
 import { calendarioDoBanco, hojeBR, somarDias } from "../calendario.js";
 import { prazosPadrao } from "../listas.js";
 import { notificar, idsPorNome, idsPorPerfil } from "../notificacoes.js";
+import { visualizarPrazo, acaoVisualizacao } from "./prazo-visualizar.js";
 import { seguro, h } from "../html.js";
 import { opcoes, listasApoio, csrfOk, txt, dataValida, urgencia, rotuloProcesso, dataBR, descricaoDaIntimacao, cabecalhoAgenda, dataTravada } from "./comum.js";
 
@@ -182,14 +183,19 @@ export async function prazos(req, env, sessao, id) {
   }
 
   // ---------- Cumprir (ação rápida da lista) ----------
+  if (id && /\/(reagendar|cancelar)$/.test(id) && req.method === "POST") {
+    const [pid, acaoV] = id.split("/");
+    return acaoVisualizacao(req, env, sessao, pid, acaoV);
+  }
   if (id && id.endsWith("/cumprir") && req.method === "POST") {
-    const { ok } = await csrfOk(req, sessao);
+    const { f, ok } = await csrfOk(req, sessao);
     const pid = Number(id.split("/")[0]);
     if (ok) {
       await env.DB.prepare("UPDATE prazos SET situacao = 'cumprido', data_cumprimento = ?, atualizado_em = ? WHERE id = ? AND situacao = 'aberto'")
         .bind(hojeBR(), agora(), pid).run();
       await auditar(env, req, sessao.usuario_id, "prazo_cumprido", `prazo ${pid}`);
     }
+    if (f.get("voltar") === "item") return redirecionar(`/sistema/prazos/${pid}?msg=${ok ? "cumprido" : "sessao"}`);
     return redirecionar(req.headers.get("Referer")?.includes("/sistema/") ? new URL(req.headers.get("Referer")).pathname + new URL(req.headers.get("Referer")).search : "/sistema/agenda?visao=prazos");
   }
 
@@ -197,6 +203,8 @@ export async function prazos(req, env, sessao, id) {
   const novo = id === "novo";
   const existente = novo ? null : await env.DB.prepare("SELECT * FROM prazos WHERE id = ?").bind(Number(id)).first();
   if (!novo && !existente) return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Prazo não encontrado</h1>` }), 404);
+  // Já cadastrado: só visualização (cumprir, reagendar ou cancelar). Os campos não são mais editados.
+  if (!novo) return req.method === "GET" ? visualizarPrazo(req, env, sessao, existente) : redirecionar(`/sistema/prazos/${existente.id}?msg=edicao`);
   const apoio = await listasApoio(env);
   const acao = novo ? "/sistema/prazos/novo" : `/sistema/prazos/${id}`;
   const tela = (p, { erro, aviso, calculo } = {}) => resposta(pagina({

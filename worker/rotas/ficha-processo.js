@@ -68,7 +68,7 @@ export async function fichaProcesso(req, env, sessao, id) {
       <td class="col-descricao">${textoCurto(x.descricao)}</td>
       <td>${x.responsavel || ""}</td>
       <td class="nowrap">${situacaoPrazo(x)}</td>
-      <td class="acoes-linha"><a class="icone-acao" href="/sistema/prazos/${String(x.id)}" title="Editar" aria-label="Editar prazo">✎</a>
+      <td class="acoes-linha"><a class="icone-acao" href="/sistema/prazos/${String(x.id)}" title="Abrir" aria-label="Abrir prazo">✎</a>
         ${x.situacao === "aberto" ? html`<form method="post" action="/sistema/prazos/${String(x.id)}/cumprir" class="form-linha">${campoCsrf(sessao)}<button class="botao-check" type="submit" title="Marcar como cumprido" aria-label="Marcar como cumprido"></button></form>` : html`<span class="botao-check marcado" aria-hidden="true">✓</span>`}</td>
     </tr>` })),
     ...ags.map((x) => ({ ordem: x.situacao === "agendado" ? 0 : 1, data: x.data, html: html`<tr>

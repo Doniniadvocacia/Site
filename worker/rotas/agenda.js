@@ -48,7 +48,7 @@ const etiqueta = (it) => {
   if (!it.prazo) {
     const travadoAv = dataTravada({ ...it, categoria: "Compromisso" });
     const movelAv = !it.feito && !travadoAv;
-    return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${travadoAv ? " travado" : ""}" href="${it.href}"
+    return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${travadoAv ? " travado" : ""}" href="${it.href}" data-detalhe="agenda:${String(it.id)}"
       title="Compromisso: ${rotulo}${travadoAv ? " · data fixada (sessão de julgamento)" : movelAv ? " · arraste para reagendar" : ""}"
       ${movelAv ? seguro(`draggable="true" data-agenda="${it.id}" data-fatal="9999-12-31" data-compromisso="1"`) : ""}>${rotulo}</a>`;
   }
@@ -58,7 +58,7 @@ const etiqueta = (it) => {
   const travado = dataTravada(it);
   const movel = !it.feito && !travado && (it.compromisso || !!it.prazo_fatal);
   const limite = it.compromisso ? "9999-12-31" : it.prazo_fatal;
-  return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}${travado ? " travado" : ""}" href="${it.href}"
+  return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}${travado ? " travado" : ""}" href="${it.href}" data-detalhe="prazo:${String(it.id)}"
     title="${it.compromisso ? "Compromisso" : "Prazo"}: ${rotulo}${it.compromisso ? "" : ` · Prazo fatal: ${fatal}`}${it.feito ? " (cumprido)" : travado ? " · data fixada (sessão de julgamento)" : movel ? " · arraste para reagendar" : ""}"
     ${movel ? seguro(`draggable="true" data-prazo="${it.id}" data-fatal="${limite}"${it.compromisso ? ' data-compromisso="1"' : ""}`) : ""}>${rotulo}</a>`;
 };
@@ -114,7 +114,7 @@ async function calendarioMensal(req, env, sessao) {
         <span><i class="feito-amostra"></i>Cumprido</span>
         <span><i class="recesso-amostra"></i>Recesso forense (20/12 a 20/01): prazos suspensos</span>
       </div>
-      <script src="/assets/js/agenda.js" defer></script>`,
+      <script src="/assets/js/agenda.js" defer></script><script src="/assets/js/agenda-detalhe.js" defer></script>`,
   }));
 }
 
@@ -127,7 +127,8 @@ async function agendaDoDia(req, env, sessao, data) {
     corpo: html`<p class="trilha"><a href="/sistema/agenda?mes=${a}-${m}">Agenda</a></p>
       <h1>${d}/${m}/${a}${feriados.get(data) ? html` <small class="subtitulo">· ${feriados.get(data)}</small>` : ""}</h1>
       <div class="titulo-acoes"><span></span><span><a class="botao-link" href="/sistema/prazos/novo?data=${data}">Novo agendamento</a></span></div>
-      <section class="cartao">${itens.length ? html`<div class="lista-etiquetas">${itens.map(etiqueta)}</div>` : html`<p>Nada marcado para este dia.</p>`}</section>`,
+      <section class="cartao">${itens.length ? html`<div class="lista-etiquetas">${itens.map(etiqueta)}</div>` : html`<p>Nada marcado para este dia.</p>`}</section>
+      <script src="/assets/js/agenda-detalhe.js" defer></script>`,
   }));
 }
 

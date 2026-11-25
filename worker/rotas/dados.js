@@ -119,7 +119,7 @@ export async function painel(req, env, sessao) {
         <summary><h2>Próximos Compromissos</h2></summary>
         ${proximos.length ? proximos.map((p) => html`<article class="compromisso">
           <div class="compromisso-acoes">
-            <a href="/sistema/prazos/${String(p.id)}" title="Editar prazo" aria-label="Editar prazo">${icone.lapis(26)}</a>
+            <a href="/sistema/prazos/${String(p.id)}" title="Abrir prazo" aria-label="Abrir prazo">${icone.olho(26)}</a>
           </div>
           <div class="compromisso-dados">
             <dl>
