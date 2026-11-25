@@ -1,10 +1,12 @@
 // Motor dos cálculos judiciais (funções puras, sem banco): atualização monetária e juros de mora por período.
 //
 // Convenções (aparecem na memória do cálculo):
-// - Correção monetária: aplica as variações mensais do índice do mês do vencimento (inclusive) ao mês do cálculo (exclusive),
-//   compostas (fator acumulado). Mês sem índice divulgado conta como 0% e gera aviso.
-// - Juros: simples (não capitalizados), sobre o valor corrigido, pro rata die. Taxas mensais (SELIC, taxa legal, TR) são
-//   proporcionais aos dias de cada mês; taxas fixas (1% ou 0,5% ao mês) usam dias corridos / 30.
+// - Correção monetária: variações mensais acumuladas. Padrão (igual ao Memorial/Exotics): pro rata linear com granularidade
+//   diária no primeiro e no último mês; opcional: meses cheios, do mês do vencimento ao mês anterior ao do cálculo.
+//   Mês sem índice divulgado não é corrigido e gera aviso.
+// - Juros: simples (não capitalizados), sobre o valor corrigido. Taxas mensais (SELIC, taxa legal, TR) são proporcionais
+//   aos dias de cada mês; taxas fixas (1% ou 0,5% ao mês) contam meses completos pelo aniversário da parcela (padrão,
+//   como no Memorial) ou dias corridos / 30.
 // - A SELIC já engloba correção e juros: no período em que ela incide não há correção à parte.
 // - Lei 14.905/2024: a partir de 30/08/2024, correção pelo IPCA e juros pela taxa legal (SELIC − IPCA, mínimo zero).
 
@@ -51,6 +53,7 @@ const ms = (d) => Date.parse(`${d}T00:00:00Z`);
 const diasEntre = (a, b) => Math.round((ms(b) - ms(a)) / DIA);
 const fimDoMes = (mes) => { const p = `${somarMes(mes, 1)}-01`; return p; }; // primeiro dia do mês seguinte (exclusivo)
 const diasNoMes = (mes) => diasEntre(`${mes}-01`, fimDoMes(mes));
+const diaAnterior = (d) => new Date(ms(d) - DIA).toISOString().slice(0, 10);
 const arred = (v, c = 2) => Math.round(v * 10 ** c) / 10 ** c;
 
 // Resolve o regime em uma função (data do trecho, antes do marco?) → { c, j }.
@@ -79,23 +82,46 @@ function trechos(a, b, marco) {
   return pts.slice(0, -1).map((x, i) => [x, pts[i + 1]]);
 }
 
-function fatorCorrecao(serie, mesIni, mesFim, idx, avisos) {
-  // meses [mesIni, mesFim)
+// Correção do intervalo [a, b). Com pro rata (convenção linear, granularidade diária, como no Memorial/Exotics),
+// cada mês entra na proporção dos dias do intervalo dentro dele; sem pro rata, aplica os meses cheios [mês(a), mês(b)).
+function fatorCorrecao(serie, a, b, idx, avisos, prorata) {
   let f = 1;
-  if (!serie || serie === "nenhuma") return 1;
-  for (let m = mesIni; m < mesFim; m = somarMes(m, 1)) {
+  if (!serie || serie === "nenhuma" || a >= b) return 1;
+  const ultimo = prorata ? mesDe(diaAnterior(b)) : somarMes(mesDe(b), -1);
+  for (let m = mesDe(a); m <= ultimo; m = somarMes(m, 1)) {
+    let peso = 1;
+    if (prorata) {
+      const ini = `${m}-01` > a ? `${m}-01` : a, fim = fimDoMes(m) < b ? fimDoMes(m) : b;
+      peso = diasEntre(ini, fim) / diasNoMes(m);
+      if (peso <= 0) continue;
+    }
     const v = idx[serie]?.get(m);
-    if (v === undefined) { avisos.add(`${CORRECOES[serie]} de ${m.slice(5)}/${m.slice(0, 4)} ainda não divulgado: considerado 0%.`); continue; }
-    f *= 1 + v / 100;
+    if (v === undefined) { avisos.add(`${CORRECOES[serie]} de ${m.slice(5)}/${m.slice(0, 4)} ainda não divulgado: período não corrigido.`); continue; }
+    f *= 1 + (v / 100) * peso;
   }
   return f;
 }
 
-function percentualJuros(tipo, a, b, idx, avisos) {
+// Soma n meses a uma data, ajustando ao último dia do mês (31/01 + 1 mês = 29/02).
+function somarMeses(d, n) {
+  const m = somarMes(mesDe(d), n);
+  const dia = Math.min(Number(d.slice(8, 10)), diasNoMes(m));
+  return `${m}-${String(dia).padStart(2, "0")}`;
+}
+
+function percentualJuros(tipo, a, b, idx, avisos, { aniversario = true, final = true } = {}) {
   // juros simples no intervalo de dias [a, b)
   if (!tipo || tipo === "nenhum" || a >= b) return 0;
-  if (tipo === "1am") return diasEntre(a, b) / 30;
-  if (tipo === "05am") return (diasEntre(a, b) / 30) * 0.5;
+  if (tipo === "1am" || tipo === "05am") {
+    const taxa = tipo === "1am" ? 1 : 0.5;
+    if (!aniversario) return (diasEntre(a, b) / 30) * taxa;
+    // Meses completos pelo aniversário (sem pro rata, como no Memorial); a sobra de dias só conta
+    // quando o trecho termina numa mudança de critério, para não se perder entre as fases.
+    let n = 0;
+    while (somarMeses(a, n + 1) <= b) n++;
+    const sobra = final ? 0 : diasEntre(somarMeses(a, n), b) / 30;
+    return (n + sobra) * taxa;
+  }
   let soma = 0;
   for (let m = mesDe(a); m <= mesDe(b); m = somarMes(m, 1)) {
     const ini = `${m}-01` > a ? `${m}-01` : a, fim = fimDoMes(m) < b ? fimDoMes(m) : b;
@@ -114,7 +140,6 @@ function percentualJuros(tipo, a, b, idx, avisos) {
 }
 
 const br = (d) => d.split("-").reverse().join("/");
-const diaAnterior = (d) => new Date(ms(d) - DIA).toISOString().slice(0, 10);
 // O fim do trecho é exclusivo; na tela mostra o último dia do trecho (ou a data do cálculo, no último).
 const rotuloPeriodo = (a, b, final) => `${br(a)} a ${br(b === final ? b : diaAnterior(b))}`;
 
@@ -126,11 +151,16 @@ function calcularParcela(par, p, idx, regra, avisos) {
   const marco = p.regime === "trabalhista" ? (p.marco || d0) : p.juros_desde === "evento" ? d0 : (p.marco || d0);
   let fator = 1, jurosPct = 0;
   const memoria = [];
+  const prorata = p.prorata !== false, aniversario = p.juros_fixos !== "dias";
+  // Junta trechos vizinhos com o mesmo critério (ex.: regime personalizado sem a Lei 14.905 não deve cortar em 30/08/2024).
+  const fases = [];
   for (const [a, b] of trechos(d0, dF, marco)) {
-    const { c, j } = regra(a, a < marco);
-    // correção: meses do trecho [mês(a), mês(b)); o último trecho vai até o mês do cálculo (exclusive)
-    const f = fatorCorrecao(c, mesDe(a), mesDe(b), idx, avisos);
-    const jp = percentualJuros(j, a, b, idx, avisos);
+    const r = regra(a, a < marco), ult = fases[fases.length - 1];
+    if (ult && ult.c === r.c && ult.j === r.j) ult.b = b; else fases.push({ a, b, ...r });
+  }
+  for (const { a, b, c, j } of fases) {
+    const f = fatorCorrecao(c, a, b, idx, avisos, prorata);
+    const jp = percentualJuros(j, a, b, idx, avisos, { aniversario, final: b === dF });
     fator *= f; jurosPct += jp;
     memoria.push({ periodo: rotuloPeriodo(a, b, dF), correcao: CORRECOES[c] || "—", fator: f, juros: JUROS[j] || "—", jurosPct: jp });
   }
@@ -180,6 +210,8 @@ export function lerParametros(f) {
     multa: Math.max(0, Math.min(100, num(f.get("multa")) || 0)),
     honorarios: Math.max(0, Math.min(100, num(f.get("honorarios")) || 0)),
     honorarios_base: f.get("honorarios_base") === "sem_multa" ? "sem_multa" : "com_multa",
+    prorata: f.get("prorata") !== "nao",
+    juros_fixos: f.get("juros_fixos") === "dias" ? "dias" : "aniversario",
     observacoes: String(f.get("observacoes") || "").slice(0, 2000),
     parcelas,
     extras,

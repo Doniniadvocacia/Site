@@ -71,6 +71,8 @@ function formulario(sessao, p, procs, acao) {
         <label data-nao="trabalhista">Juros desde<select name="juros_desde" data-juros-desde>${op({ evento: "O vencimento de cada parcela (evento danoso)", marco: "Uma data fixa (citação)" }, p.juros_desde || "evento")}</select></label>
         <label data-marco><span data-rotulo-marco>${(REGIMES[p.regime] || REGIMES.civel).marco}</span><input type="date" name="marco" value="${p.marco || ""}"></label>
         <label>Data do cálculo<input type="date" name="data_final" value="${p.data_final || hojeBR()}" required></label>
+        <label>Pro rata da correção<select name="prorata">${op({ sim: "Sim — proporcional aos dias (como no Memorial)", nao: "Não — meses cheios" }, p.prorata === false ? "nao" : "sim")}</select></label>
+        <label>Juros de taxa fixa (1% / 0,5%)<select name="juros_fixos">${op({ aniversario: "Meses completos pelo aniversário (como no Memorial)", dias: "Dias corridos ÷ 30" }, p.juros_fixos || "aniversario")}</select></label>
       </div>
       <p class="dica" data-explica-regime></p>
     </section>
@@ -149,8 +151,8 @@ function blocoResultado(p, r, { titulo, processo, completo = true } = {}) {
         <tbody>${l.memoria.map((m) => html`<tr><td>${m.periodo}</td><td>${m.correcao}</td><td class="num">${fator(m.fator)}</td><td>${m.juros}</td><td class="num">${pct(m.jurosPct)}</td></tr>`)}</tbody></table>` : html`<p class="dica">Vencimento na data do cálculo: sem atualização.</p>`}
     </div>`)}` : ""}
     ${p.observacoes ? html`<h3 class="subtitulo-relatorio">Observações</h3><p class="pre">${p.observacoes}</p>` : ""}
-    <p class="nota-relatorio">Metodologia: correção pelas variações mensais do índice, do mês do vencimento (inclusive) ao mês do cálculo (exclusive), de forma acumulada;
-      juros simples sobre o valor corrigido, pro rata die (taxas mensais proporcionais aos dias de cada mês; taxas fixas por dias corridos/30).
+    <p class="nota-relatorio">Metodologia: correção pelas variações mensais do índice, de forma acumulada, ${p.prorata === false ? "em meses cheios, do mês do vencimento (inclusive) ao mês do cálculo (exclusive)" : "com pro rata die linear no primeiro e no último mês (granularidade diária)"};
+      juros simples sobre o valor corrigido (SELIC, taxa legal e TR proporcionais aos dias de cada mês; taxas fixas ${p.juros_fixos === "dias" ? "por dias corridos/30" : "por meses completos, contados no aniversário da parcela, sem pro rata"}).
       No período da SELIC não há correção à parte. Desde ${dataBR(LEI_14905)}, art. 389, parágrafo único, e art. 406 do Código Civil (Lei 14.905/2024; taxa legal pela Res. CMN 5.171/2024).
       Índices: Banco Central do Brasil (SGS) — ${Object.values(SERIES).map((s) => `${s.nome}: série ${s.codigo}`).join("; ")}.</p>
     <footer class="rodape-relatorio">Cálculo gerado pelo Diligo · ${NOME_ESCRITORIO}. Confira os critérios com o título executivo.</footer>
