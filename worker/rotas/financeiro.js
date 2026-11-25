@@ -120,10 +120,12 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
 export const NOME_ESCRITORIO = "Eduardo Donini Advocacia";
 
 // Campo de busca (cliente ou processo): texto visível + id oculto + lista de sugestões (assets/js/selecao.js).
-const campoBusca = ({ tipo, rotulo, nome, id, texto, placeholder, cliente = null }) => html`<label class="campo-busca" data-busca="${tipo}">${rotulo}
+// No campo Pagante, "pagante" guarda quem paga quando não é um cliente (ex.: o próprio escritório, nas despesas).
+const campoBusca = ({ tipo, rotulo, nome, id, texto, placeholder, cliente = null, pagante = null }) => html`<label class="campo-busca" data-busca="${tipo}">${rotulo}
   <span class="campo-busca-caixa"><input type="text" class="busca-texto" value="${texto || ""}" placeholder="${placeholder}" autocomplete="off"
-    role="combobox" aria-autocomplete="list" aria-expanded="false"><button type="button" class="busca-limpar" aria-label="Limpar ${rotulo.toLowerCase()}" title="Limpar"${id ? "" : html` hidden`}>×</button></span>
+    role="combobox" aria-autocomplete="list" aria-expanded="false"><button type="button" class="busca-limpar" aria-label="Limpar ${rotulo.toLowerCase()}" title="Limpar"${id || pagante ? "" : html` hidden`}>×</button></span>
   <input type="hidden" name="${nome}" value="${id ? String(id) : ""}"${cliente ? html` data-cliente="${String(cliente)}"` : ""}>
+  ${pagante !== null ? html`<input type="hidden" name="pagante" value="${pagante}">` : ""}
   <ul class="sugestoes busca-opcoes" role="listbox" hidden></ul></label>`;
 
 function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false }) {
@@ -131,6 +133,8 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
   const cats = apoio.categorias[despesa ? "despesa" : "receita"];
   const nomeProcesso = l.processo_id ? (apoio.processos.find(([id]) => Number(id) === Number(l.processo_id)) || [])[1] : "";
   const nomeCliente = l.cliente_id ? (apoio.clientes.find(([id]) => Number(id) === Number(l.cliente_id)) || [])[1] : "";
+  // Pagante que não é cliente: o escritório nas despesas novas, ou o que já estava gravado.
+  const paganteTexto = l.cliente_id ? "" : (l.pagante || (novo && despesa ? NOME_ESCRITORIO : ""));
   const contas = [...new Set([...apoio.contas, ...(l.conta ? [l.conta] : [])])].map((x) => [x, x]);
   const favs = [...new Set([...apoio.favorecidos.map((x) => x.nome), ...(l.favorecido ? [l.favorecido] : [])])].map((x) => [x, x]);
   const condicao = l.condicao || "À Vista";
@@ -142,7 +146,7 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
       <label class="opcao"><input type="radio" name="tipo" value="despesa"${despesa ? html` checked` : ""}> Despesa</label>
     </fieldset>
     <label>Tipo de lançamento<select name="categoria" required data-categorias-receita="${JSON.stringify(apoio.categorias.receita)}" data-categorias-despesa="${JSON.stringify(apoio.categorias.despesa)}">${opcoes([...new Set([...cats, ...(l.categoria && !cats.includes(l.categoria) ? [l.categoria] : [])])].map((x) => [x, x]), l.categoria, "Selecione…")}</select></label>
-    ${campoBusca({ tipo: "cliente", rotulo: "Cliente", nome: "cliente_id", id: l.cliente_id, texto: nomeCliente, placeholder: "Buscar por nome, processo ou pasta" })}
+    ${campoBusca({ tipo: "cliente", rotulo: "Pagante", nome: "cliente_id", id: l.cliente_id, texto: nomeCliente || paganteTexto, placeholder: "Buscar cliente por nome, processo ou pasta", pagante: l.cliente_id ? "" : paganteTexto })}
     ${campoBusca({ tipo: "processo", rotulo: "Processo", nome: "processo_id", id: l.processo_id, texto: nomeProcesso, placeholder: "Buscar por parte, nº do processo ou pasta", cliente: l.cliente_id })}
     <label>Responsável<select name="responsavel">${opcoes(apoio.responsaveis, l.responsavel)}</select></label>
     ${novo ? html`<fieldset class="largo grade-form grupo-condicao"><legend>Valor e condição</legend>
@@ -160,7 +164,6 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
     <label>Forma de pagamento<select name="forma_pagamento">${opcoes([...new Set([...apoio.formas, ...(l.forma_pagamento ? [l.forma_pagamento] : [])])].map((x) => [x, x]), l.forma_pagamento)}</select></label>
     <label class="opcao-linha"><input type="checkbox" name="pago" value="1"${l.pago ? html` checked` : ""}> ${seguro(`<span class="rotulo-pago">${despesa ? "Já pago" : "Já recebido"}</span>`)}${novo ? " (1ª parcela)" : ""}</label>
     <label>Data do pagamento<input type="date" name="data_pagamento" value="${l.data_pagamento || ""}"></label>
-    <label>Pagante<input name="pagante" maxlength="200" value="${l.pagante || (novo && despesa ? NOME_ESCRITORIO : "")}"${novo && despesa && !l.pagante ? html` data-auto="1"` : ""}></label>
     <label><span class="rotulo-linha">Favorecido <a class="link-pequeno" href="/sistema/favorecidos" target="_blank" rel="noopener">cadastrar</a></span><select name="favorecido">${opcoes(favs, l.favorecido, "Selecione…")}</select></label>
     <label class="largo">Dados bancários / Pix<textarea name="dados_bancarios" rows="2" maxlength="1000" placeholder="Banco, agência, conta ou chave Pix">${l.dados_bancarios || ""}</textarea></label>
     <label class="largo">Descrição<textarea name="descricao" rows="2" maxlength="300" required placeholder="Ex.: Honorários iniciais — ação regressiva">${l.descricao || ""}</textarea></label>
@@ -186,7 +189,7 @@ function lerForm(f) {
     valor_txt: txt(f, "valor", 30), entrada_txt: txt(f, "entrada", 30), valor: numeroBR(f.get("valor")), entrada: numeroBR(f.get("entrada")),
     parcelas: Math.max(0, Math.min(120, Number(f.get("parcelas")) || 0)), vencimento: dataValida(txt(f, "vencimento")),
     forma_pagamento: txt(f, "forma_pagamento", 40), pago: f.get("pago") === "1" ? 1 : 0, data_pagamento: dataValida(txt(f, "data_pagamento")),
-    pagante: txt(f, "pagante", 200), favorecido: txt(f, "favorecido", 200), dados_bancarios: txt(f, "dados_bancarios", 1000), observacoes: txt(f, "observacoes", 4000),
+    pagante: Number(f.get("cliente_id")) ? null : txt(f, "pagante", 200), favorecido: txt(f, "favorecido", 200), dados_bancarios: txt(f, "dados_bancarios", 1000), observacoes: txt(f, "observacoes", 4000),
     conta: txt(f, "conta", 60),
   };
 }
@@ -403,7 +406,7 @@ export async function financeiro(req, env, sessao, id) {
   if (!l.pago) l.data_pagamento = null;
   if (l.processo_id) {
     const cliDoProc = (await env.DB.prepare("SELECT cliente_id FROM processos WHERE id = ?").bind(l.processo_id).first())?.cliente_id ?? null;
-    if (cliDoProc) l.cliente_id = cliDoProc; // o processo define o cliente
+    if (cliDoProc && !l.pagante) l.cliente_id = cliDoProc; // o processo define o cliente, salvo quando o pagante não é cliente (ex.: escritório)
   }
 
   let anexoId = existente?.anexo_id ?? null;

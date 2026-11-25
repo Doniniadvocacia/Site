@@ -12,6 +12,17 @@
   var escritorio = form.getAttribute("data-escritorio") || "";
   var favorecidos = JSON.parse(form.getAttribute("data-favorecidos") || "[]");
   var pagante = form.querySelector("input[name=pagante]");
+  var campoPagante = form.querySelector(".campo-busca[data-busca=cliente]");
+  // Mostra/limpa o escritório como pagante no campo de busca (sem cliente escolhido).
+  function paganteEscritorio(ativo) {
+    if (!campoPagante || !pagante) return;
+    var texto = campoPagante.querySelector(".busca-texto"), id = campoPagante.querySelector("input[name=cliente_id]"), limpar = campoPagante.querySelector(".busca-limpar");
+    if (id.value) return;
+    if (ativo && !pagante.value) { pagante.value = escritorio; texto.value = escritorio; }
+    else if (!ativo && pagante.value === escritorio) { pagante.value = ""; texto.value = ""; }
+    else return;
+    limpar.hidden = !pagante.value; campoPagante.classList.toggle("selecionado", !!pagante.value);
+  }
   var txt = function (seletor, texto) { var el = form.querySelector(seletor); if (el) el.textContent = texto; };
   var tipoAtual = function () { var m = form.querySelector("input[name=tipo]:checked"); return m && m.value === "despesa" ? "despesa" : "receita"; };
 
@@ -30,13 +41,9 @@
     txt(".rotulo-conta", despesa ? "Conta de débito" : "Conta de crédito");
     txt(".rotulo-pago", despesa ? "Já pago" : "Já recebido");
     if (!inicial) montarCategorias();
-    // Despesa: pagante é o escritório (preenchido automaticamente, pode ser alterado).
-    if (pagante && !inicial) {
-      if (despesa && !pagante.value) { pagante.value = escritorio; pagante.setAttribute("data-auto", "1"); }
-      else if (!despesa && pagante.getAttribute("data-auto") === "1") { pagante.value = ""; pagante.setAttribute("data-auto", "0"); }
-    }
+    // Despesa: o pagante é o escritório (pode ser trocado por um cliente); receita: volta para a busca de cliente.
+    if (!inicial) paganteEscritorio(despesa);
   }
-  if (pagante) pagante.addEventListener("input", function () { pagante.setAttribute("data-auto", "0"); });
   form.querySelectorAll("input[name=tipo]").forEach(function (r) { r.addEventListener("change", function () { aplicarTipo(false); }); });
   aplicarTipo(true);
 

@@ -12,21 +12,30 @@
         id: rot.querySelector("input[type=hidden]"),
         lista: rot.querySelector(".busca-opcoes"),
         limpar: rot.querySelector(".busca-limpar"),
+        pagante: rot.querySelector("input[name=pagante]"),
         itens: [], ativo: -1, timer: null, ctrl: null,
       };
       campos[tipo] = c;
     });
     if (!campos.cliente && !campos.processo) return;
+    // Campo Pagante: além dos clientes, oferece o próprio escritório (nas despesas).
+    var escritorio = form.getAttribute("data-escritorio") || "";
+    var ehDespesa = function () { return form.classList.contains("eh-despesa"); };
+    var temValor = function (c) { return !!(c.id.value || (c.pagante && c.pagante.value)); };
 
     function fechar(c) { c.lista.hidden = true; c.lista.textContent = ""; c.itens = []; c.ativo = -1; c.texto.setAttribute("aria-expanded", "false"); }
-    function definir(c, id, rotulo) {
-      c.id.value = id || ""; c.texto.value = rotulo || ""; c.limpar.hidden = !id;
-      c.rot.classList.toggle("selecionado", !!id);
+    function definir(c, id, rotulo, pagante) {
+      c.id.value = id || ""; c.texto.value = rotulo || "";
+      if (c.pagante) c.pagante.value = id ? "" : (pagante || "");
+      c.limpar.hidden = !temValor(c);
+      c.rot.classList.toggle("selecionado", temValor(c));
     }
     function escolher(c, item) {
+      if (item.escritorio) { definir(c, "", item.titulo, item.titulo); fechar(c); return; }
       definir(c, item.id, item.titulo);
       fechar(c);
-      if (c.tipo === "processo" && campos.cliente && item.cliente_id && String(campos.cliente.id.value) !== String(item.cliente_id)) {
+      // Processo escolhido preenche o pagante com o cliente só se o pagante estiver vazio (nas despesas, o escritório continua pagante).
+      if (c.tipo === "processo" && campos.cliente && item.cliente_id && !temValor(campos.cliente)) {
         definir(campos.cliente, item.cliente_id, item.cliente_nome);
       }
       if (c.tipo === "cliente" && campos.processo && campos.processo.id.value) {
@@ -63,24 +72,29 @@
     function buscar(c) {
       var termo = c.texto.value.trim();
       var cliente = c.tipo === "processo" && campos.cliente ? campos.cliente.id.value : "";
-      if (termo.length < 2 && !(c.tipo === "processo" && cliente)) { fechar(c); return; }
+      var opcaoEscritorio = c.tipo === "cliente" && c.pagante && escritorio && ehDespesa()
+        && (!termo || escritorio.toLowerCase().indexOf(termo.toLowerCase()) >= 0) ? [{ id: "", titulo: escritorio, detalhe: "Escritório", escritorio: true }] : [];
+      if (termo.length < 2 && !(c.tipo === "processo" && cliente)) { if (opcaoEscritorio.length) mostrar(c, opcaoEscritorio, termo); else fechar(c); return; }
       if (c.ctrl) c.ctrl.abort();
       c.ctrl = typeof AbortController === "function" ? new AbortController() : null;
       var url = "/sistema/busca/opcoes?tipo=" + c.tipo + "&q=" + encodeURIComponent(termo) + (cliente ? "&cliente=" + cliente : "");
       fetch(url, { credentials: "same-origin", signal: c.ctrl ? c.ctrl.signal : undefined })
         .then(function (r) { return r.json(); })
-        .then(function (j) { if (document.activeElement === c.texto) mostrar(c, j.itens || [], termo); })
+        .then(function (j) { if (document.activeElement === c.texto) mostrar(c, opcaoEscritorio.concat(j.itens || []), termo); })
         .catch(function () {});
     }
     Object.keys(campos).forEach(function (k) {
       var c = campos[k];
-      c.rot.classList.toggle("selecionado", !!c.id.value);
+      c.rot.classList.toggle("selecionado", temValor(c));
       c.texto.addEventListener("input", function () {
-        if (c.id.value) { c.id.value = ""; c.limpar.hidden = true; c.rot.classList.remove("selecionado"); }
+        if (temValor(c)) { c.id.value = ""; if (c.pagante) c.pagante.value = ""; c.limpar.hidden = true; c.rot.classList.remove("selecionado"); }
         clearTimeout(c.timer); c.timer = setTimeout(function () { buscar(c); }, 200);
       });
-      c.texto.addEventListener("focus", function () { if (!c.id.value) buscar(c); });
-      c.texto.addEventListener("blur", function () { setTimeout(function () { if (document.activeElement === c.texto) return; fechar(c); if (!c.id.value) c.texto.value = ""; }, 150); });
+      // Com algo já escolhido, o texto fica selecionado: digitar substitui (ex.: trocar o escritório por um cliente).
+      var selecionarAoSoltar = false;
+      c.texto.addEventListener("focus", function () { if (!temValor(c)) buscar(c); else { c.texto.select(); selecionarAoSoltar = true; } });
+      c.texto.addEventListener("mouseup", function (e) { if (selecionarAoSoltar) { e.preventDefault(); c.texto.select(); selecionarAoSoltar = false; } });
+      c.texto.addEventListener("blur", function () { setTimeout(function () { if (document.activeElement === c.texto) return; fechar(c); if (!temValor(c)) c.texto.value = ""; }, 150); });
       c.texto.addEventListener("keydown", function (e) {
         if (e.key === "ArrowDown") { e.preventDefault(); if (c.lista.hidden) buscar(c); else marcar(c, c.ativo + 1); }
         else if (e.key === "ArrowUp") { e.preventDefault(); marcar(c, c.ativo - 1); }
