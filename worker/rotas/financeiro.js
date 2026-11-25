@@ -119,6 +119,10 @@ export async function cartaoFinanceiro(env, sessao, { processoId = null, cliente
 
 // ---------- Formulário ----------
 export const NOME_ESCRITORIO = "Eduardo Donini Advocacia";
+// Conta de crédito/débito só faz sentido quando o dinheiro passa por uma conta do escritório:
+// some para Dinheiro e Cartão de Crédito e enquanto a forma de pagamento não for escolhida.
+const SEM_CONTA = /^(dinheiro|cart[aã]o de cr[eé]dito)$/i;
+export const contaVisivel = (forma) => Boolean(forma) && !SEM_CONTA.test(String(forma).trim());
 
 // Campo de busca (cliente ou processo): texto visível + id oculto + lista de sugestões (assets/js/selecao.js).
 // No campo Pagante, "pagante" guarda quem paga quando não é um cliente (ex.: o próprio escritório, nas despesas).
@@ -161,8 +165,8 @@ function formulario(sessao, l, apoio, acao, { novo, grupoQtd = 0, anexos = false
       <label>Valor (R$)<input name="valor" required inputmode="decimal" value="${l.valor_txt ?? ""}"></label>
       <label>Vencimento<input type="date" name="vencimento" required value="${l.vencimento || ""}"></label>
       ${l.grupo ? html`<p class="dica largo">${rotuloParcela(l) ? `Parcela ${rotuloParcela(l)} · ` : ""}${l.condicao || ""}. A alteração vale só para este lançamento.</p>` : ""}`}
-    <label>${seguro(`<span class="rotulo-conta">${despesa ? "Conta de débito" : "Conta de crédito"}</span>`)}<select name="conta">${opcoes(contas, l.conta, "Selecione a conta")}</select></label>
     <label>Forma de pagamento<select name="forma_pagamento">${opcoes([...new Set([...apoio.formas, ...(l.forma_pagamento ? [l.forma_pagamento] : [])])].map((x) => [x, x]), l.forma_pagamento)}</select></label>
+    <label class="campo-conta"${contaVisivel(l.forma_pagamento) ? "" : html` hidden`}>${seguro(`<span class="rotulo-conta">${despesa ? "Conta de débito" : "Conta de crédito"}</span>`)}<select name="conta">${opcoes(contas, l.conta, "Selecione a conta")}</select></label>
     <label class="opcao-linha"><input type="checkbox" name="pago" value="1"${l.pago ? html` checked` : ""}> ${seguro(`<span class="rotulo-pago">${despesa ? "Já pago" : "Já recebido"}</span>`)}${novo ? " (1ª parcela)" : ""}</label>
     <label>Data do pagamento<input type="date" name="data_pagamento" value="${l.data_pagamento || ""}"></label>
     <label><span class="rotulo-linha">Favorecido <a class="link-pequeno" href="/sistema/favorecidos" target="_blank" rel="noopener">cadastrar</a></span><select name="favorecido">${opcoes(favs, l.favorecido, "Selecione…")}</select></label>
@@ -191,7 +195,7 @@ function lerForm(f) {
     parcelas: Math.max(0, Math.min(120, Number(f.get("parcelas")) || 0)), vencimento: dataValida(txt(f, "vencimento")),
     forma_pagamento: txt(f, "forma_pagamento", 40), pago: f.get("pago") === "1" ? 1 : 0, data_pagamento: dataValida(txt(f, "data_pagamento")),
     pagante: Number(f.get("cliente_id")) ? null : txt(f, "pagante", 200), favorecido: txt(f, "favorecido", 200), dados_bancarios: txt(f, "dados_bancarios", 1000), observacoes: txt(f, "observacoes", 4000),
-    conta: txt(f, "conta", 60),
+    conta: contaVisivel(txt(f, "forma_pagamento", 40)) ? txt(f, "conta", 60) : null,
   };
 }
 

@@ -787,3 +787,4 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .conc-criar[open] > summary { margin-bottom: .6rem; }
 @media (max-width: 760px) { .lista-conciliacao > li { grid-template-columns: 1fr; } }
 .acoes-notificacoes { display: inline-flex; gap: .8rem; align-items: center; }
+.campo-conta[hidden] { display: none !important; }

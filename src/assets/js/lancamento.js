@@ -47,6 +47,20 @@
   form.querySelectorAll("input[name=tipo]").forEach(function (r) { r.addEventListener("change", function () { aplicarTipo(false); }); });
   aplicarTipo(true);
 
+  // Conta de crédito/débito: só aparece depois da forma de pagamento, e não para Dinheiro ou Cartão de Crédito.
+  var forma = form.querySelector("select[name=forma_pagamento]");
+  var campoConta = form.querySelector(".campo-conta");
+  if (forma && campoConta) {
+    var aplicarForma = function () {
+      var v = (forma.value || "").trim();
+      var mostra = !!v && !/^(dinheiro|cart[aã]o de cr[eé]dito)$/i.test(v);
+      campoConta.hidden = !mostra;
+      if (!mostra) campoConta.querySelector("select").value = "";
+    };
+    forma.addEventListener("change", aplicarForma);
+    aplicarForma();
+  }
+
   // Favorecido escolhido: os dados bancários acompanham o favorecido (e ficam vazios se ele não tiver).
   // Só um texto digitado à mão no campo é preservado.
   var fav = form.querySelector("select[name=favorecido]");
