@@ -788,3 +788,32 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 @media (max-width: 760px) { .lista-conciliacao > li { grid-template-columns: 1fr; } }
 .acoes-notificacoes { display: inline-flex; gap: .8rem; align-items: center; }
 .campo-conta[hidden] { display: none !important; }
+
+/* ---------- Agenda: calendário maior e na paleta do sistema ---------- */
+.conteudo:has(.calendario) { max-width: min(1680px, 100%); padding-left: 1.5rem; padding-right: 1.5rem; }
+.cal-rolagem { border-radius: 10px; border: 1px solid var(--linha); background: var(--branco); overflow-x: auto; }
+.calendario { grid-template-columns: repeat(7, minmax(150px, 1fr)); border: 0; min-width: 1050px; }
+.cal-semana { background: var(--navy); color: #e8e2d6; border-right: 1px solid #22344f; border-bottom: 0; padding: .7rem .5rem; letter-spacing: .1em; }
+.cal-semana:nth-child(7) { border-right: 0; }
+.dia { min-height: max(140px, calc((100vh - 360px) / 6)); border-right: 1px solid #eee8de; border-bottom: 1px solid #eee8de; padding: .45rem .5rem .55rem; gap: .35rem; }
+.dia:nth-child(7n) { border-right: 0; }
+.dia.nao-util { background: #f7f3ec; }
+.dia.nao-util .dia-num { color: #8a6f52; }
+.dia.hoje { background: #fbf5ea; box-shadow: inset 0 0 0 2px var(--dourado); }
+.dia.hoje .dia-num { background: var(--dourado); color: var(--branco); border-radius: 999px; min-width: 1.8rem; text-align: center; padding: .3rem .4rem; }
+.dia.fora { opacity: .4; }
+.dia-num { font-size: 1.05rem; }
+.feriado-nome { color: #8a6f52; font-weight: 600; }
+.etiqueta { border-radius: 6px; font-size: .78rem; padding: .32rem .6rem; border-left: 3px solid rgba(0,0,0,.18); }
+.etiqueta:hover { filter: brightness(1.12); }
+/* Paleta do sistema: navy, dourado, vinho, verde, bronze e tons derivados */
+.cor-0 { background: #7a2e2e; } .cor-1 { background: #a0522d; } .cor-2 { background: #1f6b3a; } .cor-3 { background: #5b3a5e; }
+.cor-4 { background: #2f5d62; } .cor-5 { background: #b08d57; color: #fff !important; } .cor-6 { background: #3d5a80; }
+.cor-7 { background: #8a6f52; } .cor-8 { background: #6b7a3a; } .cor-9 { background: #1e3352; } .cor-compromisso { background: #14233b; border-left-color: var(--dourado); }
+.etiqueta.feito, .legenda i.feito-amostra { background: #e6e1d7 !important; color: #7a7466 !important; text-decoration: line-through; border-left-color: #cfc8ba; }
+.legenda { background: var(--branco); border: 1px solid var(--linha); border-radius: 8px; padding: .7rem 1rem; }
+.legenda i.recesso-amostra { background: repeating-linear-gradient(135deg, rgba(176,141,87,.35) 0 3px, transparent 3px 6px); border: 1px solid #e0d3bd; }
+.ver-mais { background: #f3efe7; border-color: var(--linha); color: var(--navy); }
+.cal-navegacao a { border-color: var(--linha); }
+.cal-navegacao a:hover { border-color: var(--dourado); }
+.dia.alvo { outline-color: var(--dourado); }
