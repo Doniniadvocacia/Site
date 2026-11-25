@@ -1,7 +1,8 @@
-/* Diligo — identidade do sistema: navy #14233B, dourado #B08D57, creme #F6F3EE */
+/* Diligo — identidade visual v1: navy #14233B, dourado #B08D57, creme #F6F3EE; apoio: tinta #2A3548, linha #E3DCCF, verde #3E7C59.
+   Serifa (Georgia) só em títulos e na marca; interface em fonte de sistema. Os pingos dos "i" da marca são sempre dourados. */
 :root {
   --navy: #14233B; --navy-2: #1e3352; --dourado: #B08D57; --creme: #F6F3EE; --branco: #fff;
-  --texto: #1f2733; --suave: #6b7280; --linha: #e4ded3; --erro: #9b1c1c; --ok: #1f6b3a;
+  --texto: #1f2733; --tinta: #2A3548; --suave: #6b7280; --linha: #E3DCCF; --erro: #9b1c1c; --ok: #3E7C59;
   --serifa: Georgia, "Times New Roman", serif;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -12,8 +13,9 @@ h1, h2, h3 { font-family: var(--serifa); color: var(--navy); line-height: 1.25; 
 h1 { font-size: 1.7rem; } h2 { font-size: 1.2rem; } h3 { font-size: 1rem; }
 
 .topo-sistema { background: var(--navy); color: var(--creme); display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 2rem; padding: .8rem 1.5rem; }
-.marca-sistema { font-family: var(--serifa); font-size: 1.35rem; color: var(--branco); text-decoration: none; letter-spacing: .02em; }
-.marca-sistema span { display: block; font: .65rem/1 var(--sans); letter-spacing: .2em; text-transform: uppercase; color: var(--dourado); margin-top: .2rem; }
+.marca-sistema { display: inline-flex; flex-direction: column; align-items: flex-start; color: var(--creme); text-decoration: none; line-height: 1; }
+.marca-sistema img { display: block; height: 40px; width: auto; margin: -2px 0 0 -2px; }
+.marca-sistema span { display: block; font: .62rem/1 var(--sans); letter-spacing: .24em; text-transform: uppercase; color: var(--dourado); margin-top: .1rem; }
 .menu { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.2rem; flex: 1; }
 .menu a { color: #d9dee7; text-decoration: none; font-size: .9rem; }
 .menu a:hover { color: var(--branco); }
@@ -941,3 +943,6 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 @media (max-width: 640px) { .grade-calculo .campo-busca { grid-column: 1 / -1; } }
 .grade-calculo .campo-check { display: flex; align-items: center; gap: .5rem; height: 2.5rem; font-size: .88rem; color: var(--texto); cursor: pointer; }
 .grade-calculo .campo-check input { width: auto; height: auto; margin: 0; }
+.cartao-entrada { text-align: left; }
+.marca-entrada { display: block; width: 190px; height: auto; margin: .2rem auto 1.4rem; }
+.cartao-entrada h1 { text-align: center; font-size: 1.25rem; }

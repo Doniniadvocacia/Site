@@ -93,11 +93,14 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
   <meta name="robots" content="noindex, nofollow">
   <title>${titulo} · Diligo</title>
   <link rel="stylesheet" href="/assets/css/sistema.css">
-  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/img/diligo/icone.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/img/diligo/icone-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/img/diligo/icone-180.png">
+  <meta name="theme-color" content="#14233B">
 </head>
 <body class="${sessao ? "logado" : "publico"}">
   <header class="topo-sistema">
-    <a class="marca-sistema" href="/sistema/">Diligo<span>Eduardo Donini Advocacia</span></a>
+    <a class="marca-sistema" href="/sistema/" aria-label="Diligo — Eduardo Donini Advocacia"><img src="/assets/img/diligo/marca-topo.svg" alt="Diligo" width="105" height="40"><span>Eduardo Donini Advocacia</span></a>
     ${menu}
   </header>
   <main class="conteudo">

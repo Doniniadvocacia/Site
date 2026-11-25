@@ -68,7 +68,8 @@ function telaEntrar(erro, email = "") {
   return pagina({
     titulo: "Entrar",
     erro,
-    corpo: html`<section class="cartao estreito">
+    corpo: html`<section class="cartao estreito cartao-entrada">
+      <img class="marca-entrada" src="/assets/img/diligo/marca-completa.svg" alt="Diligo — Gestão jurídica" width="210" height="89">
       <h1>Entrar no sistema</h1>
       <form method="post" action="/sistema/entrar" class="formulario">
         <label>E-mail<input name="email" type="email" required value="${email}" autocomplete="username" autofocus></label>
