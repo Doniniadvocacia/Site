@@ -22,8 +22,8 @@
   ],
   // Anexos (cifrados) do histórico e do financeiro. O script de implantação cria o bucket se faltar.
   "r2_buckets": [{ "binding": "ARQUIVOS", "bucket_name": "diligo-arquivos" }],
-  // Captura do DJEN às 7h e 13h de Brasília (10h e 16h UTC), de segunda a sexta.
-  "triggers": { "crons": ["0 10 * * 1-5", "0 16 * * 1-5"] },
+  // Captura do DJEN às 7h e 13h de Brasília (10h e 16h UTC), de segunda a sexta (na Cloudflare, 1 = domingo: por isso MON-FRI).
+  "triggers": { "crons": ["0 10 * * MON-FRI", "0 16 * * MON-FRI"] },
   // Mantém variáveis cadastradas pelo painel ao publicar.
   "keep_vars": true,
   // Identificador da publicação (usado para renovar o cache de CSS/JS a cada versão).
