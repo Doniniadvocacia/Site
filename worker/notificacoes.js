@@ -13,6 +13,11 @@ export async function idsPorNome(env, nome) {
   const { results } = await env.DB.prepare("SELECT id FROM usuarios WHERE ativo = 1 AND nome = ? AND perfil != 'cliente'").bind(nome).all();
   return results.map((r) => r.id);
 }
+// Quem acompanha o Financeiro: administradores e usuários com a credencial do financeiro.
+export async function idsFinanceiro(env) {
+  const { results } = await env.DB.prepare("SELECT id FROM usuarios WHERE ativo = 1 AND (perfil = 'admin' OR acesso_financeiro = 1)").all();
+  return results.map((r) => r.id);
+}
 export async function idsPorPerfil(env, perfis) {
   const { results } = await env.DB.prepare(`SELECT id FROM usuarios WHERE ativo = 1 AND perfil IN (${perfis.map(() => "?").join(",")})`).bind(...perfis).all();
   return results.map((r) => r.id);
@@ -61,16 +66,23 @@ export async function carregarNotificacoes(env, sessao) {
     q("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'"),
     q("SELECT id, tipo, texto, link, lida, criado_em FROM notificacoes WHERE usuario_id = ? ORDER BY lida, criado_em DESC LIMIT 15", [sessao.usuario_id]),
     q("SELECT COUNT(*) AS n FROM notificacoes WHERE usuario_id = ? AND lida = 0", [sessao.usuario_id]),
+    q("SELECT chave FROM pendencias_vistas WHERE usuario_id = ? AND dia = ?", [sessao.usuario_id, hoje]),
   ];
   let r;
   try { r = await env.DB.batch(consultas); } catch { return null; }
-  const [prazos, comps, fups, leads, intim, notifs, naoLidas] = r.map((x) => x.results);
+  const [prazosTodos, compsTodos, fups, leads, intim, notifs, naoLidas, vistas] = r.map((x) => x.results);
+  // Prazos e compromissos já abertos pelo sino hoje (ou lidos/limpos) saem da lista até amanhã.
+  const vistos = new Set(vistas.map((v) => v.chave));
+  const chaveComp = (c) => (c.origem === "p" ? `prazo:${c.id}` : `agenda:${c.id}`);
+  const prazos = prazosTodos.filter((p) => !vistos.has(`prazo:${p.id}`));
+  const comps = compsTodos.filter((c) => !vistos.has(chaveComp(c)));
+  const viaPendencia = (chave, destino) => `/sistema/notificacoes/pendencia?c=${encodeURIComponent(chave)}&ir=${encodeURIComponent(destino)}`;
   const quando = (d) => (d < hoje ? "Atrasado" : "Hoje");
   const grupos = [
     { nome: "Prazos", total: prazos.length, link: "/sistema/agenda?visao=prazos", itens: prazos.slice(0, LIMITE).map((p) => ({
-      texto: p.titulo, detalhe: [rotProc(p), `fatal ${dataBR(p.prazo_fatal)}`].filter(Boolean).join(" · "), selo: quando(p.data), link: `/sistema/prazos/${p.id}` })) },
+      texto: p.titulo, detalhe: [rotProc(p), `fatal ${dataBR(p.prazo_fatal)}`].filter(Boolean).join(" · "), selo: quando(p.data), link: viaPendencia(`prazo:${p.id}`, `/sistema/prazos/${p.id}`) })) },
     { nome: "Compromissos", total: comps.length, link: "/sistema/agenda?visao=lista", itens: comps.slice(0, LIMITE).map((c) => ({
-      texto: c.titulo, detalhe: [rotProc(c), c.hora].filter(Boolean).join(" · "), selo: quando(c.data), link: c.origem === "p" ? `/sistema/prazos/${c.id}` : `/sistema/agenda/${c.id}` })) },
+      texto: c.titulo, detalhe: [rotProc(c), c.hora].filter(Boolean).join(" · "), selo: quando(c.data), link: viaPendencia(chaveComp(c), c.origem === "p" ? `/sistema/prazos/${c.id}` : `/sistema/agenda/${c.id}`) })) },
     { nome: "Follow-ups", total: fups.length, link: "/sistema/crm?visao=followups", itens: fups.slice(0, LIMITE).map((t) => ({
       texto: t.titulo, detalhe: t.nome, selo: quando(t.data), link: t.cliente_id ? `/sistema/clientes/${t.cliente_id}#followups` : `/sistema/crm/leads/${t.lead_id}#followups` })) },
     { nome: "Leads sem próximo passo", total: leads.length, link: "/sistema/crm", itens: leads.slice(0, LIMITE).map((l) => ({
@@ -79,7 +91,8 @@ export async function carregarNotificacoes(env, sessao) {
       texto: `${intim[0].n} intimação(ões) aguardando conferência`, link: "/sistema/publicacoes" }] : [] },
   ].filter((g) => g.total);
   const pendencias = grupos.reduce((s, g) => s + g.total, 0);
-  return { grupos, pendencias, notificacoes: notifs, naoLidas: naoLidas[0].n, total: pendencias + naoLidas[0].n };
+  const chavesVisiveis = [...prazos.map((p) => `prazo:${p.id}`), ...comps.map(chaveComp)];
+  return { grupos, pendencias, notificacoes: notifs, naoLidas: naoLidas[0].n, total: pendencias + naoLidas[0].n, chavesVisiveis };
 }
 
 // ---------- Sino (HTML da barra) ----------
@@ -99,10 +112,10 @@ export function sino(sessao) {
     <summary class="sino" aria-label="${n.total ? `Notificações: ${n.total} pendente(s)` : "Notificações"}" title="Notificações">${icoSino()}${n.total ? html`<span class="sino-contagem">${contagem}</span>` : ""}</summary>
     <div class="painel-notificacoes" role="dialog" aria-label="Notificações e pendências">
       <div class="painel-notificacoes-topo"><strong>Notificações${n.naoLidas ? html` <span class="contagem">${String(n.naoLidas)}</span>` : ""}</strong>
-        ${n.notificacoes.length ? html`<span class="acoes-notificacoes">
-          ${n.naoLidas ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}">
+        ${n.notificacoes.length || n.chavesVisiveis.length ? html`<span class="acoes-notificacoes">
+          ${n.naoLidas || n.chavesVisiveis.length ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}">
             <button type="submit" class="link-botao">Ler todas</button></form>` : ""}
-          <form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar todas as notificações? As pendências continuam na lista.">
+          <form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar as notificações e as pendências de prazos e compromissos? Os itens que continuarem pendentes voltam a aparecer amanhã.">
             <input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="link-botao">Limpar</button></form></span>` : ""}</div>
       <div class="painel-notificacoes-corpo">
         ${n.notificacoes.length ? html`<ul class="lista-notificacoes">${n.notificacoes.map((x) => html`<li class="${x.lida ? "" : "nao-lida"}">
@@ -124,10 +137,28 @@ export function sino(sessao) {
 const linkSeguro = (v) => (typeof v === "string" && /^\/sistema\/[\w\-/?=&.%#]*$/.test(v) && !v.includes("//") ? v : "/sistema/notificacoes");
 
 export async function notificacoes(req, env, sessao, id) {
+  if (id === "pendencia") {
+    // Abrir uma pendência de prazo/compromisso pelo sino: some da lista hoje e segue para o item.
+    const sp = new URL(req.url).searchParams;
+    const chave = String(sp.get("c") || "");
+    if (/^(prazo|agenda):\d+$/.test(chave)) {
+      await env.DB.batch([
+        env.DB.prepare("INSERT OR IGNORE INTO pendencias_vistas (usuario_id, chave, dia) VALUES (?, ?, ?)").bind(sessao.usuario_id, chave, hojeBR()),
+        env.DB.prepare("DELETE FROM pendencias_vistas WHERE dia < ?").bind(hojeBR()),
+      ]);
+    }
+    return redirecionar(linkSeguro(sp.get("ir")));
+  }
   if ((id === "lidas" || id === "limpar") && req.method === "POST") {
     const f = await req.formData();
     if (iguais(String(f.get("csrf") || ""), sessao.csrf)) {
       await env.DB.prepare(id === "limpar" ? "DELETE FROM notificacoes WHERE usuario_id = ?" : "UPDATE notificacoes SET lida = 1 WHERE usuario_id = ? AND lida = 0").bind(sessao.usuario_id).run();
+      // Pendências de prazos e compromissos: saem da lista até amanhã.
+      const atuais = await carregarNotificacoes(env, sessao);
+      const dia = hojeBR();
+      if (atuais?.chavesVisiveis?.length) {
+        await env.DB.batch(atuais.chavesVisiveis.map((c) => env.DB.prepare("INSERT OR IGNORE INTO pendencias_vistas (usuario_id, chave, dia) VALUES (?, ?, ?)").bind(sessao.usuario_id, c, dia)));
+      }
     }
     const ref = req.headers.get("Referer");
     let volta = "/sistema/notificacoes";

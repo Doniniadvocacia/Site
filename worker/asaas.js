@@ -2,7 +2,7 @@
 // A chave fica no segredo ASAAS_API_KEY (nunca no código). O token dos avisos é gerado aqui e guardado cifrado.
 import { agora, cifrar, decifrar, iguais, tokenAleatorio } from "./seguranca.js";
 import { hojeBR, somarDias } from "./calendario.js";
-import { notificar, idsPorPerfil } from "./notificacoes.js";
+import { notificar, idsFinanceiro } from "./notificacoes.js";
 
 const API_PADRAO = "https://api.asaas.com/v3";
 export const asaasConfigurado = (env) => Boolean(env.ASAAS_API_KEY);
@@ -123,6 +123,17 @@ export async function cancelarCobranca(env, lancamento) {
   await env.DB.prepare("UPDATE financeiro SET asaas_id = NULL, asaas_status = NULL, asaas_link = NULL, asaas_forma = NULL, atualizado_em = ? WHERE id = ?").bind(agora(), lancamento.id).run();
 }
 
+// Sino: avisa administradores e quem tem acesso ao Financeiro sempre que um pagamento novo chega do Asaas
+// (pelo aviso automático ou pela sincronização).
+async function avisarPagamento(env, financeiroId, p) {
+  const l = await env.DB.prepare(`SELECT f.descricao, f.valor, COALESCE(c.nome, c2.nome) AS cliente FROM financeiro f LEFT JOIN clientes c ON c.id = f.cliente_id
+      LEFT JOIN processos pr ON pr.id = f.processo_id LEFT JOIN clientes c2 ON c2.id = pr.cliente_id WHERE f.id = ?`).bind(financeiroId).first();
+  const valor = Number(p.value ?? l?.valor ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const forma = FORMA_DILIGO[p.billingType] ? ` via ${FORMA_DILIGO[p.billingType]}` : "";
+  await notificar(env, { destinos: await idsFinanceiro(env), tipo: "asaas", link: `/sistema/financeiro/${financeiroId}`,
+    texto: `Pagamento recebido no Asaas: ${valor}${forma} · ${l?.cliente ? `${l.cliente} · ` : ""}${l?.descricao || "lançamento"}` });
+}
+
 // Aplica no lançamento o estado de uma cobrança do Asaas. Devolve o que foi feito.
 export async function aplicarCobranca(env, p) {
   if (!p?.id) return { resultado: "sem cobrança" };
@@ -137,6 +148,7 @@ export async function aplicarCobranca(env, p) {
     await env.DB.prepare(`UPDATE financeiro SET asaas_id = ?, asaas_status = ?, asaas_link = COALESCE(?, asaas_link), pago = 1, data_pagamento = ?,
         forma_pagamento = COALESCE(?, forma_pagamento), conta = ?, atualizado_em = ? WHERE id = ?`)
       .bind(p.id, status, p.invoiceUrl || null, data, FORMA_DILIGO[p.billingType] || null, CONTA_ASAAS, t, l.id).run();
+    if (!l.pago) await avisarPagamento(env, l.id, p);
     return { resultado: l.pago ? "já estava pago" : "baixado", financeiroId: l.id };
   }
   if (ESTORNADOS.has(status) && l.pago) {
@@ -185,11 +197,6 @@ export async function receberAviso(req, env) {
     r = await aplicarCobranca(env, p);
   }
   await env.DB.prepare("UPDATE asaas_eventos SET financeiro_id = ?, resultado = ? WHERE id = ?").bind(r.financeiroId || null, r.resultado, String(ev.id).slice(0, 80)).run();
-  if (r.resultado === "baixado") {
-    const l = await env.DB.prepare("SELECT descricao, valor FROM financeiro WHERE id = ?").bind(r.financeiroId).first();
-    const valor = Number(l?.valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    await notificar(env, { destinos: await idsPorPerfil(env, ["admin"]), tipo: "asaas", link: `/sistema/financeiro/${r.financeiroId}`, texto: `Pagamento recebido no Asaas: ${valor} · ${l?.descricao || "lançamento"}` });
-  }
   return resposta(200, "OK");
 }
 

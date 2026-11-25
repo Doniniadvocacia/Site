@@ -99,7 +99,7 @@ async function sistema(req, env, ctx) {
   if (caminho === "/sistema/conta/cadastro") return editarCadastro(req, env, sessao);
   if ((m0 = caminho.match(/^\/sistema\/cep\/(\d{5}-?\d{3})$/))) return consultarCep(env, m0[1]);
   sessao.pendentes = (await env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE situacao = 'pendente'").first())?.n || 0;
-  if ((m0 = caminho.match(/^\/sistema\/notificacoes(?:\/(lidas|limpar|\d+))?$/))) return notificacoes(req, env, sessao, m0[1]);
+  if ((m0 = caminho.match(/^\/sistema\/notificacoes(?:\/(lidas|limpar|pendencia|\d+))?$/))) return notificacoes(req, env, sessao, m0[1]);
   // Sino de notificações: só nas páginas (GET), não nas consultas de apoio.
   if (metodo === "GET" && !/^\/sistema\/(busca\/|anexos\/|cep\/)/.test(caminho)) {
     if (ctx && (await capturaPendente(env))) ctx.waitUntil(capturarDjen(env, "acesso").catch((e) => console.error(e)));
