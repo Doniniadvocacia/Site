@@ -70,12 +70,15 @@ export async function carregarNotificacoes(env, sessao) {
   ];
   let r;
   try { r = await env.DB.batch(consultas); } catch { return null; }
-  const [prazosTodos, compsTodos, fups, leads, intim, notifs, naoLidas, vistas] = r.map((x) => x.results);
+  const [prazosTodos, compsTodos, fupsTodos, leadsTodos, intimTodas, notifs, naoLidas, vistas] = r.map((x) => x.results);
   // Prazos e compromissos já abertos pelo sino hoje (ou lidos/limpos) saem da lista até amanhã.
   const vistos = new Set(vistas.map((v) => v.chave));
   const chaveComp = (c) => (c.origem === "p" ? `prazo:${c.id}` : `agenda:${c.id}`);
   const prazos = prazosTodos.filter((p) => !vistos.has(`prazo:${p.id}`));
   const comps = compsTodos.filter((c) => !vistos.has(chaveComp(c)));
+  const fups = fupsTodos.filter((t) => !vistos.has(`followup:${t.id}`));
+  const leads = leadsTodos.filter((l) => !vistos.has(`lead:${l.id}`));
+  const intim = vistos.has(`intimacoes:${intimTodas[0].n}`) ? [{ n: 0 }] : intimTodas; // volta a aparecer se a quantidade mudar
   const viaPendencia = (chave, destino) => `/sistema/notificacoes/pendencia?c=${encodeURIComponent(chave)}&ir=${encodeURIComponent(destino)}`;
   const quando = (d) => (d < hoje ? "Atrasado" : "Hoje");
   const grupos = [
@@ -84,14 +87,15 @@ export async function carregarNotificacoes(env, sessao) {
     { nome: "Compromissos", total: comps.length, link: "/sistema/agenda?visao=lista", itens: comps.slice(0, LIMITE).map((c) => ({
       texto: c.titulo, detalhe: [rotProc(c), c.hora].filter(Boolean).join(" · "), selo: quando(c.data), link: viaPendencia(chaveComp(c), c.origem === "p" ? `/sistema/prazos/${c.id}` : `/sistema/agenda/${c.id}`) })) },
     { nome: "Follow-ups", total: fups.length, link: "/sistema/crm?visao=followups", itens: fups.slice(0, LIMITE).map((t) => ({
-      texto: t.titulo, detalhe: t.nome, selo: quando(t.data), link: t.cliente_id ? `/sistema/clientes/${t.cliente_id}#followups` : `/sistema/crm/leads/${t.lead_id}#followups` })) },
+      texto: t.titulo, detalhe: t.nome, selo: quando(t.data), link: viaPendencia(`followup:${t.id}`, t.cliente_id ? `/sistema/clientes/${t.cliente_id}#followups` : `/sistema/crm/leads/${t.lead_id}#followups`) })) },
     { nome: "Leads sem próximo passo", total: leads.length, link: "/sistema/crm", itens: leads.slice(0, LIMITE).map((l) => ({
-      texto: l.nome, detalhe: `${l.etapa} · agende um follow-up`, link: `/sistema/crm/leads/${l.id}#followups` })) },
+      texto: l.nome, detalhe: `${l.etapa} · agende um follow-up`, link: viaPendencia(`lead:${l.id}`, `/sistema/crm/leads/${l.id}#followups`) })) },
     { nome: "Intimações para triagem", total: intim[0].n, link: "/sistema/publicacoes", itens: intim[0].n ? [{
-      texto: `${intim[0].n} intimação(ões) aguardando conferência`, link: "/sistema/publicacoes" }] : [] },
+      texto: `${intim[0].n} intimação(ões) aguardando conferência`, link: viaPendencia(`intimacoes:${intim[0].n}`, "/sistema/publicacoes") }] : [] },
   ].filter((g) => g.total);
   const pendencias = grupos.reduce((s, g) => s + g.total, 0);
-  const chavesVisiveis = [...prazos.map((p) => `prazo:${p.id}`), ...comps.map(chaveComp)];
+  const chavesVisiveis = [...prazos.map((p) => `prazo:${p.id}`), ...comps.map(chaveComp), ...fups.map((t) => `followup:${t.id}`),
+    ...leads.map((l) => `lead:${l.id}`), ...(intim[0].n ? [`intimacoes:${intim[0].n}`] : [])];
   return { grupos, pendencias, notificacoes: notifs, naoLidas: naoLidas[0].n, total: pendencias + naoLidas[0].n, chavesVisiveis };
 }
 
@@ -115,7 +119,7 @@ export function sino(sessao) {
         ${n.notificacoes.length || n.chavesVisiveis.length ? html`<span class="acoes-notificacoes">
           ${n.naoLidas || n.chavesVisiveis.length ? html`<form method="post" action="/sistema/notificacoes/lidas" class="form-linha"><input type="hidden" name="csrf" value="${sessao.csrf}">
             <button type="submit" class="link-botao">Ler todas</button></form>` : ""}
-          <form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar as notificações e as pendências de prazos e compromissos? Os itens que continuarem pendentes voltam a aparecer amanhã.">
+          <form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar as notificações e as pendências? Os itens que continuarem pendentes voltam a aparecer amanhã.">
             <input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="link-botao">Limpar</button></form></span>` : ""}</div>
       <div class="painel-notificacoes-corpo">
         ${n.notificacoes.length ? html`<ul class="lista-notificacoes">${n.notificacoes.map((x) => html`<li class="${x.lida ? "" : "nao-lida"}">
@@ -141,7 +145,7 @@ export async function notificacoes(req, env, sessao, id) {
     // Abrir uma pendência de prazo/compromisso pelo sino: some da lista hoje e segue para o item.
     const sp = new URL(req.url).searchParams;
     const chave = String(sp.get("c") || "");
-    if (/^(prazo|agenda):\d+$/.test(chave)) {
+    if (/^(prazo|agenda|followup|lead|intimacoes):\d+$/.test(chave)) {
       await env.DB.batch([
         env.DB.prepare("INSERT OR IGNORE INTO pendencias_vistas (usuario_id, chave, dia) VALUES (?, ?, ?)").bind(sessao.usuario_id, chave, hojeBR()),
         env.DB.prepare("DELETE FROM pendencias_vistas WHERE dia < ?").bind(hojeBR()),
@@ -153,7 +157,7 @@ export async function notificacoes(req, env, sessao, id) {
     const f = await req.formData();
     if (iguais(String(f.get("csrf") || ""), sessao.csrf)) {
       await env.DB.prepare(id === "limpar" ? "DELETE FROM notificacoes WHERE usuario_id = ?" : "UPDATE notificacoes SET lida = 1 WHERE usuario_id = ? AND lida = 0").bind(sessao.usuario_id).run();
-      // Pendências de prazos e compromissos: saem da lista até amanhã.
+      // Pendências (prazos, compromissos, follow-ups, leads, intimações): saem da lista até amanhã.
       const atuais = await carregarNotificacoes(env, sessao);
       const dia = hojeBR();
       if (atuais?.chavesVisiveis?.length) {
