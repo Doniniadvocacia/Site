@@ -106,7 +106,7 @@ export async function painel(req, env, sessao) {
       </div>
 
       ${fup.itens.length ? html`<details class="compromissos followups-painel" open>
-        <summary>Follow-ups de clientes</summary>
+        <summary><h2>Follow-ups de clientes</h2></summary>
         <ul class="lista-tarefas">${fup.itens.map((t) => html`<li class="${t.data < fup.hoje ? "atrasado" : t.data === fup.hoje ? "hoje" : ""}">
           <span class="tarefa-data">${t.data < fup.hoje ? "Atrasado · " : t.data === fup.hoje ? "Hoje · " : ""}${dataBR(t.data)}</span>
           <span class="tarefa-titulo">${t.titulo}</span>
@@ -116,24 +116,24 @@ export async function painel(req, env, sessao) {
       </details>` : ""}
 
       <details class="compromissos" open>
-        <summary>Proximos Compromissos</summary>
+        <summary><h2>Próximos Compromissos</h2></summary>
         ${proximos.length ? proximos.map((p) => html`<article class="compromisso">
           <div class="compromisso-acoes">
             <a href="/sistema/prazos/${String(p.id)}" title="Editar prazo" aria-label="Editar prazo">${icone.lapis(26)}</a>
           </div>
           <div class="compromisso-dados">
             <dl>
-              <div><dt>Pasta:</dt><dd>${p.pasta || "—"} ${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}" title="Abrir processo" class="icone-link">${icone.seta()}</a>` : ""}</dd></div>
-              <div><dt>Cliente:</dt><dd>${p.cliente || "—"}</dd></div>
-              <div><dt>${p.categoria === "Compromisso" ? "Compromisso:" : "Prazo:"}</dt><dd><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a> <span class="selo ${p.categoria === "Compromisso" ? "selo-compromisso" : "selo-prazo"}">${p.categoria === "Compromisso" ? "Compromisso" : "Prazo"}</span></dd></div>
+              <div><dt>Pasta</dt><dd>${p.pasta || "—"} ${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}" title="Abrir processo" class="icone-link">${icone.seta()}</a>` : ""}</dd></div>
+              <div><dt>Cliente</dt><dd>${p.cliente || "—"}</dd></div>
+              <div><dt>${p.categoria === "Compromisso" ? "Compromisso" : "Prazo"}</dt><dd><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a> <span class="selo ${p.categoria === "Compromisso" ? "selo-compromisso" : "selo-prazo"}">${p.categoria === "Compromisso" ? "Compromisso" : "Prazo"}</span></dd></div>
             </dl>
             <dl>
-              <div><dt>Número Processo:</dt><dd>${p.numero || "—"}</dd></div>
-              <div class="compromisso-descricao"><dt>${icone.folha(16)} Descrição:</dt><dd>${resumoTexto(p.descricao)}</dd></div>
+              <div><dt>Número do processo</dt><dd>${p.numero || "—"}</dd></div>
+              <div class="compromisso-descricao"><dt>${icone.folha(16)} Descrição</dt><dd>${resumoTexto(p.descricao)}</dd></div>
             </dl>
             <dl class="compromisso-status">
-              <div><dt>Prazo Interno:</dt><dd>${status(p.interno)}</dd></div>
-              <div><dt>Prazo fatal:</dt><dd>${dataBR(p.prazo_fatal)} ${urgencia(p.prazo_fatal)}</dd></div>
+              <div><dt>Prazo interno</dt><dd>${status(p.interno)}</dd></div>
+              <div><dt>Prazo fatal</dt><dd>${dataBR(p.prazo_fatal)} ${urgencia(p.prazo_fatal)}</dd></div>
             </dl>
           </div>
           <form method="post" action="/sistema/prazos/${String(p.id)}/cumprir" class="compromisso-check">${campoCsrf(sessao)}
