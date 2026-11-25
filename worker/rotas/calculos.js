@@ -3,9 +3,9 @@ import { html, pagina, resposta, redirecionar, campoCsrf, dataBR, moeda } from "
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
-import { csrfOk, opcoes } from "./comum.js";
+import { csrfOk } from "./comum.js";
 import { celula, num as numCsv } from "./relatorios.js";
-import { NOME_ESCRITORIO } from "./financeiro.js";
+import { NOME_ESCRITORIO, campoBusca } from "./financeiro.js";
 import { calcular, lerParametros, validar, REGIMES, CORRECOES, JUROS, LEI_14905 } from "../calculos-motor.js";
 import { SERIES, carregarIndices, atualizarIndices, situacaoIndices } from "../indices.js";
 
@@ -57,7 +57,7 @@ function formulario(sessao, p, procs, acao) {
       <h2>Identificação</h2>
       <div class="grade-calculo">
         <label class="duplo">Título<input name="titulo" value="${p.titulo || ""}" maxlength="150" placeholder="Ex.: Atualização da condenação — sentença de 10/03/2025"></label>
-        <label class="duplo">Processo<select name="processo_id">${opcoes(procs, p.processo_id, "Sem processo vinculado")}</select></label>
+        ${campoBusca({ tipo: "processo", rotulo: "Processo", nome: "processo_id", id: p.processo_id, texto: p.processo_id ? (procs.find(([v]) => Number(v) === Number(p.processo_id)) || [])[1] : "", placeholder: "Buscar por parte, nº do processo ou pasta" })}
       </div>
     </section>
     <section class="cartao">
@@ -107,7 +107,7 @@ function formulario(sessao, p, procs, acao) {
       <button type="submit" name="acao" value="calcular" class="botao-secundario" formaction="${acao}#resultado">Calcular (prévia)</button>
       <button type="submit" name="acao" value="salvar">Salvar cálculo</button>
     </div>
-    <script src="/assets/js/calculos.js" defer></script>
+    <script src="/assets/js/selecao.js" defer></script><script src="/assets/js/calculos.js" defer></script>
   </form>`;
 }
 

@@ -936,3 +936,6 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 @media (max-width: 640px) { .grade-calculo .duplo { grid-column: 1 / -1; } }
 @media print { .previa-calculo > h2, .form-calculo { display: none !important; } }
 .gerador-mensal[hidden] { display: none; }
+.grade-calculo .campo-busca { grid-column: span 2; }
+.grade-calculo .campo-busca .busca-texto { height: 2.5rem; }
+@media (max-width: 640px) { .grade-calculo .campo-busca { grid-column: 1 / -1; } }

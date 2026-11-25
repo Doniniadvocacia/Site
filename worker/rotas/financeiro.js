@@ -126,7 +126,7 @@ export const contaVisivel = (forma) => Boolean(forma) && !SEM_CONTA.test(String(
 
 // Campo de busca (cliente ou processo): texto visível + id oculto + lista de sugestões (assets/js/selecao.js).
 // No campo Pagante, "pagante" guarda quem paga quando não é um cliente (ex.: o próprio escritório, nas despesas).
-const campoBusca = ({ tipo, rotulo, nome, id, texto, placeholder, cliente = null, pagante = null }) => html`<label class="campo-busca" data-busca="${tipo}">${rotulo}
+export const campoBusca = ({ tipo, rotulo, nome, id, texto, placeholder, cliente = null, pagante = null }) => html`<label class="campo-busca" data-busca="${tipo}">${rotulo}
   <span class="campo-busca-caixa"><input type="text" class="busca-texto" value="${texto || ""}" placeholder="${placeholder}" autocomplete="off"
     role="combobox" aria-autocomplete="list" aria-expanded="false"><button type="button" class="busca-limpar" aria-label="Limpar ${rotulo.toLowerCase()}" title="Limpar"${id || pagante ? "" : html` hidden`}>×</button></span>
   <input type="hidden" name="${nome}" value="${id ? String(id) : ""}"${cliente ? html` data-cliente="${String(cliente)}"` : ""}>
