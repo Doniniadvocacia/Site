@@ -89,7 +89,8 @@ export async function fichaProcesso(req, env, sessao, id) {
       <p class="trilha"><a href="/sistema/processos">Processos</a></p>
       <div class="titulo-acoes"><div><h1>${p.pasta ? `Pasta ${p.pasta}` : "Processo"}</h1>
         <p class="subtitulo">${p.numero || "sem número"}${p.cliente_id ? html` · <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : ""}${p.parte_contraria ? ` × ${p.parte_contraria}` : ""}</p></div>
-        <a class="botao-link botao-secundario" href="/sistema/processos/${String(p.id)}/editar">Editar</a></div>
+        <span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/calculos?processo=${String(p.id)}">Cálculos</a>
+        <a class="botao-link botao-secundario" href="/sistema/processos/${String(p.id)}/editar">Editar</a></span></div>
 
       ${bloco("Dados da Pasta", ficha(
         campo("Pasta", p.pasta), campo("Adv. responsável", p.advogado_responsavel),

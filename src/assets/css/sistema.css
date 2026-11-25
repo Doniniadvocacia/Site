@@ -894,3 +894,45 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .alertas-ia { margin: .6rem 0; padding-left: 1.1rem; color: #8a5a12; font-size: .88rem; }
 .cartao-ia .botoes-form form { margin: 0; }
 .nota-ia { font-size: .78rem; color: var(--suave); margin: .6rem 0 0; }
+
+/* Cálculos judiciais */
+.form-calculo .cartao h2 { margin-top: 0; }
+.grade-calculo { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .8rem 1rem; align-items: end; }
+.grade-calculo label { display: grid; gap: .25rem; font-size: .8rem; color: var(--suave); min-width: 0; }
+.grade-calculo label small { font-size: .72rem; }
+.grade-calculo input, .grade-calculo select { width: 100%; box-sizing: border-box; height: 2.5rem; padding: 0 .6rem; font-size: .9rem; margin: 0; }
+.grade-calculo .duplo { grid-column: span 2; }
+.grade-calculo .largo { grid-column: 1 / -1; }
+.grade-calculo [hidden] { display: none; }
+.tabela-parcelas { width: 100%; border-collapse: collapse; }
+.tabela-parcelas th { text-align: left; font-size: .76rem; color: var(--suave); font-weight: 600; padding: .3rem .4rem; }
+.tabela-parcelas td { padding: .25rem .4rem; }
+.tabela-parcelas input { width: 100%; box-sizing: border-box; height: 2.3rem; padding: 0 .55rem; font-size: .88rem; margin: 0; }
+.tabela-parcelas td:first-child { width: 11rem; }
+.tabela-parcelas td:last-child { width: 2.4rem; text-align: center; }
+.tabela-parcelas .campo-valor { text-align: right; }
+.tabela-extras td:nth-child(2) { width: 12rem; }
+.botao-icone { width: 2rem; height: 2rem; padding: 0; border-radius: 6px; background: transparent; color: var(--suave); border: 1px solid var(--linha); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.botao-icone:hover { color: var(--erro); border-color: #e3b4b4; background: #fbeaea; }
+.gerador-mensal { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem .8rem; align-items: end; background: #faf8f4; border: 1px dashed var(--dourado); border-radius: 8px; padding: .8rem; margin: .4rem 0 .8rem; }
+.gerador-mensal label { display: grid; gap: .25rem; font-size: .78rem; color: var(--suave); }
+.gerador-mensal input { height: 2.3rem; box-sizing: border-box; padding: 0 .5rem; margin: 0; width: 100%; }
+.gerador-mensal button { height: 2.3rem; }
+.subtitulo-calculo { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-size: .95rem; margin: 1.2rem 0 .4rem; color: var(--navy); }
+.subtitulo-calculo small { font-weight: 400; color: var(--suave); font-size: .78rem; }
+.campo-obs { display: grid; gap: .25rem; font-size: .8rem; color: var(--suave); margin-top: 1rem; }
+.campo-obs textarea { width: 100%; box-sizing: border-box; }
+.previa-calculo { margin-top: 1.4rem; scroll-margin-top: 1rem; }
+.previa-calculo > h2 { color: var(--navy); }
+.cartao-resumo.destaque-total { background: var(--navy); color: #fff; }
+.cartao-resumo.destaque-total span, .cartao-resumo.destaque-total strong { color: #fff; }
+.tabela-totais { max-width: 560px; margin-left: auto; }
+.tabela-totais td:first-child { color: var(--texto); }
+.avisos-calculo { margin: .4rem 0 1rem; padding-left: 1.1rem; color: #8a5a12; font-size: .85rem; }
+.memoria-parcela { break-inside: avoid; margin-bottom: .6rem; }
+.memoria-parcela p { margin: .4rem 0 .2rem; font-size: .88rem; }
+.tabela-memoria { font-size: .8rem; margin-bottom: .4rem; }
+.tabela-indices td, .tabela-indices th { white-space: nowrap; }
+@media (max-width: 640px) { .grade-calculo .duplo { grid-column: 1 / -1; } }
+@media print { .previa-calculo > h2, .form-calculo { display: none !important; } }
+.gerador-mensal[hidden] { display: none; }

@@ -63,6 +63,7 @@ export function pagina({ titulo, corpo, sessao = null, aviso = null, erro = null
         <a href="/sistema/publicacoes">Intimações${pend ? html` <span class="selo-menu">${String(pend)}</span>` : ""}</a>
         <a href="/sistema/agenda">Agenda</a>
         ${sessao.financeiro ? html`<a href="/sistema/financeiro">Financeiro</a>` : ""}
+        <a href="/sistema/calculos">Cálculos</a>
         ${sessao.perfil === "admin" ? html`<a href="/sistema/configuracoes">Configurações</a>` : ""}
         <form class="busca-menu" method="get" action="/sistema/busca" role="search">
           <input name="q" placeholder="Parte, processo ou pasta" aria-label="Buscar por nome da parte, número do processo ou pasta" required
