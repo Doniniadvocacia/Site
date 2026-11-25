@@ -795,7 +795,7 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .calendario { grid-template-columns: repeat(7, minmax(150px, 1fr)); border: 0; min-width: 1050px; }
 .cal-semana { background: var(--navy); color: #e8e2d6; border-right: 1px solid #22344f; border-bottom: 0; padding: .7rem .5rem; letter-spacing: .1em; }
 .cal-semana:nth-child(7) { border-right: 0; }
-.dia { min-height: max(140px, calc((100vh - 360px) / 6)); border-right: 1px solid #eee8de; border-bottom: 1px solid #eee8de; padding: .45rem .5rem .55rem; gap: .35rem; }
+.dia { min-height: max(118px, calc((100vh - 430px) / 6)); border-right: 1px solid #eee8de; border-bottom: 1px solid #eee8de; padding: .45rem .5rem .55rem; gap: .35rem; }
 .dia:nth-child(7n) { border-right: 0; }
 .dia.nao-util { background: #f7f3ec; }
 .dia.nao-util .dia-num { color: #8a6f52; }
