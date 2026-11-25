@@ -869,3 +869,28 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .vazio-pesquisa p { margin: 0; color: var(--suave); }
 .tabela-pesquisa td.num, .tabela-pesquisa th.num { text-align: right; }
 @media (max-width: 640px) { .grade-pesquisa { grid-template-columns: 1fr 1fr; } .grade-pesquisa .filtro-largo { grid-column: 1 / -1; } }
+
+/* Sugestões da IA nas intimações */
+.botao-mini, a.botao-mini { padding: .3rem .65rem; font-size: .78rem; min-height: 0; line-height: 1.2; display: inline-flex; align-items: center; }
+.faixa-ia { display: flex; justify-content: space-between; align-items: center; gap: .8rem 1.2rem; flex-wrap: wrap; background: #f3f0fa; border: 1px solid #ddd5ef; border-left: 3px solid #6b5aa6; border-radius: 8px; padding: .7rem 1rem; margin: 1rem 0; font-size: .88rem; }
+.faixa-ia form { margin: 0; }
+.faixa-ia-off { background: #faf8f4; border-color: var(--linha); border-left-color: var(--dourado); color: var(--suave); }
+.coluna-ia { min-width: 220px; }
+.sugestao-ia-lista { display: grid; gap: .25rem; justify-items: start; }
+.sugestao-ia-lista strong { color: var(--navy); font-size: .88rem; }
+.sugestao-ia-lista small { color: var(--suave); font-size: .78rem; }
+.sugestao-ia-lista .selo { margin-left: 0; }
+.acoes-sugestao { display: flex; gap: .35rem; margin-top: .2rem; }
+.acoes-sugestao form { margin: 0; }
+.selo-confianca.alta { background: #e5f2ea; color: var(--ok); }
+.selo-confianca.media { background: #fdf3e1; color: #8a5a12; }
+.selo-confianca.baixa { background: #fbeaea; color: var(--erro); }
+.selo-urgente { background: var(--erro); color: #fff; }
+.cartao-ia { border-left: 3px solid #6b5aa6; }
+.cartao-ia .titulo-acoes form { margin: 0; }
+.linha-sugestao { margin: .2rem 0 .3rem; font-size: 1rem; color: var(--navy); }
+.ficha-ia { margin-top: .6rem; }
+.ficha-ia .largo { grid-column: 1 / -1; }
+.alertas-ia { margin: .6rem 0; padding-left: 1.1rem; color: #8a5a12; font-size: .88rem; }
+.cartao-ia .botoes-form form { margin: 0; }
+.nota-ia { font-size: .78rem; color: var(--suave); margin: .6rem 0 0; }

@@ -12,6 +12,7 @@ import { publicacoes } from "./rotas/publicacoes.js";
 import { agenda } from "./rotas/agenda.js";
 import { oabs, feriados } from "./rotas/configuracoes.js";
 import { capturarDjen, capturaPendente } from "./djen.js";
+import { analisarPendentes } from "./ia.js";
 import { cadastroCliente, cadastroProcesso } from "./rotas/cadastro.js";
 import { adicionarHistorico, excluirHistorico, editarHistorico } from "./rotas/historico.js";
 import { financeiro } from "./rotas/financeiro.js";
@@ -103,7 +104,7 @@ async function sistema(req, env, ctx) {
   if ((m0 = caminho.match(/^\/sistema\/notificacoes(?:\/(lidas|limpar|pendencia|\d+))?$/))) return notificacoes(req, env, sessao, m0[1]);
   // Sino de notificações: só nas páginas (GET), não nas consultas de apoio.
   if (metodo === "GET" && !/^\/sistema\/(busca\/|anexos\/|cep\/)/.test(caminho)) {
-    if (ctx && (await capturaPendente(env))) ctx.waitUntil(capturarDjen(env, "acesso").catch((e) => console.error(e)));
+    if (ctx && (await capturaPendente(env))) ctx.waitUntil(capturarDjen(env, "acesso").then(() => analisarPendentes(env)).catch((e) => console.error(e)));
     sessao.notif = await carregarNotificacoes(env, sessao);
     sessao.sino = sino(sessao);
   }
@@ -144,7 +145,9 @@ async function sistema(req, env, ctx) {
   if ((m = caminho.match(/^\/sistema\/crm\/tarefas\/(\d+)\/concluir$/)) && metodo === "POST") return concluirTarefa(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover|reagendar|cancelar))?))?$/))) return prazos(req, env, sessao, m[1]);
-  if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1]);
+  if (caminho === "/sistema/publicacoes/analisar") return publicacoes(req, env, sessao, null, ctx, "analisar");
+  if ((m = caminho.match(/^\/sistema\/publicacoes\/(\d+)\/(analisar|aprovar)$/))) return publicacoes(req, env, sessao, m[1], ctx, m[2]);
+  if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1], ctx);
   if (caminho === "/sistema/agenda/detalhe") return detalheJson(req, env);
   if ((m = caminho.match(/^\/sistema\/agenda(?:\/(novo|\d+(?:\/mover)?|dia\/\d{4}-\d{2}-\d{2}))?$/))) return agenda(req, env, sessao, m[1]);
 
@@ -183,7 +186,7 @@ export default {
 
   // Captura agendada do DJEN (ver "triggers" no wrangler.jsonc)
   async scheduled(evento, env, ctx) {
-    if (env.DB) ctx.waitUntil(capturarDjen(env, "agendada"));
+    if (env.DB) ctx.waitUntil(capturarDjen(env, "agendada").then(() => analisarPendentes(env)).catch((e) => console.error(e)));
     if (env.DB && asaasConfigurado(env)) ctx.waitUntil(sincronizar(env).catch((e) => console.error("Asaas:", e.message)));
   },
 };
