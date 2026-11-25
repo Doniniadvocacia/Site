@@ -71,8 +71,8 @@ function formulario(sessao, p, procs, acao) {
         <label data-nao="trabalhista">Juros desde<select name="juros_desde" data-juros-desde>${op({ evento: "O vencimento de cada parcela (evento danoso)", marco: "Uma data fixa (citação)" }, p.juros_desde || "evento")}</select></label>
         <label data-marco><span data-rotulo-marco>${(REGIMES[p.regime] || REGIMES.civel).marco}</span><input type="date" name="marco" value="${p.marco || ""}"></label>
         <label>Data do cálculo<input type="date" name="data_final" value="${p.data_final || hojeBR()}" required></label>
-        <label>Pro rata da correção<select name="prorata">${op({ sim: "Sim — proporcional aos dias (como no Memorial)", nao: "Não — meses cheios" }, p.prorata === false ? "nao" : "sim")}</select></label>
-        <label>Juros de taxa fixa (1% / 0,5%)<select name="juros_fixos">${op({ aniversario: "Meses completos pelo aniversário (como no Memorial)", dias: "Dias corridos ÷ 30" }, p.juros_fixos || "aniversario")}</select></label>
+        <label class="campo-check"><input type="checkbox" name="prorata" value="sim"${p.prorata === false ? "" : html` checked`}> Aplicar pro rata na correção</label>
+        <label>Juros de taxa fixa (1% / 0,5%)<select name="juros_fixos">${op({ aniversario: "Meses completos (aniversário da parcela)", dias: "Dias corridos ÷ 30" }, p.juros_fixos || "aniversario")}</select></label>
       </div>
       <p class="dica" data-explica-regime></p>
     </section>

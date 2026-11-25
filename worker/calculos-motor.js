@@ -210,7 +210,7 @@ export function lerParametros(f) {
     multa: Math.max(0, Math.min(100, num(f.get("multa")) || 0)),
     honorarios: Math.max(0, Math.min(100, num(f.get("honorarios")) || 0)),
     honorarios_base: f.get("honorarios_base") === "sem_multa" ? "sem_multa" : "com_multa",
-    prorata: f.get("prorata") !== "nao",
+    prorata: f.get("prorata") === "sim",
     juros_fixos: f.get("juros_fixos") === "dias" ? "dias" : "aniversario",
     observacoes: String(f.get("observacoes") || "").slice(0, 2000),
     parcelas,
