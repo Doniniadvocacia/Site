@@ -66,7 +66,8 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
   const hoje = hojeBR();
   return html`<ul class="lancamentos">${linhas.map((l) => {
     const atrasado = !l.pago && l.vencimento < hoje;
-    const quem = [l.cliente_nome, l.pasta].filter(Boolean).join(" · ");
+    // Receita: quem paga (cliente); despesa: quem recebe (favorecido/beneficiário). A pasta vem junto.
+    const quem = [l.tipo === "despesa" ? l.favorecido : l.cliente_nome, l.pasta].filter(Boolean).join(" · ");
     return html`<li class="lancamento ${l.tipo}${l.pago ? " pago" : ""}">
       <div class="lanc-tipo">
         <span class="etiqueta-tipo ${l.tipo}">${l.tipo === "receita" ? "Receita" : "Despesa"}</span>

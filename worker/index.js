@@ -1,6 +1,6 @@
 // Ponto de entrada do Worker: o site público é servido pelos arquivos estáticos;
 // tudo em /sistema passa por aqui, com autenticação obrigatória.
-import { html, pagina, resposta, redirecionar } from "./html.js";
+import { html, pagina, resposta, redirecionar, definirVersao } from "./html.js";
 import { lerSessao } from "./sessao.js";
 import { chaveValida } from "./seguranca.js";
 import { configurar, entrar, doisFatores, sair, trocarSenha } from "./rotas/acesso.js";
@@ -165,6 +165,7 @@ async function sistema(req, env, ctx) {
 
 export default {
   async fetch(req, env, ctx) {
+    definirVersao(env.VERSAO?.id);
     const { pathname } = new URL(req.url);
     if (pathname === "/sistema" || pathname.startsWith("/sistema/")) {
       if (!env.DB) return new Response("Banco de dados não configurado.", { status: 503 });

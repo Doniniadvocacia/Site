@@ -29,13 +29,18 @@ const CABECALHOS = {
   "X-Robots-Tag": "noindex, nofollow",
 };
 
+// Versão da publicação: entra como ?v= nos endereços de CSS e JS, para o navegador não usar arquivos antigos do cache.
+let VERSAO = String(Date.now());
+export const definirVersao = (v) => { if (v) VERSAO = String(v).replace(/[^\w-]/g, "").slice(0, 40); };
+const comVersao = (texto) => (typeof texto === "string" ? texto.replace(/(\/assets\/(?:css|js)\/[\w.-]+\.(?:css|js))"/g, `$1?v=${VERSAO}"`) : texto);
+
 export function resposta(corpo, status = 200, extras = {}) {
   const headers = new Headers(CABECALHOS);
   for (const [k, v] of Object.entries(extras)) {
     if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
     else headers.set(k, v);
   }
-  return new Response(render(corpo), { status, headers });
+  return new Response(comVersao(render(corpo)), { status, headers });
 }
 
 export function redirecionar(destino, extras = {}) {
