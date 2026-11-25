@@ -11,6 +11,7 @@ import { cartaoFinanceiro } from "./financeiro.js";
 import { fichaProcesso } from "./ficha-processo.js";
 import { abasClientes, chips, etiquetasDe, blocoRelacionamento, followupsPainel, mensagem as mensagemCrm } from "./crm.js";
 import { obterListas } from "../listas.js";
+import { pesquisaClientes, pesquisaProcessos } from "./pesquisa.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
@@ -77,7 +78,7 @@ export async function painel(req, env, sessao) {
 
       <div class="destaques">
         <div class="cartao-data"><span class="cartao-data-mes">${MESES[Number(mes) - 1]}</span><span class="cartao-data-dia">${String(Number(dia))}</span></div>
-        <a class="destaque verde" href="/sistema/processos">
+        <a class="destaque verde" href="/sistema/processos?status=ativos">
           <span class="marca-agua">${icone.balanca(130)}</span>
           <h2>Processos</h2>
           <div class="destaque-numero"><strong>${String(ativos)}</strong><span>Ativos</span></div>
@@ -211,39 +212,7 @@ export async function busca(req, env, sessao) {
 }
 
 export async function clientes(req, env, sessao, id) {
-  if (!id) {
-    const sp = new URL(req.url).searchParams;
-    const q = (sp.get("q") || "").trim().slice(0, 100);
-    const origem = (sp.get("origem") || "").slice(0, 100), etiqueta = (sp.get("etiqueta") || "").slice(0, 40);
-    const { results: todos } = await env.DB.prepare(
-      `SELECT c.id, c.nome, c.tipo, c.cidade, c.estado, c.origem, c.etiquetas, COUNT(p.id) AS processos
-         FROM clientes c LEFT JOIN processos p ON p.cliente_id = c.id
-        GROUP BY c.id ORDER BY c.nome COLLATE NOCASE`
-    ).all();
-    const bate = criarFiltro(q);
-    const temEtiqueta = (c) => etiquetasDe(c.etiquetas).some((e) => e.toLocaleLowerCase("pt-BR") === etiqueta.toLocaleLowerCase("pt-BR"));
-    const results = todos.filter((c) => (!q || bate(c.nome, c.etiquetas)) && (!origem || c.origem === origem) && (!etiqueta || temEtiqueta(c)));
-    const origens = (await obterListas(env, ["origem_cliente"])).origem_cliente;
-    const etiquetas = [...new Map(todos.flatMap((c) => etiquetasDe(c.etiquetas)).map((e) => [e.toLocaleLowerCase("pt-BR"), e])).values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
-    const opc = (valores, sel, vazio) => html`<option value="">${vazio}</option>${valores.map((v) => html`<option value="${v}"${v === sel ? html` selected` : ""}>${v}</option>`)}`;
-    return resposta(pagina({
-      titulo: "Clientes", sessao,
-      corpo: html`
-        <div class="titulo-acoes"><h1>Clientes</h1><span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/crm/leads/novo">Novo potencial cliente</a><a class="botao-link" href="/sistema/clientes/novo">Novo cliente</a></span></div>
-        ${abasClientes("clientes")}
-        <form class="busca filtros-crm" method="get"><input name="q" value="${q}" placeholder="Buscar por nome ou etiqueta" aria-label="Buscar por nome ou etiqueta">
-          <select name="origem" aria-label="Origem">${opc(origens, origem, "Todas as origens")}</select>
-          ${etiquetas.length ? html`<select name="etiqueta" aria-label="Etiqueta">${opc(etiquetas, etiqueta, "Todas as etiquetas")}</select>` : ""}
-          <button type="submit">Buscar</button>${q || origem || etiqueta ? html`<a class="botao-link botao-secundario" href="/sistema/clientes">Limpar</a>` : ""}</form>
-        <div class="tabela-rolagem"><table>
-          <thead><tr><th>Nome</th><th>Tipo</th><th>Cidade</th><th>Origem</th><th>Processos</th></tr></thead>
-          <tbody>${results.map((c) => html`<tr>
-            <td><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a>${chips(c.etiquetas)}</td><td>${c.tipo}</td>
-            <td>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</td><td>${c.origem || ""}</td><td>${String(c.processos)}</td></tr>`)}</tbody>
-        </table></div>
-        <p class="dica">${String(results.length)} cliente(s).</p>`,
-    }));
-  }
+  if (!id) return pesquisaClientes(req, env, sessao);
   const c = await env.DB.prepare("SELECT * FROM clientes WHERE id = ?").bind(Number(id)).first();
   if (!c) return naoEncontrado(sessao);
   const [documento, nascimento, email, telefone, endereco, observacoes] = await Promise.all(
@@ -275,38 +244,6 @@ export async function clientes(req, env, sessao, id) {
 }
 
 export async function processos(req, env, sessao, id) {
-  if (!id) {
-    const sp = new URL(req.url).searchParams;
-    const q = (sp.get("q") || "").trim().slice(0, 100);
-    const situacao = (sp.get("situacao") || "").slice(0, 100);
-    let sql = `SELECT p.id, p.pasta, p.numero, p.tipo_acao, p.situacao, p.fase, p.comarca, p.uf, p.parte_contraria, c.nome AS cliente
-                 FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE 1 = 1`;
-    const args = [];
-    if (situacao) {
-      sql += situacao === "Sem situação" ? " AND COALESCE(p.situacao, '') = ''" : " AND p.situacao = ?1";
-      if (situacao !== "Sem situação") args.push(situacao);
-    }
-    sql += " ORDER BY CAST(p.pasta AS INTEGER), p.pasta";
-    const { results: todos } = await env.DB.prepare(sql).bind(...args).all();
-    const bate = criarFiltro(q);
-    const results = q ? todos.filter((p) => bate(p.numero, p.pasta, p.cliente, p.parte_contraria)) : todos;
-    return resposta(pagina({
-      titulo: "Processos", sessao,
-      corpo: html`
-        <div class="titulo-acoes"><h1>Processos${situacao ? html` · ${situacao}` : ""}</h1><a class="botao-link" href="/sistema/processos/novo">Novo processo</a></div>
-        <form class="busca" method="get">
-          <input name="q" value="${q}" placeholder="Número, pasta, cliente ou parte contrária" aria-label="Buscar processos">
-          ${situacao ? html`<input type="hidden" name="situacao" value="${situacao}">` : ""}
-          <button type="submit">Buscar</button>
-        </form>
-        <div class="tabela-rolagem"><table>
-          <thead><tr><th>Pasta</th><th>Número</th><th>Cliente</th><th>Ação</th><th>Situação</th><th>Comarca</th></tr></thead>
-          <tbody>${results.map((p) => html`<tr>
-            <td>${p.pasta}</td><td><a href="/sistema/processos/${String(p.id)}">${p.numero || "sem número"}</a></td>
-            <td>${p.cliente}</td><td>${p.tipo_acao}</td><td>${p.situacao}</td><td>${[p.comarca, p.uf].filter(Boolean).join(" / ")}</td></tr>`)}</tbody>
-        </table></div>
-        <p class="dica">${String(results.length)} processo(s).</p>`,
-    }));
-  }
+  if (!id) return pesquisaProcessos(req, env, sessao);
   return fichaProcesso(req, env, sessao, id);
 }

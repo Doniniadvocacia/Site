@@ -844,3 +844,28 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .acao-prazo p { margin: 0; }
 .acao-prazo label { display: grid; gap: .25rem; font-size: .85rem; }
 .acao-prazo button { justify-self: start; }
+
+/* Pesquisa de clientes e processos */
+.painel-pesquisa { background: var(--branco); border: 1px solid var(--linha); border-radius: 10px; padding: 1.1rem 1.25rem 1rem; margin: 1.2rem 0 1rem; }
+.painel-pesquisa-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .8rem; }
+.painel-pesquisa-topo h2 { margin: 0; font-size: 1.05rem; color: var(--navy); }
+.link-discreto { font-size: .85rem; color: var(--suave); }
+.link-discreto:hover { color: var(--navy); }
+.grade-pesquisa { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .75rem .9rem; align-items: end; }
+.grade-pesquisa label { display: grid; gap: .25rem; font-size: .78rem; color: var(--suave); min-width: 0; }
+.grade-pesquisa input, .grade-pesquisa select { width: 100%; box-sizing: border-box; height: 2.4rem; padding: 0 .55rem; font-size: .88rem; margin: 0; }
+.grade-pesquisa .filtro-largo { grid-column: span 2; }
+.botoes-pesquisa { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
+.gerar-relatorio { margin-top: 1rem; border-top: 1px dashed var(--linha); padding-top: .8rem; }
+.gerar-relatorio summary { cursor: pointer; font-weight: 600; color: var(--navy); font-size: .9rem; }
+.gerar-relatorio summary::marker { color: var(--dourado); }
+.gerar-relatorio .dica { margin: .6rem 0 .5rem; }
+.colunas-relatorio { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .35rem .9rem; }
+.opcao-coluna { display: flex; align-items: center; gap: .45rem; font-size: .86rem; color: var(--texto, inherit); cursor: pointer; }
+.opcao-coluna input { margin: 0; width: auto; height: auto; }
+.opcao-coluna small { color: var(--suave); font-size: .72rem; }
+.contagem-pesquisa { margin: .2rem 0 .5rem; font-size: .88rem; color: var(--suave); }
+.contagem-pesquisa strong { color: var(--navy); }
+.vazio-pesquisa p { margin: 0; color: var(--suave); }
+.tabela-pesquisa td.num, .tabela-pesquisa th.num { text-align: right; }
+@media (max-width: 640px) { .grade-pesquisa { grid-template-columns: 1fr 1fr; } .grade-pesquisa .filtro-largo { grid-column: 1 / -1; } }

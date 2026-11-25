@@ -121,8 +121,8 @@ async function abertos(env, p) {
 }
 
 // ---------- Planilha (CSV para Excel em português: ponto e vírgula, vírgula decimal, UTF-8 com BOM) ----------
-const num = (v) => (v === null || v === undefined || v === "" ? "" : Number(v).toFixed(2).replace(".", ","));
-const celula = (v) => {
+export const num = (v) => (v === null || v === undefined || v === "" ? "" : Number(v).toFixed(2).replace(".", ","));
+export const celula = (v) => {
   let s = String(v ?? "");
   if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(,\d+)?$/.test(s)) s = `'${s}`; // evita fórmulas em planilha
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
