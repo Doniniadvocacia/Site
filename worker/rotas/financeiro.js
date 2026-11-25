@@ -9,6 +9,8 @@ import { opcoes, listasApoio, csrfOk, txt, dataValida, numeroBR, rotuloProcesso,
 import { linkAnexo } from "./historico.js";
 import { obterListas, categoriasFinanceiras } from "../listas.js";
 import { listaFavorecidos } from "./favorecidos.js";
+import { blocoCobranca } from "./asaas.js";
+import { asaasConfigurado, saldoAsaas, STATUS as STATUS_ASAAS } from "../asaas.js";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const CONDICOES = [["À Vista", "À vista"], ["Parcelado", "Parcelado"], ["Entrada+Parcelado", "Entrada + parcelado"], ["Recorrente", "Recorrente (mensal)"]];
@@ -81,6 +83,7 @@ function tabela(sessao, linhas, { mostrarProcesso = true } = {}) {
       <div class="lanc-descricao">
         <a href="/sistema/financeiro/${String(l.id)}">${l.descricao}</a>${rotuloParcela(l) ? html` <span class="parcela">${rotuloParcela(l)}</span>` : ""}
         ${l.anexo_id ? html`<div>${linkAnexo(l)}</div>` : ""}
+        ${l.asaas_id ? html`<div class="lanc-asaas"><span class="${`selo selo-asaas ${["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(l.asaas_status) ? "pago" : l.asaas_status === "OVERDUE" ? "vencida" : ""}`}">Asaas · ${STATUS_ASAAS[l.asaas_status] || l.asaas_status || "cobrança"}</span>${l.asaas_link && !l.pago ? html` <a href="${l.asaas_link}" target="_blank" rel="noopener noreferrer">link de pagamento</a>` : ""}</div>` : ""}
       </div>
       <div class="lanc-valor">
         <p class="lanc-quantia"><span class="cifrao" aria-hidden="true">$</span><strong class="${l.tipo}">${l.tipo === "despesa" ? "− " : ""}${valor(l.valor)}</strong></p>
@@ -276,6 +279,8 @@ export async function financeiro(req, env, sessao, id) {
     else if (conta) { onde.push("f.conta = ?"); args.push(conta); }
     // "Sem conta" vale para todos os meses: sem período escolhido, mostra todos os lançamentos sem conta.
     if (conta === "__sem__" && !periodo) { args[0] = "0000-01-01"; args[1] = "9999-12-31"; }
+    const [asaasSaldo, asaasPend] = asaasConfigurado(env) ? await Promise.all([saldoAsaas(env),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM asaas_extrato WHERE situacao = 'pendente'").first()]) : [null, null];
     const [{ results: doPeriodo }, atraso, saldo, cats, clis, contasUsadas] = await Promise.all([
       env.DB.prepare(`${SELECT_LANC} WHERE ${onde.join(" AND ")} ORDER BY f.vencimento, f.id LIMIT 2000`).bind(...args).all(),
       env.DB.prepare(`SELECT SUM(CASE WHEN tipo = 'receita' THEN valor ELSE 0 END) AS receber, SUM(CASE WHEN tipo = 'despesa' THEN valor ELSE 0 END) AS pagar,
@@ -320,6 +325,8 @@ export async function financeiro(req, env, sessao, id) {
           <div class="cartao-resumo receita"><span>Receitas ${sufixo}</span><strong>${valor(rec)}</strong><small>Recebido ${valor(recPago)}</small></div>
           <div class="cartao-resumo despesa"><span>Despesas ${sufixo}</span><strong>${valor(desp)}</strong><small>Pago ${valor(despPago)}</small></div>
           <div class="cartao-resumo"><span>Resultado ${sufixo}</span><strong class="${recPago - despPago < 0 ? "despesa" : "receita"}">${valor(recPago - despPago)}</strong><small>Previsto ${valor(rec - desp)}</small></div>
+          ${asaasSaldo ? html`<a class="cartao-resumo cartao-asaas" href="/sistema/financeiro/conciliacao"><span>Saldo no Asaas</span><strong>${asaasSaldo.erro ? "—" : valor(asaasSaldo.saldo)}</strong>
+            <small>${asaasSaldo.erro ? "erro na conexão" : asaasPend?.n ? `${asaasPend.n} movimentação(ões) a conciliar` : "extrato conciliado"}</small></a>` : ""}
           <div class="cartao-resumo alerta"><span>Em atraso (todos os meses)</span><strong>${valor(atraso?.receber || 0)}</strong><small>a receber · ${valor(atraso?.pagar || 0)} a pagar</small></div>
         </div>
         <form method="get" action="/sistema/financeiro" class="filtros-financeiro" role="search" aria-label="Filtrar lançamentos">
@@ -346,10 +353,12 @@ export async function financeiro(req, env, sessao, id) {
   const apoio = await apoioForm(env);
   const acao = novo ? "/sistema/financeiro/novo" : `/sistema/financeiro/${existente.id}`;
   const grupoQtd = existente?.grupo ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM financeiro WHERE grupo = ? AND (pago = 0 OR id = ?)").bind(existente.grupo, existente.id).first()).n : 0;
+  const cob = blocoCobranca(env, sessao, existente, new URL(req.url).searchParams);
   const tela = (l, { erro, aviso } = {}) => resposta(pagina({
-    titulo: novo ? "Novo lançamento" : existente.descricao, sessao, erro, aviso,
+    titulo: novo ? "Novo lançamento" : existente.descricao, sessao, erro: erro || cob.erro, aviso: aviso || cob.aviso,
     corpo: html`<p class="trilha"><a href="/sistema/financeiro${l.vencimento ? `?mes=${l.vencimento.slice(0, 7)}` : ""}">Financeiro</a></p>
       <h1>${novo ? "Novo lançamento" : existente.descricao}</h1>
+      ${cob.bloco}
       <section class="cartao">${formulario(sessao, l, apoio, acao, { novo, grupoQtd, anexos: anexosDisponiveis(env) })}</section>`,
   }));
 

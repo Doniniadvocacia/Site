@@ -23,6 +23,8 @@ import { favorecidos } from "./rotas/favorecidos.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
 import { carregarNotificacoes, sino, notificacoes } from "./notificacoes.js";
 import { relatorios } from "./rotas/relatorios.js";
+import { configAsaas, conciliacao, cobrancaLancamento } from "./rotas/asaas.js";
+import { receberAviso, sincronizar, asaasConfigurado } from "./asaas.js";
 import { crm, cadastroLead, fichaLead, acaoLead, novaInteracao, editarInteracao, excluirInteracao, novaTarefa, concluirTarefa } from "./rotas/crm.js";
 
 const EQUIPE = new Set(["admin", "advogado", "colaborador"]);
@@ -49,6 +51,7 @@ async function status(env) {
     `DATA_KEY: ${ok(env.DATA_KEY)}${env.DATA_KEY ? (chaveValida(env.DATA_KEY) ? " (formato válido)" : " (FORMATO INVÁLIDO: precisa ser 32 bytes em base64)") : ""}`,
     `SETUP_TOKEN: ${ok(env.SETUP_TOKEN)}`,
     `WIX_API_KEY: ${ok(env.WIX_API_KEY)}`,
+    `ASAAS_API_KEY: ${ok(env.ASAAS_API_KEY)}`,
     `R2 (anexos): ${ok(env.ARQUIVOS)}`,
     `Variáveis recebidas pelo sistema: ${Object.keys(env).filter((k) => /^[A-Z_]+$/.test(k)).sort().join(", ") || "nenhuma"}`,
   ];
@@ -63,6 +66,7 @@ function configuracoes(sessao) {
     ${item("/sistema/feriados", "Feriados", "Feriados locais e suspensões de expediente")}
     ${item("/sistema/listas", "Listas", "Incluir e excluir opções dos campos de seleção")}
     ${item("/sistema/favorecidos", "Favorecidos", "Quem recebe pagamentos e repasses do escritório")}
+    ${item("/sistema/asaas", "Asaas", "Cobranças, baixa automática de pagamentos e conciliação")}
     ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
     ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
   </div>` }));
@@ -73,6 +77,8 @@ async function sistema(req, env, ctx) {
   const caminho = url.pathname.replace(/\/+$/, "") || "/";
   const metodo = req.method;
   if (!["GET", "HEAD", "POST"].includes(metodo)) return new Response("Método não permitido", { status: 405 });
+  // Avisos do Asaas (webhook): sem sessão, autenticados pelo token do cabeçalho asaas-access-token.
+  if (caminho === "/sistema/asaas/aviso" && metodo === "POST") return receberAviso(req, env);
   if (metodo === "POST" && !origemValida(req)) return new Response("Origem inválida", { status: 403 });
 
   const sessao = await lerSessao(env, req);
@@ -116,6 +122,9 @@ async function sistema(req, env, ctx) {
   if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/historico$/)) && metodo === "POST") return adicionarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)$/))) return editarHistorico(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/historico\/(\d+)\/excluir$/)) && metodo === "POST") return excluirHistorico(req, env, sessao, m[1]);
+  const semFin = () => resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1>` }), 403);
+  if (caminho === "/sistema/financeiro/conciliacao") return sessao.financeiro ? conciliacao(req, env, sessao) : semFin();
+  if ((m = caminho.match(/^\/sistema\/financeiro\/(\d+)\/cobranca(?:\/(cancelar))?$/)) && metodo === "POST") return sessao.financeiro ? cobrancaLancamento(req, env, sessao, m[1], m[2] || "gerar") : semFin();
   if (caminho === "/sistema/financeiro/relatorios") return sessao.financeiro ? relatorios(req, env, sessao)
     : resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1>` }), 403);
   if ((m = caminho.match(/^\/sistema\/financeiro(?:\/(novo|\d+(?:\/(?:baixar|estornar))?))?$/))) return financeiro(req, env, sessao, m[1]);
@@ -139,7 +148,7 @@ async function sistema(req, env, ctx) {
 
   const admin = sessao.perfil === "admin";
   // Configurações e tudo o que fica dentro delas: somente administradores.
-  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas)(\/|$)/.test(caminho)) {
+  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas|asaas)(\/|$)/.test(caminho)) {
     return resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1><p>Esta área é exclusiva para administradores.</p>` }), 403);
   }
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);
@@ -149,6 +158,7 @@ async function sistema(req, env, ctx) {
   if (caminho === "/sistema/oabs" && admin) return oabs(req, env, sessao);
   if (caminho === "/sistema/feriados" && admin) return feriados(req, env, sessao);
   if (caminho === "/sistema/listas" && admin) return listas(req, env, sessao);
+  if (caminho === "/sistema/asaas" && admin) return configAsaas(req, env, sessao);
 
   return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Página não encontrada</h1>` }), 404);
 }
@@ -171,5 +181,6 @@ export default {
   // Captura agendada do DJEN (ver "triggers" no wrangler.jsonc)
   async scheduled(evento, env, ctx) {
     if (env.DB) ctx.waitUntil(capturarDjen(env, "agendada"));
+    if (env.DB && asaasConfigurado(env)) ctx.waitUntil(sincronizar(env).catch((e) => console.error("Asaas:", e.message)));
   },
 };
