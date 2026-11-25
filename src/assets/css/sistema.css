@@ -83,6 +83,11 @@ fieldset.calculo { border: 1px dashed var(--dourado); border-radius: 8px; paddin
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: end; background: #fdfbf6; }
 fieldset.calculo legend { font: 600 .8rem var(--sans); color: var(--navy); padding: 0 .4rem; letter-spacing: .06em; text-transform: uppercase; }
 fieldset.calculo label { display: grid; gap: .3rem; font-size: .85rem; color: var(--suave); }
+fieldset.calculo label { position: relative; align-self: end; }
+fieldset.calculo :is(input, select), fieldset.calculo > button { height: 2.6rem; box-sizing: border-box; margin: 0; }
+fieldset.calculo > button { align-self: end; }
+fieldset.calculo .dica-padrao { position: absolute; top: 100%; left: 0; margin-top: .15rem; white-space: nowrap; }
+fieldset.calculo:has(.dica-padrao:not(:empty)) { padding-bottom: 1.6rem; }
 .resultado-calculo { grid-column: 1 / -1; margin: 0; background: var(--branco); border-left: 3px solid var(--dourado); padding: .6rem .8rem; }
 .botao-secundario { background: var(--branco); color: var(--navy); }
 .botao-secundario:hover { background: #eef1f6; }
