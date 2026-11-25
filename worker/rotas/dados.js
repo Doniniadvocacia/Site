@@ -116,7 +116,7 @@ export async function painel(req, env, sessao) {
         <p class="dica"><a href="/sistema/crm?visao=followups">Ver todos os follow-ups</a></p>
       </details>` : ""}
 
-      <details class="compromissos" open>
+      <details class="compromissos">
         <summary><h2>Próximos Compromissos</h2></summary>
         ${proximos.length ? proximos.map((p) => html`<article class="compromisso">
           <div class="compromisso-acoes">
