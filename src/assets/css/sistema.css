@@ -946,3 +946,16 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .cartao-entrada { text-align: left; }
 .marca-entrada { display: block; width: 190px; height: auto; margin: .2rem auto 1.4rem; }
 .cartao-entrada h1 { text-align: center; font-size: 1.25rem; }
+.conc-quem { color: var(--suave); font-size: .8rem; margin-left: .3rem; }
+/* Topo em telas médias: cabe tudo em uma linha (logo, 8 itens, busca, sino e conta) */
+@media (min-width: 1100px) and (max-width: 1340px) {
+  .topo-sistema { gap: .75rem 1.1rem; padding-left: 1.1rem; padding-right: 1.1rem; }
+  .menu { gap: .4rem .8rem; }
+  .menu .busca-menu input { width: 150px; }
+  .menu-usuario-nome { max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+}
+@media (min-width: 1100px) and (max-width: 1220px) {
+  .menu { gap: .4rem .65rem; font-size: .9rem; }
+  .menu .busca-menu input { width: 120px; }
+  .marca-sistema span { letter-spacing: .16em; }
+}

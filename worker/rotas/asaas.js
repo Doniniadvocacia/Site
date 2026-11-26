@@ -4,6 +4,8 @@ import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { csrfOk, txt, opcoes } from "./comum.js";
 import { categoriasFinanceiras } from "../listas.js";
+import { listaFavorecidos } from "./favorecidos.js";
+import { campoBusca } from "./financeiro.js";
 import {
   asaasConfigurado, saldoAsaas, ativarAvisos, sincronizar, lerConfig, gerarCobranca, cancelarCobranca, FORMAS, STATUS, CONTA_ASAAS,
 } from "../asaas.js";
@@ -179,16 +181,22 @@ export async function conciliacao(req, env, sessao) {
     if (acao === "criar") {
       const categoria = txt(f, "categoria", 80);
       const descricao = txt(f, "descricao", 300) || mov.descricao || rotuloTipo(mov.tipo);
-      const r = await env.DB.prepare(`INSERT INTO financeiro (tipo, categoria, descricao, valor, vencimento, pago, data_pagamento, conta, condicao, responsavel, criado_por, criado_em, atualizado_em)
-          VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'À Vista', ?, ?, ?, ?)`)
-        .bind(mov.valor >= 0 ? "receita" : "despesa", categoria, descricao, Math.abs(mov.valor), mov.data, mov.data, CONTA_ASAAS, sessao.nome, sessao.usuario_id, t, t).run();
+      // Receita: quem pagou (cliente). Despesa: a quem foi paga (favorecido do cadastro).
+      const receita = mov.valor >= 0;
+      const clienteId = receita ? Number(f.get("cliente_id")) || null : null;
+      if (clienteId && !(await env.DB.prepare("SELECT id FROM clientes WHERE id = ?").bind(clienteId).first())) return volta("dados");
+      const favorecido = receita ? null : txt(f, "favorecido", 200) || null;
+      const r = await env.DB.prepare(`INSERT INTO financeiro (tipo, categoria, descricao, valor, vencimento, pago, data_pagamento, conta, condicao, responsavel, cliente_id, favorecido, criado_por, criado_em, atualizado_em)
+          VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'À Vista', ?, ?, ?, ?, ?, ?)`)
+        .bind(receita ? "receita" : "despesa", categoria, descricao, Math.abs(mov.valor), mov.data, mov.data, CONTA_ASAAS, sessao.nome, clienteId, favorecido, sessao.usuario_id, t, t).run();
       await env.DB.prepare("UPDATE asaas_extrato SET situacao = 'conciliado', financeiro_id = ? WHERE id = ?").bind(r.meta.last_row_id, mov.id).run();
       await auditar(env, req, sessao.usuario_id, "asaas_lancamento_criado", `extrato ${mov.id} → lançamento ${r.meta.last_row_id}`);
       return volta("criado");
     }
     return volta("dados");
   }
-  const { results: movs } = await env.DB.prepare(`SELECT e.*, f.descricao AS lanc_descricao FROM asaas_extrato e LEFT JOIN financeiro f ON f.id = e.financeiro_id
+  const { results: movs } = await env.DB.prepare(`SELECT e.*, f.descricao AS lanc_descricao, f.favorecido AS lanc_favorecido, COALESCE(c.nome, f.pagante) AS lanc_pagante
+      FROM asaas_extrato e LEFT JOIN financeiro f ON f.id = e.financeiro_id LEFT JOIN clientes c ON c.id = f.cliente_id
       WHERE e.situacao = ? ORDER BY e.data DESC, e.id DESC LIMIT 300`).bind(visao).all();
   // Sugestões: lançamentos com o mesmo valor e tipo, até 7 dias de diferença, ainda não conciliados.
   const sugestoes = new Map();
@@ -202,7 +210,8 @@ export async function conciliacao(req, env, sessao) {
       sugestoes.set(m.id, results);
     }
   }
-  const cats = await categoriasFinanceiras(env);
+  const [cats, favorecidos] = await Promise.all([categoriasFinanceiras(env), visao === "pendente" ? listaFavorecidos(env) : []]);
+  const opcoesFav = favorecidos.map((x) => [x.nome, x.nome]);
   const [pend, ultima] = await Promise.all([env.DB.prepare("SELECT COUNT(*) AS n FROM asaas_extrato WHERE situacao = 'pendente'").first(), lerConfig(env, "asaas_ultima_sync")]);
   const msg = url.searchParams.get("msg");
   const avisos = { sync: "Extrato sincronizado.", ignorado: "Movimentação ignorada.", reaberto: "Movimentação reaberta.", vinculado: "Movimentação conciliada com o lançamento.", criado: "Lançamento criado e conciliado." };
@@ -229,12 +238,16 @@ export async function conciliacao(req, env, sessao) {
             <form method="post" class="formulario grade-form">${campoCsrf(sessao)}<input type="hidden" name="mov" value="${m.id}">
               <label>Tipo de lançamento<select name="categoria">${opcoes((m.valor >= 0 ? cats.receita : cats.despesa).map((c) => [c, c]), categoriaPadrao(m), "Selecione…")}</select></label>
               <label class="duplo">Descrição<input name="descricao" maxlength="300" value="${m.descricao || rotuloTipo(m.tipo)}"></label>
+              ${m.valor >= 0
+                ? campoBusca({ tipo: "cliente", rotulo: "Pago por", nome: "cliente_id", id: null, texto: "", placeholder: "Buscar cliente por nome, processo ou pasta" })
+                : html`<label><span class="rotulo-linha">Pago a (favorecido) <a class="link-pequeno" href="/sistema/favorecidos" target="_blank" rel="noopener">cadastrar</a></span><select name="favorecido">${opcoes(opcoesFav, "", "Selecione…")}</select></label>`}
               <div class="largo botoes-form"><button type="submit" name="acao" value="criar" class="botao-pequeno">Criar ${m.valor >= 0 ? "receita" : "despesa"} paga</button></div>
             </form></details>
           <form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="mov" value="${m.id}"><button type="submit" name="acao" value="ignorar" class="botao-pequeno botao-secundario">Ignorar</button></form>`
-        : html`${m.financeiro_id ? html`<a href="/sistema/financeiro/${String(m.financeiro_id)}">${m.lanc_descricao || "ver lançamento"}</a>` : ""}
+        : html`${m.financeiro_id ? html`<a href="/sistema/financeiro/${String(m.financeiro_id)}">${m.lanc_descricao || "ver lançamento"}</a>${(m.valor >= 0 ? m.lanc_pagante : m.lanc_favorecido) ? html` <small class="conc-quem">${m.valor >= 0 ? "pago por" : "pago a"} ${m.valor >= 0 ? m.lanc_pagante : m.lanc_favorecido}</small>` : ""}` : ""}
           <form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="mov" value="${m.id}"><button type="submit" name="acao" value="reabrir" class="botao-pequeno botao-secundario">Reabrir</button></form>`}
         </div></li>`)}</ul>`
-        : html`<p class="vazio">${visao === "pendente" ? "Nada a conciliar." : "Nenhuma movimentação."}</p>`}`,
+        : html`<p class="vazio">${visao === "pendente" ? "Nada a conciliar." : "Nenhuma movimentação."}</p>`}
+      <script src="/assets/js/selecao.js" defer></script>`,
   }));
 }
