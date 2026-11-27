@@ -5,7 +5,7 @@ import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
 import { obterListas } from "../listas.js";
-import { msConfigurado, vincularPastasAutomaticas } from "../microsoft.js";
+import { msConfigurado, vincularPastasAutomaticas, garantirPastaCliente } from "../microsoft.js";
 import { normalizarEtiquetas, etiquetasUsadas, datalistEtiquetas } from "./crm.js";
 import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnpj, formatarFone, formatarCep, enderecoTexto } from "./comum.js";
 
@@ -28,6 +28,7 @@ function formularioCliente(sessao, c, acao, sugestoes) {
   return html`<form method="post" action="${acao}" class="formulario grade-form">
     ${campoCsrf(sessao)}
     <label class="largo">Nome<input name="nome" required maxlength="200" value="${c.nome || ""}"></label>
+    <label class="largo campo-check"><input type="checkbox" name="cliente" value="1"${c.cliente === 0 ? "" : html` checked`}> Cliente do escritório</label>
     <label>Tipo<select name="tipo">${opcoes(comAtual(sugestoes.tipos, c.tipo), c.tipo)}</select></label>
     <label>CPF/CNPJ<input name="documento" maxlength="18" value="${c.documento || ""}" inputmode="numeric" data-mascara="documento"></label>
     <label>Nascimento/fundação<input name="data_nascimento" maxlength="20" value="${c.data_nascimento || ""}" placeholder="dd/mm/aaaa"></label>
@@ -51,7 +52,7 @@ function formularioCliente(sessao, c, acao, sugestoes) {
     <label>Origem<select name="origem">${opcoes(comAtual(sugestoes.origens, c.origem), c.origem)}</select></label>
     <label class="duplo">Etiquetas<input name="etiquetas" maxlength="400" list="etiquetas-usadas" value="${c.etiquetas || ""}" placeholder="Separe por vírgula: VIP, seguradora, empresa"></label>
     <label class="largo">Observações<textarea name="observacoes" rows="3" maxlength="4000">${c.observacoes || ""}</textarea></label>
-    <div class="largo botoes-form"><button type="submit">Salvar cliente</button></div>
+    <div class="largo botoes-form"><button type="submit">Salvar</button></div>
     ${datalist("posicoes", sugestoes.posicoes)}${datalistEtiquetas(sugestoes.etiquetas)}
   </form>
   <p class="dica">CPF/CNPJ, nascimento, contatos, endereço e observações são gravados cifrados.</p>
@@ -66,10 +67,10 @@ export async function cadastroCliente(req, env, sessao, id) {
   const sugestoes = { posicoes: ls.posicao_cliente, tipos: ls.tipo_cadastro, generos: ls.genero, estadosCivis: ls.estado_civil, origens: ls.origem_cliente, etiquetas };
   const convertido = new URL(req.url).searchParams.get("convertido") === "1";
   const tela = (c, erro) => resposta(pagina({
-    titulo: id ? `Editar ${existente.nome}` : "Novo cliente", sessao, erro,
+    titulo: id ? `Editar ${existente.nome}` : "Nova pessoa", sessao, erro,
     ...(convertido && !erro ? { aviso: "Contrato fechado! O cliente foi criado com os dados do funil. Complete o cadastro (CPF/CNPJ, endereço) e salve." } : {}),
-    corpo: html`<p class="trilha"><a href="/sistema/clientes">Clientes</a>${id ? html` › <a href="/sistema/clientes/${id}">${existente.nome}</a>` : ""}</p>
-      <h1>${id ? "Editar cliente" : "Novo cliente"}</h1>
+    corpo: html`<p class="trilha"><a href="/sistema/clientes">Pessoas</a>${id ? html` › <a href="/sistema/clientes/${id}">${existente.nome}</a>` : ""}</p>
+      <h1>${id ? "Editar cadastro" : "Nova pessoa"}</h1>
       <section class="cartao">${formularioCliente(sessao, c, acao, sugestoes)}</section>`,
   }));
   if (req.method === "GET") {
@@ -89,11 +90,12 @@ export async function cadastroCliente(req, env, sessao, id) {
     estado_civil: txt(f, "estado_civil", 40), profissao: txt(f, "profissao", 100), cidade: txt(f, "cidade", 100), estado: txt(f, "estado", 2),
     data_cadastro: dataValida(txt(f, "data_cadastro")),
     origem: txt(f, "origem", 100), etiquetas: normalizarEtiquetas(txt(f, "etiquetas", 400)),
+    cliente: f.get("cliente") === "1" ? 1 : 0,
   };
   CAMPOS_CLIENTE_ENC.forEach((k) => (c[k] = txt(f, k, k === "observacoes" ? 4000 : 400)));
   Object.assign(c, { cep: txt(f, "cep", 9), rua: txt(f, "rua", 150), numero: txt(f, "numero", 15), complemento: txt(f, "complemento", 80), bairro: txt(f, "bairro", 80) });
   if (!ok) return tela(c, "Sessão expirada. Tente novamente.");
-  if (!c.nome) return tela(c, "Informe o nome do cliente.");
+  if (!c.nome) return tela(c, "Informe o nome.");
   // Documento: valida CPF/CNPJ quando informado ou alterado (registros antigos fora do padrão continuam aceitos se não forem mexidos).
   const docAntigo = existente ? await decifrar(env, existente.documento_enc) : "";
   if (c.documento && c.documento !== docAntigo) {
@@ -116,14 +118,19 @@ export async function cadastroCliente(req, env, sessao, id) {
   if (existente) {
     await env.DB.prepare(`UPDATE clientes SET nome=?1, tipo=?2, posicao=?3, genero=?4, estado_civil=?5, profissao=?6, cidade=?7, estado=?8,
       documento_enc=?9, data_nascimento_enc=?10, email_enc=?11, telefone_enc=?12, endereco_enc=?13, observacoes_enc=?14, data_cadastro=?15,
-      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas).run();
+      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20, cliente=?21 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas, c.cliente).run();
   } else {
     const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado, documento_enc,
-      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas)
-      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19)`).bind(...v, endDadosEnc, c.origem, c.etiquetas).run();
+      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas, cliente)
+      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19,?20)`).bind(...v, endDadosEnc, c.origem, c.etiquetas, c.cliente).run();
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "cliente_alterado" : "cliente_criado", `cliente ${novoId}`);
+  // Cliente do escritório: já ganha a pasta no SharePoint (melhor esforço; o erro fica na auditoria).
+  if (c.cliente && msConfigurado(env)) {
+    try { const sp = await garantirPastaCliente(env, novoId); if (sp?.erro) await auditar(env, req, sessao.usuario_id, "sharepoint_erro", `cliente ${novoId}: ${sp.erro}`.slice(0, 300)); }
+    catch (e) { await auditar(env, req, sessao.usuario_id, "sharepoint_erro", `cliente ${novoId}: ${String(e.message).slice(0, 250)}`); }
+  }
   return redirecionar(`/sistema/clientes/${novoId}?salvo=1`);
 }
 
@@ -193,7 +200,7 @@ export async function cadastroProcesso(req, env, sessao, id) {
   if (id && !existente) return naoEncontrado(sessao);
   const acao = id ? `/sistema/processos/${id}/editar` : "/sistema/processos/novo";
   const [clientes, ls, advogados, orgaos, comarcas] = await Promise.all([
-    env.DB.prepare("SELECT id, nome FROM clientes ORDER BY nome COLLATE NOCASE").all(),
+    env.DB.prepare("SELECT id, nome FROM clientes WHERE cliente = 1 OR id = ? ORDER BY nome COLLATE NOCASE").bind(existente?.cliente_id || 0).all(),
     obterListas(env, ["tipo_acao", "rito", "fase", "instancia", "status_pasta", "competencia", "posicao_cliente", "resultado", "motivo_encerramento"]),
     ...["advogado_responsavel", "vara", "comarca"].map((c) => usados(env, "processos", c)),
   ]);

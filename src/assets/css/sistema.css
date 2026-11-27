@@ -981,3 +981,5 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .form-agendamento .campo-check input { width: auto; height: auto; margin: 0; }
 .aviso-organizar { border: 1px solid var(--linha); border-left: 3px solid var(--navy); border-radius: 6px; padding: .6rem .9rem; margin: .8rem 0; background: #faf8f4; }
 .aviso-organizar p { margin: .3rem 0 .6rem; }
+.grade-form .campo-check { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-size: .9rem; color: var(--texto); cursor: pointer; }
+.grade-form .campo-check input { width: auto; height: auto; margin: 0; }

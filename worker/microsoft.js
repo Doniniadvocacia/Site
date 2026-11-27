@@ -257,6 +257,20 @@ export async function vincularPastasAutomaticas(env, { limite = 20, processoId =
   return r;
 }
 
+// Pasta do cliente criada já no cadastro da pessoa (quando marcada como cliente do escritório).
+export async function garantirPastaCliente(env, clienteId) {
+  const alvo = await lerAlvo(env);
+  if (!alvo.pronto) return null;
+  const c = await env.DB.prepare("SELECT id, nome, sharepoint_item FROM clientes WHERE id = ?").bind(clienteId).first();
+  if (!c) return null;
+  try {
+    const ctx = await contexto(env, alvo);
+    if (c.sharepoint_item && ctx.raiz.some((x) => x.id === c.sharepoint_item)) return { item: c.sharepoint_item };
+    const item = await pastaDoCliente(env, ctx, { cliente_id: c.id, cliente: c.nome, cliente_pasta: c.sharepoint_item });
+    return { item: item.id };
+  } catch (e) { return { erro: e.message }; }
+}
+
 // Pastas de processo vinculadas que ainda estão soltas na raiz (organização anterior, sem a pasta do cliente).
 async function soltasNaRaiz(env, alvo) {
   const raiz = new Set((await listarPasta(env, alvo.drive.id, alvo.pasta.id, 40)).filter((x) => x.folder).map((x) => x.id));

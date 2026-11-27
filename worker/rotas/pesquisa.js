@@ -30,9 +30,10 @@ const cidadeUf = (cidade, uf) => [cidade, uf].filter(Boolean).join(" / ");
 
 // ---------- Definições ----------
 const CLIENTES = {
-  chave: "clientes", titulo: "Clientes", singular: "cliente", rotuloRel: "Relatório de clientes",
+  chave: "clientes", titulo: "Pessoas", singular: "pessoa", rotuloRel: "Relatório de pessoas",
   colunas: [
     { k: "nome", r: "Nome", padrao: true },
+    { k: "vinculo", r: "Cliente do escritório", padrao: true },
     { k: "tipo", r: "Tipo", padrao: true },
     { k: "documento", r: "CPF/CNPJ", sigilo: true },
     { k: "email", r: "E-mail", sigilo: true },
@@ -46,7 +47,7 @@ const CLIENTES = {
     { k: "cadastro", r: "Cadastro", data: true },
   ],
   ordens: [["nome", "Nome"], ["cidade", "Cidade"], ["processos", "Mais processos"], ["cadastro", "Cadastro mais recente"]],
-  filtros: ["q", "documento", "tipo", "cidade", "uf", "origem", "etiqueta", "procs", "de", "ate"],
+  filtros: ["q", "vinculo", "documento", "tipo", "cidade", "uf", "origem", "etiqueta", "procs", "de", "ate"],
 };
 const PROCESSOS = {
   chave: "processos", titulo: "Processos", singular: "processo", rotuloRel: "Relatório de processos",
@@ -87,7 +88,7 @@ function lerFiltros(def, sp) {
 // ---------- Dados ----------
 async function dadosClientes(env, p) {
   const { results } = await env.DB.prepare(
-    `SELECT c.id, c.nome, c.tipo, c.cidade, c.estado, c.profissao, c.origem, c.etiquetas, c.data_cadastro,
+    `SELECT c.id, c.nome, c.cliente, c.tipo, c.cidade, c.estado, c.profissao, c.origem, c.etiquetas, c.data_cadastro,
             c.documento_enc, c.email_enc, c.telefone_enc,
             COUNT(pr.id) AS processos,
             SUM(CASE WHEN pr.id IS NULL THEN 0 WHEN LOWER(COALESCE(pr.situacao, '')) LIKE '%arquiv%' OR LOWER(COALESCE(pr.situacao, '')) LIKE '%encerr%'
@@ -96,6 +97,7 @@ async function dadosClientes(env, p) {
   const { f } = p;
   let lista = results.filter((c) =>
     bateTexto(f.q, c.nome, c.etiquetas) &&
+    (!f.vinculo || (f.vinculo === "clientes" ? c.cliente === 1 : c.cliente !== 1)) &&
     (!f.tipo || igual(c.tipo, f.tipo)) &&
     (!f.cidade || normalizar(c.cidade).includes(normalizar(f.cidade))) &&
     (!f.uf || igual(c.estado, f.uf)) &&
@@ -115,7 +117,7 @@ async function dadosClientes(env, p) {
     processos: (a, b) => b.processos - a.processos || a.nome.localeCompare(b.nome, "pt-BR"),
     cadastro: (a, b) => (b.data_cadastro || "").localeCompare(a.data_cadastro || "") || a.nome.localeCompare(b.nome, "pt-BR"),
   }[p.ordem];
-  return lista.sort(ord).map((c) => ({ ...c, cidade: cidadeUf(c.cidade, c.estado), cadastro: c.data_cadastro, url: `/sistema/clientes/${c.id}` }));
+  return lista.sort(ord).map((c) => ({ ...c, vinculo: c.cliente === 1 ? "Sim" : "Não", cidade: cidadeUf(c.cidade, c.estado), cadastro: c.data_cadastro, url: `/sistema/clientes/${c.id}` }));
 }
 
 async function dadosProcessos(env, p) {
@@ -179,6 +181,7 @@ function painelFiltros(def, p, op) {
   const f = p.f;
   const campos = def === CLIENTES ? html`
       ${campoTexto("Nome ou etiqueta", "q", f.q, { largo: true, ph: "Digite parte do nome", foco: !p.pesquisar })}
+      ${campoSelect("Vínculo", "vinculo", [["clientes", "Clientes do escritório"], ["outras", "Não clientes"]], f.vinculo, "Todas")}
       ${campoTexto("CPF/CNPJ", "documento", f.documento, { ph: "Só os números" })}
       ${campoSelect("Tipo", "tipo", op.tipos, f.tipo)}
       ${campoTexto("Cidade", "cidade", f.cidade)}
@@ -249,9 +252,9 @@ function tabelaResultados(def, p, linhas) {
 
 function descreverFiltros(def, p) {
   const nomes = { q: def === CLIENTES ? "Nome/etiqueta" : "Busca", documento: "CPF/CNPJ", tipo: "Tipo", cidade: "Cidade", uf: "UF", origem: "Origem", etiqueta: "Etiqueta",
-    procs: "Processos", cliente: "Cliente", parte: "Parte contrária", tipo_acao: "Ação", situacao: "Situação", status: "Status", fase: "Fase", instancia: "Instância",
+    vinculo: "Vínculo", procs: "Processos", cliente: "Cliente", parte: "Parte contrária", tipo_acao: "Ação", situacao: "Situação", status: "Status", fase: "Fase", instancia: "Instância",
     comarca: "Comarca", responsavel: "Responsável", resultado: "Resultado" };
-  const rotulos = { procs: { ativos: "com processos ativos", inativos: "só encerrados", sem: "sem processos" }, status: { ativos: "ativos", inativos: "encerrados/arquivados" } };
+  const rotulos = { vinculo: { clientes: "clientes do escritório", outras: "não clientes" }, procs: { ativos: "com processos ativos", inativos: "só encerrados", sem: "sem processos" }, status: { ativos: "ativos", inativos: "encerrados/arquivados" } };
   const partes = def.filtros.filter((k) => p.f[k] && k !== "de" && k !== "ate").map((k) => `${nomes[k]}: ${rotulos[k]?.[p.f[k]] || p.f[k]}`);
   const periodo = def === CLIENTES ? "Cadastro" : "Distribuição";
   if (p.f.de || p.f.ate) partes.push(`${periodo}: ${p.f.de ? dataBR(p.f.de) : "…"} a ${p.f.ate ? dataBR(p.f.ate) : "…"}`);
@@ -316,7 +319,7 @@ async function pesquisa(def, req, env, sessao) {
     p.pesquisar ? carregar(env, { ...pTela, f: p.f }) : Promise.resolve(null),
   ]);
   const botoes = def === CLIENTES
-    ? html`<span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/crm/leads/novo">Novo potencial cliente</a><a class="botao-link" href="/sistema/clientes/novo">Novo cliente</a></span>`
+    ? html`<span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/crm/leads/novo">Novo potencial cliente</a><a class="botao-link" href="/sistema/clientes/novo">Nova pessoa</a></span>`
     : html`<a class="botao-link" href="/sistema/processos/novo">Novo processo</a>`;
   return resposta(pagina({
     titulo: def.titulo, sessao,

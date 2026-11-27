@@ -175,7 +175,7 @@ export async function buscaSugestoes(req, env) {
   if (q.length < 2) return json({ itens: [] });
   const { procs, clis } = await buscarTudo(env, q, { procs: 8, clis: 6 });
   const itens = [
-    ...clis.map((c) => ({ grupo: "Clientes", titulo: c.nome, detalhe: [c.cidade, c.estado].filter(Boolean).join(" / "), url: `/sistema/clientes/${c.id}` })),
+    ...clis.map((c) => ({ grupo: "Pessoas", titulo: c.nome, detalhe: [c.cidade, c.estado].filter(Boolean).join(" / "), url: `/sistema/clientes/${c.id}` })),
     ...procs.map((p) => ({ grupo: "Processos", titulo: `${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}`, detalhe: [p.cliente, p.parte_contraria].filter(Boolean).join(" × "), url: `/sistema/processos/${p.id}` })),
   ];
   return json({ itens });
@@ -194,7 +194,7 @@ export async function busca(req, env, sessao) {
       </form>
       ${q ? html`<p class="dica">${String(total)} resultado(s) para “${q}”.</p>` : ""}
       ${q ? html`
-      <section class="cartao"><h2>Clientes (${String(clis.length)})</h2>
+      <section class="cartao"><h2>Pessoas (${String(clis.length)})</h2>
         ${clis.length ? html`<ul class="lista-simples">${clis.map((c) => html`<li><a href="/sistema/clientes/${String(c.id)}">${c.nome}</a><span>${[c.cidade, c.estado].filter(Boolean).join(" / ")}</span></li>`)}</ul>` : html`<p class="vazio">Nenhum cliente encontrado.</p>`}
       </section>
       <section class="cartao"><h2>Processos (${String(procs.length)})</h2>
@@ -219,8 +219,8 @@ export async function clientes(req, env, sessao, id) {
   return resposta(pagina({
     titulo: c.nome, sessao, ...mensagemDaUrl(req), ...mensagemCrm(req),
     corpo: html`
-      <p class="trilha"><a href="/sistema/clientes">Clientes</a></p>
-      <div class="titulo-acoes"><h1>${c.nome}</h1><a class="botao-link botao-secundario" href="/sistema/clientes/${String(c.id)}/editar">Editar</a></div>
+      <p class="trilha"><a href="/sistema/clientes">Pessoas</a></p>
+      <div class="titulo-acoes"><h1>${c.nome} <span class="${c.cliente ? "selo selo-pago" : "selo"}">${c.cliente ? "Cliente do escritório" : "Não é cliente"}</span></h1><a class="botao-link botao-secundario" href="/sistema/clientes/${String(c.id)}/editar">Editar</a></div>
       <section class="cartao"><dl class="ficha">
         ${campo("Tipo", c.tipo)}${campo("CPF/CNPJ", documento)}${campo("Nascimento", nascimento)}
         ${campo("E-mail", email)}${campo("Telefone", telefone)}${campo("Endereço", endereco)}

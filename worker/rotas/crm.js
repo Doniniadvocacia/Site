@@ -47,7 +47,7 @@ export const datalistEtiquetas = (valores) => html`<datalist id="etiquetas-usada
 
 // Abas da página de clientes.
 export const abasClientes = (ativa) => html`<nav class="abas">
-  <a href="/sistema/clientes" class="${ativa === "clientes" ? "ativa" : ""}">Clientes</a>
+  <a href="/sistema/clientes" class="${ativa === "clientes" ? "ativa" : ""}">Pessoas</a>
   <a href="/sistema/crm" class="${ativa === "funil" ? "ativa" : ""}">Funil de prospecção</a>
   <a href="/sistema/crm?visao=followups" class="${ativa === "followups" ? "ativa" : ""}">Follow-ups</a>
   <a href="/sistema/crm?visao=encerrados" class="${ativa === "encerrados" ? "ativa" : ""}">Contratados e perdidos</a>
@@ -142,7 +142,7 @@ export async function crm(req, env, sessao) {
   const { n: perdidos } = await env.DB.prepare("SELECT COUNT(*) AS n FROM leads WHERE etapa = 'Perdido' AND encerrado_em >= ?").bind(t - 90 * DIA).first();
   return resposta(pagina({
     titulo: "Funil de prospecção", sessao, ...mensagem(req),
-    corpo: html`<div class="titulo-acoes"><h1>Clientes</h1><a class="botao-link" href="/sistema/crm/leads/novo">Novo potencial cliente</a></div>
+    corpo: html`<div class="titulo-acoes"><h1>Pessoas</h1><a class="botao-link" href="/sistema/crm/leads/novo">Novo potencial cliente</a></div>
       ${abasClientes("funil")}
       <form class="busca filtros-crm" method="get">
         <input name="q" value="${q}" placeholder="Nome, área, origem ou etiqueta" aria-label="Buscar no funil">
@@ -170,7 +170,7 @@ async function paginaFollowups(req, env, sessao) {
     : html`<a href="/sistema/crm/leads/${String(t.lead_id)}">${t.lead_nome}</a> <span class="selo selo-lead">${t.etapa}</span>`);
   return resposta(pagina({
     titulo: "Follow-ups", sessao, ...mensagem(req),
-    corpo: html`<div class="titulo-acoes"><h1>Clientes</h1><a class="botao-link" href="/sistema/crm/leads/novo">Novo potencial cliente</a></div>
+    corpo: html`<div class="titulo-acoes"><h1>Pessoas</h1><a class="botao-link" href="/sistema/crm/leads/novo">Novo potencial cliente</a></div>
       ${abasClientes("followups")}
       <nav class="abas sub-abas"><a href="/sistema/crm?visao=followups" class="${meus ? "" : "ativa"}">Todos</a><a href="/sistema/crm?visao=followups&meus=1" class="${meus ? "ativa" : ""}">Meus</a></nav>
       ${results.length ? html`<div class="tabela-rolagem"><table class="tabela-followups"><thead><tr><th></th><th>Data</th><th>Próximo passo</th><th>Com</th><th>Responsável</th></tr></thead>
@@ -192,7 +192,7 @@ async function paginaEncerrados(req, env, sessao) {
   for (const l of results) { const o = l.origem || "Sem origem"; porOrigem[o] ??= { c: 0, p: 0 }; porOrigem[o][l.etapa === "Contratado" ? "c" : "p"]++; }
   return resposta(pagina({
     titulo: "Contratados e perdidos", sessao, ...mensagem(req),
-    corpo: html`<div class="titulo-acoes"><h1>Clientes</h1><a class="botao-link" href="/sistema/crm/leads/novo">Novo potencial cliente</a></div>
+    corpo: html`<div class="titulo-acoes"><h1>Pessoas</h1><a class="botao-link" href="/sistema/crm/leads/novo">Novo potencial cliente</a></div>
       ${abasClientes("encerrados")}
       ${Object.keys(porOrigem).length ? html`<section class="cartao"><h2>Conversão por origem</h2><div class="tabela-rolagem"><table><thead><tr><th>Origem</th><th>Contratados</th><th>Perdidos</th><th>Conversão</th></tr></thead>
         <tbody>${Object.entries(porOrigem).sort((a, b) => (b[1].c + b[1].p) - (a[1].c + a[1].p)).map(([o, v]) => html`<tr><td>${o}</td><td>${String(v.c)}</td><td>${String(v.p)}</td><td>${String(Math.round((v.c / (v.c + v.p)) * 100))}%</td></tr>`)}</tbody></table></div></section>` : ""}
