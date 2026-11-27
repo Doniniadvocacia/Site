@@ -7,7 +7,7 @@ import { lerConfig, gravarConfig } from "../asaas.js";
 import { LIMITE_ANEXO } from "../anexos.js";
 import {
   msConfigurado, urlAutorizacao, urlRetorno, concluirConexao, desconectar, lerAlvo, buscarSites, bibliotecas,
-  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos, migrarAnexos, situacaoMigracao, outlookLiberado,
+  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos, migrarAnexos, situacaoMigracao, outlookLiberado, paraOrganizar, organizarPorCliente,
 } from "../microsoft.js";
 
 const tamanho = (b) => (!b ? "" : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
@@ -46,6 +46,12 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
     if (!ok) return volta("sessao");
     const acao = f.get("acao");
     try {
+      if (acao === "organizar") {
+        const r = await organizarPorCliente(env, { limite: 15 });
+        if (r.movidas) await auditar(env, req, sessao.usuario_id, "sharepoint_organizado", `${r.movidas} pasta(s) movida(s) para a pasta do cliente`);
+        const erro = r.erros[0] ? `&m=${encodeURIComponent(r.erros[0].slice(0, 200))}` : "";
+        return volta("org", `&o=${r.movidas}&r=${r.restantes}${erro}${r.movidas && r.restantes && !r.erros.length ? "&seguir=1" : ""}`);
+      }
       if (acao === "automatico") {
         const r = await vincularPastasAutomaticas(env, { limite: 20 });
         if (r.feitos) await auditar(env, req, sessao.usuario_id, "sharepoint_automatico", `${r.feitos} processo(s), ${r.criadas} pasta(s) criada(s)`);
@@ -112,11 +118,18 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
     }
     if (alvo.pronto) {
       const restantes = await pendentesAutomaticos(env);
-      const seguir = msg === "auto" && url.searchParams.get("seguir") === "1" && restantes > 0;
+      const soltas = await paraOrganizar(env);
+      const seguirOrg = msg === "org" && url.searchParams.get("seguir") === "1" && soltas > 0;
+      const seguir = msg === "auto" && url.searchParams.get("seguir") === "1" && restantes > 0 && !soltas;
       etapa = html`<section class="cartao"><h2>Pastas dos processos</h2>
-        <p class="dica">Cada processo ganha uma pasta dentro de <strong>${alvo.pasta.nome}</strong>, com o nome <strong>nº da pasta - Cliente x Parte Contrária</strong>.
-          Se já existir ali uma pasta com esse nome, ou começando pelo nº da pasta (ex.: "35 - …" ou "Pasta 35 - …"), ela é aproveitada.
+        <p class="dica">Organização: <strong>${alvo.pasta.nome} › Cliente › nº da pasta - Parte Contrária</strong>.
+          Se já existir uma pasta com esse nome, ou começando pelo nº da pasta (ex.: "35 - …" ou "Pasta 35 - …"), ela é aproveitada.
           Processos novos ganham a pasta ao serem cadastrados; os que vêm da sincronização, a cada rodada automática.</p>
+        ${soltas ? html`<div class="aviso-organizar"><p><strong>${String(soltas)}</strong> pasta(s) de processo ainda estão soltas em ${alvo.pasta.nome}, fora da pasta do cliente.
+            Organizar move cada uma (com os arquivos) para a pasta do cliente; as que estão no padrão antigo passam a se chamar "nº - Parte Contrária". Os vínculos no Diligo continuam.</p>
+          <form method="post" ${seguirOrg ? seguro('data-auto-continuar="1"') : ""}>${campoCsrf(sessao)}<input type="hidden" name="acao" value="organizar">
+            <button type="submit">${seguirOrg ? "Organizando…" : "Organizar por cliente"}</button></form>
+          ${seguirOrg ? html`<p class="dica">Movendo em lotes de 15. Mantenha esta página aberta até terminar.</p>` : ""}</div>` : ""}
         ${restantes ? html`<p><strong>${String(restantes)}</strong> processo(s) ainda sem pasta.</p>
           <form method="post" ${seguir ? seguro('data-auto-continuar="1"') : ""}>${campoCsrf(sessao)}<input type="hidden" name="acao" value="automatico">
             <button type="submit">${seguir ? "Continuando…" : "Criar as pastas que faltam"}</button></form>
@@ -134,10 +147,11 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
     }
   } catch (e) { etapa = html`<p class="erro">Microsoft: ${e.message}</p>`; }
 
+  const msgOrg = msg === "org" ? `${url.searchParams.get("o") || 0} pasta(s) movida(s) para a pasta do cliente.${url.searchParams.get("m") ? ` Erro: ${url.searchParams.get("m")}` : ""}` : null;
   const msgMigrar = msg === "migrar" ? `${url.searchParams.get("e") || 0} documento(s) enviado(s) ao SharePoint${Number(url.searchParams.get("x")) ? `, ${url.searchParams.get("x")} já estava(m) lá` : ""}.${url.searchParams.get("m") ? ` Erro: ${url.searchParams.get("m")}` : ""}` : null;
   const msgAuto = msg === "auto" ? `${url.searchParams.get("f") || 0} processo(s) vinculado(s), ${url.searchParams.get("c") || 0} pasta(s) criada(s).${url.searchParams.get("m") ? ` Erro: ${url.searchParams.get("m")}` : ""}` : null;
   return resposta(pagina({
-    titulo: "Microsoft 365", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(msgAuto ? { aviso: msgAuto } : {}), ...(msgMigrar ? { aviso: msgMigrar } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
+    titulo: "Microsoft 365", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(msgAuto ? { aviso: msgAuto } : {}), ...(msgMigrar ? { aviso: msgMigrar } : {}), ...(msgOrg ? { aviso: msgOrg } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/configuracoes">Configurações</a></p><h1>Microsoft 365 · SharePoint</h1>
       <p class="dica">Liga o Diligo à biblioteca de documentos do escritório no SharePoint: cada processo pode ser vinculado à sua pasta, que passa a aparecer na ficha do processo, e os anexos enviados pelo histórico e os comprovantes de protocolo são copiados para lá.</p>
       ${!msConfigurado(env) ? html`<section class="cartao"><h2>Configuração inicial</h2>
@@ -185,7 +199,7 @@ async function cartaoMigracao(env, sessao, msg, url) {
 
 // ---------- Pasta do processo ----------
 export async function processoSharepoint(req, env, sessao, id, sub) {
-  const proc = await env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.sharepoint_drive, p.sharepoint_item, p.sharepoint_nome, p.sharepoint_url, c.nome AS cliente
+  const proc = await env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.sharepoint_drive, p.sharepoint_item, p.sharepoint_nome, p.sharepoint_url, c.nome AS cliente, c.sharepoint_item AS cliente_pasta
     FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = ?`).bind(Number(id)).first();
   if (!proc) return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Processo não encontrado</h1>` }), 404);
   const volta = (msg, extra = "") => redirecionar(`/sistema/processos/${proc.id}?msg=${msg}${extra}#sharepoint`);
@@ -234,7 +248,7 @@ export async function processoSharepoint(req, env, sessao, id, sub) {
       } catch (e) { return volta("sp_erro", `&m=${encodeURIComponent(e.message.slice(0, 200))}`); }
     }
     const url = new URL(req.url);
-    const atual = url.searchParams.get("pasta") || alvo.pasta.id;
+    const atual = url.searchParams.get("pasta") || proc.cliente_pasta || alvo.pasta.id; // começa na pasta do cliente, se houver
     const q = (url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 80);
     let corpo;
     try {

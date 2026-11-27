@@ -160,41 +160,90 @@ export async function copiarParaPastaDoProcesso(env, processoId, arquivo, anexoI
   }
 }
 
-// ---------- Pastas automáticas: uma por processo, dentro da pasta raiz ----------
-// Nome: "nº da pasta - Cliente x Parte Contrária" (sem pasta, usa o número do processo).
+// ---------- Pastas automáticas: pasta raiz › cliente › processo ----------
+// Pasta do processo (dentro da do cliente): "nº da pasta - Parte Contrária" (sem pasta, usa o número do processo).
 export function nomePastaProcesso(p) {
+  const numero = String(p.pasta || "").trim() || String(p.numero || "").trim() || `Processo ${p.id}`;
+  const parte = String(p.parte_contraria || "").trim();
+  return nomeArquivo(parte ? `${numero} - ${parte}` : numero);
+}
+// Padrão anterior (na raiz): "nº - Cliente x Parte Contrária". Pastas com esse nome são renomeadas ao reorganizar.
+function nomeAntigo(p) {
   const partes = [p.cliente, p.parte_contraria].map((x) => String(x || "").trim()).filter(Boolean).join(" x ");
   const numero = String(p.pasta || "").trim() || String(p.numero || "").trim() || `Processo ${p.id}`;
   return nomeArquivo(partes ? `${numero} - ${partes}` : numero);
 }
+export const nomePastaCliente = (c) => nomeArquivo(String(c?.cliente || "").trim() || "Sem cliente");
 
-const SELECT_AUTO = `SELECT p.id, p.pasta, p.numero, p.parte_contraria, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
-  WHERE p.sharepoint_item IS NULL AND p.sharepoint_ignorar = 0`;
+const SELECT_PROC = `SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.cliente_id, p.sharepoint_item, p.sharepoint_nome, c.nome AS cliente, c.sharepoint_item AS cliente_pasta
+  FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id`;
 
 export async function pendentesAutomaticos(env) {
   return (await env.DB.prepare("SELECT COUNT(*) AS n FROM processos WHERE sharepoint_item IS NULL AND sharepoint_ignorar = 0").first())?.n || 0;
 }
 
-// Cria (ou reaproveita) a pasta de até `limite` processos sem vínculo. Uma pasta já existente na raiz é aproveitada
-// quando tem exatamente o nome esperado ou começa com o nº da pasta ("35 - ..." ou "Pasta 35 - ...") e não está ligada a outro processo.
+const comecaPelaPasta = (nome, pasta) => pasta && (nome.toLowerCase().startsWith(`${pasta} - `) || nome.toLowerCase().startsWith(`pasta ${pasta} - `) || nome.toLowerCase() === pasta || nome.toLowerCase() === `pasta ${pasta}`);
+
+// Contexto de um lote: conteúdo da raiz e das pastas de cliente já consultadas, e itens já ligados a algum processo.
+async function contexto(env, alvo) {
+  const raiz = (await listarPasta(env, alvo.drive.id, alvo.pasta.id, 40)).filter((x) => x.folder);
+  const usadas = new Set((await env.DB.prepare("SELECT sharepoint_item FROM processos WHERE sharepoint_item IS NOT NULL").all()).results.map((x) => x.sharepoint_item));
+  const doCliente = new Set((await env.DB.prepare("SELECT sharepoint_item FROM clientes WHERE sharepoint_item IS NOT NULL").all()).results.map((x) => x.sharepoint_item));
+  return { alvo, raiz, usadas, doCliente, filhos: new Map(), clientes: new Map() };
+}
+
+// Pasta do cliente: a já registrada; senão, uma pasta da raiz com o nome do cliente que não seja de outro cliente nem de processo; senão, cria.
+async function pastaDoCliente(env, ctx, p) {
+  const chave = p.cliente_id || 0;
+  if (ctx.clientes.has(chave)) return ctx.clientes.get(chave);
+  let item = p.cliente_pasta ? ctx.raiz.find((x) => x.id === p.cliente_pasta) : null;
+  if (!item && p.cliente_pasta) { try { item = await lerItem(env, ctx.alvo.drive.id, p.cliente_pasta); if (!item?.folder) item = null; } catch { item = null; } }
+  if (!item) {
+    const nome = nomePastaCliente(p);
+    item = ctx.raiz.find((x) => x.name.toLowerCase() === nome.toLowerCase() && !ctx.usadas.has(x.id) && (!ctx.doCliente.has(x.id)));
+    if (!item) { item = await criarPasta(env, ctx.alvo.drive.id, ctx.alvo.pasta.id, nome); ctx.raiz.push(item); }
+    if (p.cliente_id) { await env.DB.prepare("UPDATE clientes SET sharepoint_item = ? WHERE id = ?").bind(item.id, p.cliente_id).run(); ctx.doCliente.add(item.id); }
+  }
+  ctx.clientes.set(chave, item);
+  return item;
+}
+async function filhosDe(env, ctx, pastaId) {
+  if (!ctx.filhos.has(pastaId)) ctx.filhos.set(pastaId, (await listarPasta(env, ctx.alvo.drive.id, pastaId, 20)).filter((x) => x.folder));
+  return ctx.filhos.get(pastaId);
+}
+
+// Move (e, se tiver o nome do padrão antigo, renomeia) uma pasta para dentro da pasta do cliente.
+async function moverPasta(env, ctx, itemId, destinoId, novoNome = null) {
+  const corpo = { parentReference: { id: destinoId }, ...(novoNome ? { name: novoNome } : {}) };
+  return graph(env, `/drives/${ctx.alvo.drive.id}/items/${encodeURIComponent(itemId)}?@microsoft.graph.conflictBehavior=rename`, { metodo: "PATCH", corpo });
+}
+
+// Cria (ou reaproveita) a pasta de até `limite` processos sem vínculo, dentro da pasta do cliente. Reaproveita uma pasta
+// livre com o nome esperado ou que comece pelo nº da pasta ("35 - ..." ou "Pasta 35 - ..."): primeiro dentro da pasta do
+// cliente; depois na raiz (nesse caso, ela é movida para a pasta do cliente).
 export async function vincularPastasAutomaticas(env, { limite = 20, processoId = null } = {}) {
   const alvo = await lerAlvo(env);
   if (!alvo.pronto) return { feitos: 0, criadas: 0, erros: [], restantes: 0 };
   const { results } = processoId
-    ? await env.DB.prepare(`${SELECT_AUTO} AND p.id = ?`).bind(processoId).all()
-    : await env.DB.prepare(`${SELECT_AUTO} ORDER BY p.id LIMIT ?`).bind(limite).all();
+    ? await env.DB.prepare(`${SELECT_PROC} WHERE p.sharepoint_item IS NULL AND p.sharepoint_ignorar = 0 AND p.id = ?`).bind(processoId).all()
+    : await env.DB.prepare(`${SELECT_PROC} WHERE p.sharepoint_item IS NULL AND p.sharepoint_ignorar = 0 ORDER BY p.cliente_id, p.id LIMIT ?`).bind(limite).all();
   const r = { feitos: 0, criadas: 0, erros: [] };
   if (results.length) {
-    const naRaiz = (await listarPasta(env, alvo.drive.id, alvo.pasta.id, 40)).filter((x) => x.folder);
-    const usadas = new Set((await env.DB.prepare("SELECT sharepoint_item FROM processos WHERE sharepoint_item IS NOT NULL").all()).results.map((x) => x.sharepoint_item));
+    const ctx = await contexto(env, alvo);
     for (const p of results) {
       try {
-        const nome = nomePastaProcesso(p);
+        const nome = nomePastaProcesso(p), antigo = nomeAntigo(p);
         const pasta = String(p.pasta || "").trim().toLowerCase();
-        let item = naRaiz.find((x) => x.name.toLowerCase() === nome.toLowerCase() && !usadas.has(x.id))
-          || (pasta && naRaiz.find((x) => !usadas.has(x.id) && (x.name.toLowerCase().startsWith(`${pasta} - `) || x.name.toLowerCase().startsWith(`pasta ${pasta} - `))));
-        if (!item) { item = await criarPasta(env, alvo.drive.id, alvo.pasta.id, nome); naRaiz.push(item); r.criadas++; }
-        usadas.add(item.id);
+        const cli = await pastaDoCliente(env, ctx, p);
+        const dentro = await filhosDe(env, ctx, cli.id);
+        const livre = (x) => !ctx.usadas.has(x.id) && !ctx.doCliente.has(x.id);
+        let item = dentro.find((x) => livre(x) && x.name.toLowerCase() === nome.toLowerCase()) || dentro.find((x) => livre(x) && comecaPelaPasta(x.name, pasta));
+        if (!item) {
+          const naRaiz = ctx.raiz.find((x) => livre(x) && [nome, antigo].some((n) => x.name.toLowerCase() === n.toLowerCase())) || ctx.raiz.find((x) => livre(x) && comecaPelaPasta(x.name, pasta));
+          if (naRaiz) { item = await moverPasta(env, ctx, naRaiz.id, cli.id, naRaiz.name === antigo ? nome : null); ctx.raiz.splice(ctx.raiz.indexOf(naRaiz), 1); dentro.push(item); }
+        }
+        if (!item) { item = await criarPasta(env, alvo.drive.id, cli.id, nome); dentro.push(item); r.criadas++; }
+        ctx.usadas.add(item.id);
         await env.DB.prepare("UPDATE processos SET sharepoint_drive = ?, sharepoint_item = ?, sharepoint_nome = ?, sharepoint_url = ? WHERE id = ? AND sharepoint_item IS NULL")
           .bind(alvo.drive.id, item.id, item.name, item.webUrl || null, p.id).run();
         r.feitos++;
@@ -205,6 +254,45 @@ export async function vincularPastasAutomaticas(env, { limite = 20, processoId =
     }
   }
   r.restantes = await pendentesAutomaticos(env);
+  return r;
+}
+
+// Pastas de processo vinculadas que ainda estão soltas na raiz (organização anterior, sem a pasta do cliente).
+async function soltasNaRaiz(env, alvo) {
+  const raiz = new Set((await listarPasta(env, alvo.drive.id, alvo.pasta.id, 40)).filter((x) => x.folder).map((x) => x.id));
+  const { results } = await env.DB.prepare(`${SELECT_PROC} WHERE p.sharepoint_item IS NOT NULL AND p.sharepoint_drive = ? ORDER BY p.cliente_id, p.id`).bind(alvo.drive.id).all();
+  return results.filter((p) => raiz.has(p.sharepoint_item));
+}
+export async function paraOrganizar(env) {
+  const alvo = await lerAlvo(env);
+  if (!alvo.pronto) return 0;
+  return (await soltasNaRaiz(env, alvo)).length;
+}
+
+// Move para a pasta do cliente até `limite` pastas de processo que estão na raiz. Os arquivos vão junto e o vínculo
+// no Diligo continua o mesmo (o identificador da pasta não muda). Pastas no padrão antigo ganham o nome novo.
+export async function organizarPorCliente(env, { limite = 15 } = {}) {
+  const alvo = await lerAlvo(env);
+  if (!alvo.pronto) return { movidas: 0, erros: [], restantes: 0 };
+  const lista = (await soltasNaRaiz(env, alvo)).slice(0, limite);
+  const r = { movidas: 0, erros: [] };
+  if (lista.length) {
+    const ctx = await contexto(env, alvo);
+    for (const p of lista) {
+      try {
+        const cli = await pastaDoCliente(env, ctx, p);
+        const atual = ctx.raiz.find((x) => x.id === p.sharepoint_item);
+        const renomear = atual && atual.name === nomeAntigo(p) ? nomePastaProcesso(p) : null;
+        const item = await moverPasta(env, ctx, p.sharepoint_item, cli.id, renomear);
+        await env.DB.prepare("UPDATE processos SET sharepoint_nome = ?, sharepoint_url = ? WHERE id = ?").bind(item.name, item.webUrl || null, p.id).run();
+        r.movidas++;
+      } catch (e) {
+        r.erros.push(`processo ${p.id}: ${e.message}`);
+        if (/401|403|token|autoriza/i.test(e.message)) break;
+      }
+    }
+  }
+  r.restantes = await paraOrganizar(env);
   return r;
 }
 
