@@ -72,7 +72,7 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
       const q = (url.searchParams.get("q") || "").trim().slice(0, 100);
       const sites = q ? await buscarSites(env, q) : [];
       etapa = html`<section class="cartao"><h2>1. Site do SharePoint</h2>
-        <form method="get" class="busca"><input name="q" value="${q}" placeholder="Nome do site (ex.: Escritório, Processos)" aria-label="Buscar site"><button type="submit">Buscar</button></form>
+        <form method="get" class="busca"><input name="q" value="${q}" placeholder="Nome do site ou endereço copiado do SharePoint" aria-label="Buscar site"><button type="submit">Buscar</button></form>
         ${q ? (sites.length ? html`<ul class="lista-ms">${sites.map((s) => html`<li><span><strong>${s.displayName || s.name}</strong><small>${s.webUrl || ""}</small></span>
           <form method="post">${campoCsrf(sessao)}<input type="hidden" name="acao" value="site"><input type="hidden" name="id" value="${s.id}"><input type="hidden" name="nome" value="${s.displayName || s.name}"><input type="hidden" name="url" value="${s.webUrl || ""}">
           <button type="submit" class="botao-pequeno">Escolher</button></form></li>`)}</ul>` : html`<p class="vazio">Nenhum site encontrado com esse nome.</p>`) : ""}</section>`;

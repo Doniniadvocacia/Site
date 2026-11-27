@@ -83,7 +83,18 @@ export async function lerAlvo(env) {
   const [conta, site, drive, pasta] = await Promise.all([ler("ms_conta"), ler("ms_site"), ler("ms_drive"), ler("ms_base")]);
   return { conta, site, drive, pasta, pronto: Boolean(conta && drive && pasta) };
 }
-export const buscarSites = async (env, q) => (await graph(env, `/sites?search=${encodeURIComponent(q || "*")}&$select=id,displayName,webUrl,name`)).value || [];
+// Aceita o nome do site ou o endereço copiado do navegador (https://empresa.sharepoint.com/sites/Nome/...).
+export async function buscarSites(env, q) {
+  const texto = String(q || "").trim();
+  if (/^https?:\/\//i.test(texto)) {
+    let u; try { u = new URL(texto); } catch { return []; }
+    if (!/\.sharepoint\.com$/i.test(u.hostname)) return [];
+    const m = u.pathname.match(/^\/(sites|teams)\/[^/]+/i);
+    const caminho = m ? `/sites/${u.hostname}:${decodeURIComponent(m[0])}` : `/sites/${u.hostname}`;
+    try { return [await graph(env, `${caminho}?$select=id,displayName,webUrl,name`)]; } catch { return []; }
+  }
+  return (await graph(env, `/sites?search=${encodeURIComponent(texto || "*")}&$select=id,displayName,webUrl,name`)).value || [];
+}
 export const bibliotecas = async (env, siteId) => (await graph(env, `/sites/${encodeURIComponent(siteId)}/drives?$select=id,name,webUrl`)).value || [];
 
 const SELECAO = "$select=id,name,folder,file,size,lastModifiedDateTime,webUrl,parentReference&$top=200&$orderby=name";
