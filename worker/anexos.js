@@ -92,7 +92,7 @@ const idArquivoWix = (origem) => {
   return partes[0] === "ugd" ? partes[1] : partes[0];
 };
 
-async function baixarDoWix(env, origem) {
+export async function baixarDoWix(env, origem) {
   const fileId = idArquivoWix(origem);
   const tentativas = [];
   if (env.WIX_API_KEY) {

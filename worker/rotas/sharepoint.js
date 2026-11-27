@@ -7,7 +7,7 @@ import { lerConfig, gravarConfig } from "../asaas.js";
 import { LIMITE_ANEXO } from "../anexos.js";
 import {
   msConfigurado, urlAutorizacao, urlRetorno, concluirConexao, desconectar, lerAlvo, buscarSites, bibliotecas,
-  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos,
+  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos, migrarAnexos, situacaoMigracao,
 } from "../microsoft.js";
 
 const tamanho = (b) => (!b ? "" : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
@@ -51,6 +51,13 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
         if (r.feitos) await auditar(env, req, sessao.usuario_id, "sharepoint_automatico", `${r.feitos} processo(s), ${r.criadas} pasta(s) criada(s)`);
         const erro = r.erros[0] ? `&m=${encodeURIComponent(r.erros[0].slice(0, 200))}` : "";
         return volta("auto", `&f=${r.feitos}&c=${r.criadas}&r=${r.restantes}${erro}${r.feitos && r.restantes && !r.erros.length ? "&seguir=1" : ""}`);
+      }
+      if (acao === "migrar") {
+        const r = await migrarAnexos(env, { limite: 8, repetirErros: f.get("repetir") === "1" });
+        if (r.enviados) await auditar(env, req, sessao.usuario_id, "sharepoint_migracao", `${r.enviados} documento(s) enviado(s)`);
+        const erro = r.erros[0] ? `&m=${encodeURIComponent(r.erros[0].slice(0, 200))}` : "";
+        const andou = r.enviados + r.existentes > 0;
+        return volta("migrar", `&e=${r.enviados}&x=${r.existentes}${erro}${andou && r.pendentes - r.erros > 0 ? "&seguir=1" : ""}`);
       }
       if (acao === "desconectar") { await desconectar(env, sessao.usuario_id); await auditar(env, req, sessao.usuario_id, "microsoft_desconectado", ""); return volta("desconectado"); }
       if (acao === "site") { await gravarConfig(env, "ms_site", JSON.stringify({ id: txt(f, "id", 300), nome: txt(f, "nome", 200), url: txt(f, "url", 500) }), sessao.usuario_id); await gravarConfig(env, "ms_drive", null); await gravarConfig(env, "ms_base", null); return volta("site"); }
@@ -115,13 +122,14 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
             <button type="submit">${seguir ? "Continuando…" : "Criar as pastas que faltam"}</button></form>
           ${seguir ? html`<p class="dica">Criando em lotes de 20. Mantenha esta página aberta até terminar.</p>` : ""}`
           : html`<p>✓ Todos os processos já têm pasta no SharePoint.</p>`}
-      </section>${etapa}`;
+      </section>${await cartaoMigracao(env, sessao, msg, url)}${etapa}`;
     }
   } catch (e) { etapa = html`<p class="erro">Microsoft: ${e.message}</p>`; }
 
+  const msgMigrar = msg === "migrar" ? `${url.searchParams.get("e") || 0} documento(s) enviado(s) ao SharePoint${Number(url.searchParams.get("x")) ? `, ${url.searchParams.get("x")} já estava(m) lá` : ""}.${url.searchParams.get("m") ? ` Erro: ${url.searchParams.get("m")}` : ""}` : null;
   const msgAuto = msg === "auto" ? `${url.searchParams.get("f") || 0} processo(s) vinculado(s), ${url.searchParams.get("c") || 0} pasta(s) criada(s).${url.searchParams.get("m") ? ` Erro: ${url.searchParams.get("m")}` : ""}` : null;
   return resposta(pagina({
-    titulo: "Microsoft 365", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(msgAuto ? { aviso: msgAuto } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
+    titulo: "Microsoft 365", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(msgAuto ? { aviso: msgAuto } : {}), ...(msgMigrar ? { aviso: msgMigrar } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/configuracoes">Configurações</a></p><h1>Microsoft 365 · SharePoint</h1>
       <p class="dica">Liga o Diligo à biblioteca de documentos do escritório no SharePoint: cada processo pode ser vinculado à sua pasta, que passa a aparecer na ficha do processo, e os anexos enviados pelo histórico e os comprovantes de protocolo são copiados para lá.</p>
       ${!msConfigurado(env) ? html`<section class="cartao"><h2>Configuração inicial</h2>
@@ -147,6 +155,24 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
       </section>${etapa}`}
       <script src="/assets/js/confirmar.js" defer></script><script src="/assets/js/sharepoint-auto.js" defer></script>`,
   }));
+}
+
+async function cartaoMigracao(env, sessao, msg, url) {
+  const m = await situacaoMigracao(env);
+  const seguir = msg === "migrar" && url.searchParams.get("seguir") === "1" && m.pendentes - m.erros > 0;
+  const semErro = m.pendentes - m.erros;
+  return html`<section class="cartao"><h2>Documentos já guardados no Diligo</h2>
+    <p class="dica">Copia para a pasta de cada processo os anexos do histórico (inclusive comprovantes de protocolo) salvos antes da integração.
+      Os anexos do financeiro não são copiados. Arquivos que já estão na pasta, com o mesmo nome e tamanho, não são enviados de novo. Os originais continuam no Diligo.</p>
+    ${semErro > 0 ? html`<p><strong>${String(semErro)}</strong> documento(s) de ${String(m.processos)} processo(s) ainda não estão no SharePoint.</p>
+      <form method="post" ${seguir ? seguro('data-auto-continuar="1"') : ""}>${campoCsrf(sessao)}<input type="hidden" name="acao" value="migrar">
+        <button type="submit">${seguir ? "Continuando…" : "Copiar documentos para o SharePoint"}</button></form>
+      ${seguir ? html`<p class="dica">Copiando em lotes de 8. Mantenha esta página aberta até terminar.</p>` : ""}`
+      : m.erros ? "" : html`<p>✓ Todos os documentos dos processos com pasta já estão no SharePoint.</p>`}
+    ${m.erros && !seguir ? html`<p class="erro">${String(m.erros)} documento(s) não puderam ser copiados.</p>
+      <form method="post">${campoCsrf(sessao)}<input type="hidden" name="acao" value="migrar"><input type="hidden" name="repetir" value="1">
+        <button type="submit" class="botao-secundario">Tentar de novo os que falharam</button></form>` : ""}
+  </section>`;
 }
 
 // ---------- Pasta do processo ----------

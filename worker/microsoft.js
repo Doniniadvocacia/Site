@@ -2,7 +2,8 @@
 // Um administrador conecta a conta Microsoft do escritório uma vez (OAuth com acesso delegado); o Diligo guarda o
 // token de renovação cifrado e passa a listar, criar pastas e gravar arquivos na biblioteca do SharePoint escolhida.
 // Segredos (Cloudflare): MS_CLIENT_ID, MS_CLIENT_SECRET; opcional MS_TENANT (padrão: organizations).
-import { agora, cifrar, decifrar } from "./seguranca.js";
+import { agora, cifrar, decifrar, decifrarBytes } from "./seguranca.js";
+import { baixarDoWix } from "./anexos.js";
 import { lerConfig, gravarConfig } from "./asaas.js";
 
 const LOGIN = "https://login.microsoftonline.com";
@@ -133,12 +134,14 @@ export async function enviarArquivo(env, driveId, pastaId, nome, dados) {
 }
 
 // Cópia de um anexo do Diligo para a pasta do processo no SharePoint (se houver). Nunca impede a gravação no Diligo.
-export async function copiarParaPastaDoProcesso(env, processoId, arquivo) {
+export async function copiarParaPastaDoProcesso(env, processoId, arquivo, anexoId = null) {
   try {
     if (!msConfigurado(env) || !arquivo || typeof arquivo === "string" || !arquivo.size || !processoId) return null;
     const p = await env.DB.prepare("SELECT sharepoint_drive, sharepoint_item FROM processos WHERE id = ?").bind(processoId).first();
     if (!p?.sharepoint_drive || !p?.sharepoint_item) return null;
-    return await enviarArquivo(env, p.sharepoint_drive, p.sharepoint_item, arquivo.name, new Uint8Array(await arquivo.arrayBuffer()));
+    const item = await enviarArquivo(env, p.sharepoint_drive, p.sharepoint_item, arquivo.name, new Uint8Array(await arquivo.arrayBuffer()));
+    if (anexoId && item?.id) await env.DB.prepare("UPDATE anexos SET sharepoint_item = ?, sharepoint_erro = NULL WHERE id = ?").bind(item.id, anexoId).run();
+    return item;
   } catch (e) {
     console.error("SharePoint:", e.message);
     await env.DB.prepare("INSERT INTO auditoria (usuario_id, acao, detalhe, criado_em) VALUES (NULL, 'sharepoint_erro', ?, ?)").bind(`processo ${processoId}: ${e.message}`.slice(0, 500), agora()).run().catch(() => {});
@@ -192,4 +195,48 @@ export async function vincularPastasAutomaticas(env, { limite = 20, processoId =
   }
   r.restantes = await pendentesAutomaticos(env);
   return r;
+}
+
+// ---------- Documentos já guardados no Diligo → pasta do processo no SharePoint ----------
+// Anexos do histórico (inclui comprovantes de protocolo) de processos com pasta vinculada. Os do financeiro não vão:
+// são de acesso restrito. Um arquivo com o mesmo nome e tamanho já presente na pasta não é enviado de novo.
+const FILTRO_MIGRAR = `FROM anexos a JOIN historico h ON h.anexo_id = a.id JOIN processos p ON p.id = h.processo_id
+  WHERE a.contexto = 'historico' AND a.sharepoint_item IS NULL AND p.sharepoint_item IS NOT NULL AND (a.chave IS NOT NULL OR a.origem_wix IS NOT NULL)`;
+
+export async function situacaoMigracao(env) {
+  const r = await env.DB.prepare(`SELECT COUNT(DISTINCT a.id) AS total, COUNT(DISTINCT CASE WHEN a.sharepoint_erro IS NOT NULL THEN a.id END) AS erros, COUNT(DISTINCT p.id) AS processos ${FILTRO_MIGRAR}`).first();
+  return { pendentes: r?.total || 0, erros: r?.erros || 0, processos: r?.processos || 0 };
+}
+
+export async function migrarAnexos(env, { limite = 8, repetirErros = false } = {}) {
+  const { results } = await env.DB.prepare(`SELECT a.id, a.nome, a.chave, a.origem_wix, a.tamanho, MIN(h.processo_id) AS processo_id, p.sharepoint_drive, p.sharepoint_item AS pasta
+    ${FILTRO_MIGRAR} ${repetirErros ? "" : "AND a.sharepoint_erro IS NULL"} GROUP BY a.id ORDER BY a.id LIMIT ?`).bind(limite).all();
+  const r = { enviados: 0, existentes: 0, erros: [] };
+  const naPasta = new Map();
+  for (const a of results) {
+    try {
+      if (!naPasta.has(a.pasta)) naPasta.set(a.pasta, (await listarPasta(env, a.sharepoint_drive, a.pasta, 20)).filter((x) => x.file));
+      const arquivos = naPasta.get(a.pasta);
+      const nome = nomeArquivo(a.nome);
+      let dados = null;
+      if (a.chave) {
+        if (!env.ARQUIVOS) throw new Error("armazenamento de anexos indisponível");
+        const obj = await env.ARQUIVOS.get(a.chave);
+        if (!obj) throw new Error("arquivo não encontrado no armazenamento do Diligo");
+        dados = new Uint8Array(await decifrarBytes(env, await obj.arrayBuffer()));
+      } else {
+        dados = (await baixarDoWix(env, a.origem_wix)).dados; // ainda não copiado do Wix: vai direto para o SharePoint
+      }
+      const igual = arquivos.find((x) => x.name.toLowerCase() === nome.toLowerCase() && Number(x.size) === dados.length);
+      let item = igual;
+      if (igual) r.existentes++;
+      else { item = await enviarArquivo(env, a.sharepoint_drive, a.pasta, nome, dados); arquivos.push({ ...item, size: dados.length }); r.enviados++; }
+      await env.DB.prepare("UPDATE anexos SET sharepoint_item = ?, sharepoint_erro = NULL WHERE id = ?").bind(item.id, a.id).run();
+    } catch (e) {
+      r.erros.push(`${a.nome}: ${e.message}`);
+      await env.DB.prepare("UPDATE anexos SET sharepoint_erro = ? WHERE id = ?").bind(String(e.message).slice(0, 200), a.id).run();
+      if (/401|token|autoriza|conectad/i.test(e.message)) break;
+    }
+  }
+  return { ...r, ...(await situacaoMigracao(env)) };
 }

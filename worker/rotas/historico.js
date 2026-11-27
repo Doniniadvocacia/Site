@@ -78,7 +78,7 @@ export async function editarHistorico(req, env, sessao, id) {
   let anexoId = h.anexo_id;
   try {
     const novo = await salvarAnexo(env, f.get("arquivo"), "historico", sessao.usuario_id);
-    if (novo) await copiarParaPastaDoProcesso(env, h.processo_id, f.get("arquivo"));
+    if (novo) await copiarParaPastaDoProcesso(env, h.processo_id, f.get("arquivo"), novo);
     if (novo || f.get("remover_anexo") === "1") { const antigo = anexoId; anexoId = novo; if (antigo) { await env.DB.prepare("UPDATE historico SET anexo_id = NULL WHERE id = ?").bind(h.id).run(); await excluirAnexo(env, antigo); } }
   } catch (e) { return tela(v, e.message); }
   await env.DB.prepare("UPDATE historico SET data = ?, descricao = ?, anexo_id = ?, atualizado_em = ? WHERE id = ?").bind(v.data, v.descricao, anexoId, agora(), h.id).run();
@@ -96,7 +96,7 @@ export async function adicionarHistorico(req, env, sessao, processoId) {
   if (!data || !descricao) return volta("hist_vazio");
   let anexoId = null;
   try { anexoId = await salvarAnexo(env, f.get("arquivo"), "historico", sessao.usuario_id); } catch (e) { return volta(/20 MB/.test(e.message) ? "anexo_grande" : "anexo_indisponivel"); }
-  if (anexoId) await copiarParaPastaDoProcesso(env, proc.id, f.get("arquivo"));
+  if (anexoId) await copiarParaPastaDoProcesso(env, proc.id, f.get("arquivo"), anexoId);
   await env.DB.prepare("INSERT INTO historico (processo_id, cliente_id, data, descricao, anexo_id, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(proc.id, proc.cliente_id, data, descricao, anexoId, sessao.usuario_id, agora()).run();
   await auditar(env, req, sessao.usuario_id, "historico_criado", `processo ${proc.id}${anexoId ? `, anexo ${anexoId}` : ""}`);
