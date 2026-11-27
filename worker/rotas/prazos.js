@@ -1,4 +1,5 @@
 // Prazos: lista, cadastro, edição, cálculo e cumprimento.
+import { salvarAnexo, excluirAnexo } from "../anexos.js";
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
@@ -143,7 +144,7 @@ export async function listaPrazos(req, env, sessao) {
             <td><a href="/sistema/prazos/${String(p.id)}">${p.titulo}</a>${p.tipo ? html`<br><small>${p.tipo}</small>` : ""}</td>
             <td>${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}">${rotuloProcesso(p)}</a>` : "—"}</td>
             <td>${p.responsavel}</td>
-            <td>${p.situacao === "aberto" ? html`<form method="post" action="/sistema/prazos/${String(p.id)}/cumprir" class="form-linha">${campoCsrf(sessao)}<button class="botao-pequeno" type="submit">Cumprido</button></form>` : html`<small>${p.situacao === "cumprido" ? `Cumprido ${dataBR(p.data_cumprimento)}` : "Cancelado"}</small>`}</td>
+            <td>${p.situacao === "aberto" ? html`<form method="post" action="/sistema/prazos/${String(p.id)}/cumprir" class="form-linha">${campoCsrf(sessao)}<button class="botao-pequeno" type="submit">Cumprido</button></form>` : html`<small>${p.situacao === "cumprido" ? `Cumprido ${dataBR(p.data_cumprimento)}` : "Cancelado"}</small>${p.comprovante_anexo_id ? html` <a class="link-pequeno" href="/sistema/anexos/${String(p.comprovante_anexo_id)}" target="_blank" rel="noopener" title="Comprovante de protocolo">📎 comprovante</a>` : ""}`}</td>
           </tr>`)}</tbody>
         </table></div>` : html`<section class="cartao"><p class="vazio">Nenhum prazo nesta seleção.</p></section>`}
         <p class="dica">${String(results.length)} prazo(s).</p>`,
@@ -190,12 +191,26 @@ export async function prazos(req, env, sessao, id) {
   if (id && id.endsWith("/cumprir") && req.method === "POST") {
     const { f, ok } = await csrfOk(req, sessao);
     const pid = Number(id.split("/")[0]);
+    const voltarItem = f.get("voltar") === "item";
     if (ok) {
-      await env.DB.prepare("UPDATE prazos SET situacao = 'cumprido', data_cumprimento = ?, atualizado_em = ? WHERE id = ? AND situacao = 'aberto'")
-        .bind(hojeBR(), agora(), pid).run();
-      await auditar(env, req, sessao.usuario_id, "prazo_cumprido", `prazo ${pid}`);
+      const pz = await env.DB.prepare("SELECT id, titulo, processo_id, situacao, categoria FROM prazos WHERE id = ?").bind(pid).first();
+      if (pz && pz.situacao === "aberto") {
+        // Comprovante de protocolo (opcional): se foi enviado e falhar, o prazo não é cumprido, para o usuário tentar de novo.
+        let anexoId = null;
+        try { anexoId = await salvarAnexo(env, f.get("comprovante"), "historico", sessao.usuario_id); }
+        catch (e) { return redirecionar(`/sistema/prazos/${pid}?msg=anexo&m=${encodeURIComponent(e.message.slice(0, 150))}#acoes`); }
+        const hoje = hojeBR(), t = agora();
+        const r = await env.DB.prepare("UPDATE prazos SET situacao = 'cumprido', data_cumprimento = ?, comprovante_anexo_id = ?, atualizado_em = ? WHERE id = ? AND situacao = 'aberto'")
+          .bind(hoje, anexoId, t, pid).run();
+        if (r.meta.changes && anexoId && pz.processo_id) {
+          // Registra no histórico da pasta: o comprovante aparece também em "Arquivos do processo".
+          await env.DB.prepare("INSERT INTO historico (processo_id, data, descricao, anexo_id, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(pz.processo_id, hoje, `${pz.categoria === "Compromisso" ? "Compromisso cumprido" : "Prazo cumprido"}: ${pz.titulo} — comprovante de protocolo anexado.`, anexoId, sessao.usuario_id, t).run();
+        } else if (!r.meta.changes && anexoId) await excluirAnexo(env, anexoId);
+        await auditar(env, req, sessao.usuario_id, "prazo_cumprido", `prazo ${pid}${anexoId ? ` (comprovante ${anexoId})` : ""}`);
+      }
     }
-    if (f.get("voltar") === "item") return redirecionar(`/sistema/prazos/${pid}?msg=${ok ? "cumprido" : "sessao"}`);
+    if (voltarItem) return redirecionar(`/sistema/prazos/${pid}?msg=${ok ? "cumprido" : "sessao"}`);
     return redirecionar(req.headers.get("Referer")?.includes("/sistema/") ? new URL(req.headers.get("Referer")).pathname + new URL(req.headers.get("Referer")).search : "/sistema/agenda?visao=prazos");
   }
 

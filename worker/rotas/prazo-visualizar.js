@@ -23,7 +23,8 @@ export async function lerItem(env, tipo, id) {
     if (pub) item.descricao = descricaoDaIntimacao(pub);
   }
   const proc = item.processo_id ? await env.DB.prepare(`SELECT p.*, c.nome AS cliente_nome FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = ?`).bind(item.processo_id).first() : null;
-  return { tipo: tabela === "agenda" ? "agenda" : "prazo", item, proc };
+  const comprovante = item.comprovante_anexo_id ? await env.DB.prepare("SELECT nome FROM anexos WHERE id = ?").bind(item.comprovante_anexo_id).first() : null;
+  return { tipo: tabela === "agenda" ? "agenda" : "prazo", item, proc, comprovante_nome: comprovante?.nome || null };
 }
 
 // Campos dos dois blocos (Pasta e Agenda), no mesmo formato para a página e para o pop-up.
@@ -80,14 +81,16 @@ export async function visualizarPrazo(req, env, sessao, item, { erro = null, avi
   const avisos = { salvo: comp ? "Compromisso salvo." : "Prazo salvo.", reagendado: comp ? "Compromisso reagendado." : "Prazo interno reagendado.", cancelado: comp ? "Compromisso cancelado." : "Prazo cancelado.", cumprido: "Marcado como cumprido." };
   const erros = { sessao: "Sessão expirada. Tente novamente.", fatal: `O prazo interno não pode passar do prazo fatal (${dataBR(item.prazo_fatal)}).`, data: "Informe uma data válida.",
     travado: "Sessão de julgamento tem data fixada e não pode ser reagendada.", motivo: "Escolha o motivo do cancelamento.", outro: "Descreva o motivo em \"Detalhes\".",
-    fechado: "Este item não está mais em aberto.", edicao: "Prazos e compromissos cadastrados não podem ser editados. Use cumprir, reagendar ou cancelar." };
+    fechado: "Este item não está mais em aberto.", anexo: `Não foi possível anexar o comprovante: ${sp.get("m") || "erro no envio"}. O prazo continua em aberto.`, edicao: "Prazos e compromissos cadastrados não podem ser editados. Use cumprir, reagendar ou cancelar." };
   const aberto = item.situacao === "aberto";
   const travado = dataTravada(item);
   const motivos = await obterLista(env, "motivo_cancelamento_prazo");
   const hoje = hojeBR();
   const acoes = aberto ? html`<section class="cartao acoes-prazo" id="acoes"><h2>Ações</h2><div class="acoes-prazo-grade">
-      <form method="post" action="/sistema/prazos/${String(item.id)}/cumprir" class="acao-prazo">${campoCsrf(sessao)}<input type="hidden" name="voltar" value="item">
-        <h3>Cumprir</h3><p class="dica">Marca como cumprido hoje (${dataBR(hoje)}).</p><button type="submit">Marcar como cumprido</button></form>
+      <form method="post" action="/sistema/prazos/${String(item.id)}/cumprir" class="acao-prazo" enctype="multipart/form-data">${campoCsrf(sessao)}<input type="hidden" name="voltar" value="item">
+        <h3>Cumprir</h3><p class="dica">Marca como cumprido hoje (${dataBR(hoje)}).</p>
+        <label>${comp ? "Comprovante" : "Comprovante de protocolo"} <small>(opcional)</small><input type="file" name="comprovante" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"></label>
+        <button type="submit">Marcar como cumprido</button></form>
       <form method="post" action="/sistema/prazos/${String(item.id)}/reagendar" class="acao-prazo">${campoCsrf(sessao)}
         <h3>${comp ? "Reagendar" : "Reagendar prazo interno"}</h3>
         ${travado ? html`<p class="dica">Sessão de julgamento: a data é fixada pelo tribunal e não pode ser alterada.</p>`
@@ -109,6 +112,8 @@ export async function visualizarPrazo(req, env, sessao, item, { erro = null, avi
       ${aberto && !comp && item.prazo_fatal ? html`<p class="urgencia-prazo">Prazo fatal ${dataBR(item.prazo_fatal)} ${urgencia(item.prazo_fatal, item.situacao)}</p>` : ""}
       ${blocos.map((b) => html`<section class="cartao bloco-visualizacao"><h2>${b.titulo}</h2>${fichaHtml(b.campos)}</section>`)}
       ${descricao ? html`<section class="cartao bloco-visualizacao"><h2>Descrição</h2><p class="pre">${descricao}</p></section>` : ""}
+      ${item.comprovante_anexo_id ? html`<section class="cartao bloco-visualizacao"><h2>${comp ? "Comprovante" : "Comprovante de protocolo"}</h2>
+        <p><a class="anexo" href="/sistema/anexos/${String(item.comprovante_anexo_id)}" target="_blank" rel="noopener">📎 ${dados.comprovante_nome || "Abrir comprovante"}</a></p></section>` : ""}
       ${acoes}
       <script src="/assets/js/confirmar.js" defer></script>`,
   }));

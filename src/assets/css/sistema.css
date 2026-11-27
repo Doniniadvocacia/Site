@@ -959,3 +959,8 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
   .menu .busca-menu input { width: 120px; }
   .marca-sistema span { letter-spacing: .16em; }
 }
+.dialogo-cumprir { border: 0; border-radius: 12px; padding: 1.4rem 1.5rem; width: min(440px, 92vw); box-shadow: 0 18px 50px rgba(20,35,59,.28); }
+.dialogo-cumprir::backdrop { background: rgba(20,35,59,.45); }
+.dialogo-cumprir h2 { margin-top: 0; }
+.dialogo-cumprir label, .acao-prazo label { display: grid; gap: .3rem; font-size: .85rem; color: var(--suave); margin: .6rem 0; }
+.dialogo-cumprir input[type=file], .acao-prazo input[type=file] { font-size: .85rem; }
