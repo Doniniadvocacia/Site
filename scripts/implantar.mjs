@@ -10,7 +10,7 @@ import { writeFileSync, rmSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const NOMES = ["DATA_KEY", "SETUP_TOKEN", "WIX_API_KEY", "ASAAS_API_KEY", "ANTHROPIC_API_KEY"];
+const NOMES = ["DATA_KEY", "SETUP_TOKEN", "WIX_API_KEY", "ASAAS_API_KEY", "ANTHROPIC_API_KEY", "MS_CLIENT_ID", "MS_CLIENT_SECRET", "MS_TENANT"];
 const segredos = Object.fromEntries(
   NOMES.filter((n) => process.env[n] && process.env[n].trim()).map((n) => [n, process.env[n].trim()])
 );

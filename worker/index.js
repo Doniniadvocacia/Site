@@ -14,6 +14,7 @@ import { oabs, feriados } from "./rotas/configuracoes.js";
 import { capturarDjen, capturaPendente } from "./djen.js";
 import { analisarPendentes } from "./ia.js";
 import { calculos } from "./rotas/calculos.js";
+import { configuracaoMicrosoft, processoSharepoint } from "./rotas/sharepoint.js";
 import { atualizarSePreciso } from "./indices.js";
 import { cadastroCliente, cadastroProcesso } from "./rotas/cadastro.js";
 import { adicionarHistorico, excluirHistorico, editarHistorico } from "./rotas/historico.js";
@@ -71,6 +72,7 @@ function configuracoes(sessao) {
     ${item("/sistema/listas", "Listas", "Incluir e excluir opções dos campos de seleção")}
     ${item("/sistema/favorecidos", "Favorecidos", "Quem recebe pagamentos e repasses do escritório")}
     ${item("/sistema/asaas", "Asaas", "Cobranças, baixa automática de pagamentos e conciliação")}
+    ${item("/sistema/microsoft", "Microsoft 365", "SharePoint: pastas dos processos e cópia dos anexos")}
     ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
     ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
   </div>` }));
@@ -147,6 +149,8 @@ async function sistema(req, env, ctx) {
   if ((m = caminho.match(/^\/sistema\/crm\/tarefas\/(\d+)\/concluir$/)) && metodo === "POST") return concluirTarefa(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/processos(?:\/(\d+))?$/))) return processos(req, env, sessao, m[1]);
   if ((m = caminho.match(/^\/sistema\/prazos(?:\/(novo|\d+(?:\/(?:cumprir|mover|reagendar|cancelar))?))?$/))) return prazos(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/microsoft(?:\/(retorno|conectar))?$/))) return configuracaoMicrosoft(req, env, sessao, m[1]);
+  if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/sharepoint\/(lista|vincular|enviar)$/))) return processoSharepoint(req, env, sessao, m[1], m[2]);
   if ((m = caminho.match(/^\/sistema\/calculos(?:\/(novo|indices|\d+))?(?:\/(editar|excluir))?$/))) return calculos(req, env, sessao, m[1], m[2]);
   if (caminho === "/sistema/publicacoes/analisar") return publicacoes(req, env, sessao, null, ctx, "analisar");
   if ((m = caminho.match(/^\/sistema\/publicacoes\/(\d+)\/(analisar|aprovar)$/))) return publicacoes(req, env, sessao, m[1], ctx, m[2]);
@@ -156,7 +160,7 @@ async function sistema(req, env, ctx) {
 
   const admin = sessao.perfil === "admin";
   // Configurações e tudo o que fica dentro delas: somente administradores.
-  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas|asaas)(\/|$)/.test(caminho)) {
+  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas|asaas|microsoft)(\/|$)/.test(caminho)) {
     return resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1><p>Esta área é exclusiva para administradores.</p>` }), 403);
   }
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);

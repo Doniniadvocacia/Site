@@ -4,6 +4,7 @@ import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
 import { salvarAnexo, excluirAnexo, anexosDisponiveis } from "../anexos.js";
+import { copiarParaPastaDoProcesso } from "../microsoft.js";
 import { csrfOk, txt, dataValida, bloco } from "./comum.js";
 
 export const linkAnexo = (a) => (a.anexo_id ? html` <a class="anexo" href="/sistema/anexos/${String(a.anexo_id)}" target="_blank" rel="noopener">📎 ${a.anexo_nome || "anexo"}</a>${a.anexo_pendente ? html` <small>(não copiado do Wix)</small>` : ""}` : "");
@@ -77,6 +78,7 @@ export async function editarHistorico(req, env, sessao, id) {
   let anexoId = h.anexo_id;
   try {
     const novo = await salvarAnexo(env, f.get("arquivo"), "historico", sessao.usuario_id);
+    if (novo) await copiarParaPastaDoProcesso(env, h.processo_id, f.get("arquivo"));
     if (novo || f.get("remover_anexo") === "1") { const antigo = anexoId; anexoId = novo; if (antigo) { await env.DB.prepare("UPDATE historico SET anexo_id = NULL WHERE id = ?").bind(h.id).run(); await excluirAnexo(env, antigo); } }
   } catch (e) { return tela(v, e.message); }
   await env.DB.prepare("UPDATE historico SET data = ?, descricao = ?, anexo_id = ?, atualizado_em = ? WHERE id = ?").bind(v.data, v.descricao, anexoId, agora(), h.id).run();
@@ -94,6 +96,7 @@ export async function adicionarHistorico(req, env, sessao, processoId) {
   if (!data || !descricao) return volta("hist_vazio");
   let anexoId = null;
   try { anexoId = await salvarAnexo(env, f.get("arquivo"), "historico", sessao.usuario_id); } catch (e) { return volta(/20 MB/.test(e.message) ? "anexo_grande" : "anexo_indisponivel"); }
+  if (anexoId) await copiarParaPastaDoProcesso(env, proc.id, f.get("arquivo"));
   await env.DB.prepare("INSERT INTO historico (processo_id, cliente_id, data, descricao, anexo_id, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(proc.id, proc.cliente_id, data, descricao, anexoId, sessao.usuario_id, agora()).run();
   await auditar(env, req, sessao.usuario_id, "historico_criado", `processo ${proc.id}${anexoId ? `, anexo ${anexoId}` : ""}`);
@@ -125,9 +128,13 @@ export const MENSAGENS = {
   hist_excluido: ["aviso", "Andamento excluído."],
   hist_salvo: ["aviso", "Andamento atualizado."],
   salvo: ["aviso", "Alterações salvas."],
+  sp_vinculado: ["aviso", "Pasta do SharePoint vinculada ao processo."],
+  sp_desvinculado: ["aviso", "Pasta do SharePoint desvinculada."],
+  sp_enviado: ["aviso", "Arquivo enviado para a pasta do SharePoint."],
 };
 export function mensagemDaUrl(req) {
   const sp = new URL(req.url).searchParams;
+  if (sp.get("msg") === "sp_erro") return { erro: `SharePoint: ${sp.get("m") || "erro"}` };
   const m = MENSAGENS[sp.get("msg")] || (sp.get("salvo") ? MENSAGENS.salvo : null);
   return m ? { [m[0]]: m[1] } : {};
 }

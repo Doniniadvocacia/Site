@@ -964,3 +964,14 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .dialogo-cumprir h2 { margin-top: 0; }
 .dialogo-cumprir label, .acao-prazo label { display: grid; gap: .3rem; font-size: .85rem; color: var(--suave); margin: .6rem 0; }
 .dialogo-cumprir input[type=file], .acao-prazo input[type=file] { font-size: .85rem; }
+/* SharePoint */
+.lista-ms { list-style: none; margin: .6rem 0; padding: 0; }
+.lista-ms li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid #f0ece4; }
+.lista-ms li span { display: grid; gap: .1rem; min-width: 0; overflow-wrap: anywhere; }
+.lista-ms li small { color: var(--suave); font-size: .78rem; }
+.lista-ms form { margin: 0; flex-shrink: 0; }
+.passos-ms { padding-left: 1.2rem; display: grid; gap: .5rem; font-size: .92rem; }
+.passos-ms code { background: #f3efe7; padding: .05rem .3rem; border-radius: 4px; font-size: .82rem; overflow-wrap: anywhere; }
+.topo-sharepoint { display: flex; justify-content: space-between; align-items: center; gap: .6rem 1rem; flex-wrap: wrap; margin-bottom: .4rem; }
+.envio-sharepoint { margin-top: .8rem; gap: .5rem; flex-wrap: wrap; }
+.campo-nome-pasta { min-width: 280px; }

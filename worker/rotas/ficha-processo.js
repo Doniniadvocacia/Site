@@ -1,5 +1,6 @@
 // Ficha do processo: mesmos blocos do Diligo no Wix (pasta, processo, outras informações, decisões,
 // observações, histórico, processos vinculados, agenda e financeiro), no visual atual.
+import { msConfigurado } from "../microsoft.js";
 import { html, pagina, resposta, campoCsrf, dataBR, moeda, textoDeHtml } from "../html.js";
 import { decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
@@ -128,6 +129,9 @@ export async function fichaProcesso(req, env, sessao, id) {
           </div></li>`)}</ul>`
         : html`<p class="vazio">Nenhum arquivo. Os arquivos anexados no histórico${sessao.financeiro ? " e nos lançamentos financeiros" : ""} deste processo aparecem aqui.</p>`,
         { id: "arquivos", contagem: listaArquivos.length, aberto: listaArquivos.length > 0 })}
+
+      ${msConfigurado(env) ? bloco("Pasta no SharePoint", html`<div class="sharepoint-conteudo" data-sharepoint="/sistema/processos/${String(p.id)}/sharepoint/lista"><p class="dica">Carregando arquivos do SharePoint…</p></div>
+        <script src="/assets/js/sharepoint.js" defer></script>`, { id: "sharepoint", aberto: Boolean(p.sharepoint_item) || /sp_/.test(new URL(req.url).searchParams.get("msg") || "") }) : ""}
 
       ${hist}
 

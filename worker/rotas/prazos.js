@@ -1,5 +1,6 @@
 // Prazos: lista, cadastro, edição, cálculo e cumprimento.
 import { salvarAnexo, excluirAnexo } from "../anexos.js";
+import { copiarParaPastaDoProcesso } from "../microsoft.js";
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
@@ -209,6 +210,7 @@ export async function prazos(req, env, sessao, id) {
         const r = await env.DB.prepare("UPDATE prazos SET situacao = 'cumprido', data_cumprimento = ?, comprovante_anexo_id = ?, atualizado_em = ? WHERE id = ? AND situacao = 'aberto'")
           .bind(hoje, anexoId, t, pid).run();
         if (r.meta.changes && anexoId && pz.processo_id) {
+          await copiarParaPastaDoProcesso(env, pz.processo_id, f.get("comprovante"));
           // Registra no histórico da pasta: o comprovante aparece também em "Arquivos do processo".
           await env.DB.prepare("INSERT INTO historico (processo_id, data, descricao, anexo_id, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(pz.processo_id, hoje, `${pz.categoria === "Compromisso" ? "Compromisso cumprido" : "Prazo cumprido"}: ${pz.titulo} — comprovante de protocolo anexado.`, anexoId, sessao.usuario_id, t).run();
