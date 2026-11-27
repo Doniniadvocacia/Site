@@ -96,6 +96,14 @@ async function sistema(req, env, ctx) {
   if (caminho === "/sistema/2fa") return doisFatores(req, env, sessao);
   if (caminho === "/sistema/sair" && metodo === "POST") return sair(req, env, sessao);
 
+  // Volta do login da Microsoft: o navegador não envia o cookie de sessão (SameSite=Strict) numa navegação vinda de outro site.
+  // Uma página intermediária do próprio Diligo repete o endereço; essa segunda navegação já é do mesmo site e leva o cookie.
+  if (!sessao && caminho === "/sistema/microsoft/retorno" && !url.searchParams.has("r")) {
+    const destino = `${caminho}?${url.searchParams.toString()}&r=1`;
+    return new Response(`<!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0;url=${destino.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"><title>Concluindo a conexão…</title><p>Concluindo a conexão com a Microsoft…</p>`,
+      { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'" } });
+  }
+
   // Daqui em diante: login completo (senha + 2FA) e perfil da equipe
   if (!sessao) return redirecionar("/sistema/entrar");
   if (sessao.etapa !== "completa") return redirecionar("/sistema/2fa");
