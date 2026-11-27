@@ -43,7 +43,7 @@ async function itensDoPeriodo(env, inicio, fim) {
   return { porDia, feriados, tipos: [...new Set(prz.filter((p) => p.categoria !== "Compromisso").map((p) => p.tipo).filter(Boolean))].sort() };
 }
 
-const etiqueta = (it) => {
+const etiqueta = (it, admin = false) => {
   const rotulo = `${it.hora ? it.hora + " " : ""}${it.pasta ? it.pasta + " - " : ""}${it.titulo}`;
   if (!it.prazo) {
     const travadoAv = dataTravada({ ...it, categoria: "Compromisso" });
@@ -57,7 +57,8 @@ const etiqueta = (it) => {
   // Compromissos podem ir para qualquer data (exceto sessões de julgamento); prazos não passam do fatal.
   const travado = dataTravada(it);
   const movel = !it.feito && !travado && (it.compromisso || !!it.prazo_fatal);
-  const limite = it.compromisso ? "9999-12-31" : it.prazo_fatal;
+  // Administradores podem arrastar prazos para além do fatal (o fatal acompanha a nova data).
+  const limite = it.compromisso || admin ? "9999-12-31" : it.prazo_fatal;
   return html`<a class="etiqueta ${it.cor}${it.feito ? " feito" : ""}${noFatal ? " no-fatal" : ""}${travado ? " travado" : ""}" href="${it.href}" data-detalhe="prazo:${String(it.id)}"
     title="${it.compromisso ? "Compromisso" : "Prazo"}: ${rotulo}${it.compromisso ? "" : ` · Prazo fatal: ${fatal}`}${it.feito ? " (cumprido)" : travado ? " · data fixada (sessão de julgamento)" : movel ? " · arraste para reagendar" : ""}"
     ${movel ? seguro(`draggable="true" data-prazo="${it.id}" data-fatal="${limite}"${it.compromisso ? ' data-compromisso="1"' : ""}`) : ""}>${rotulo}</a>`;
@@ -88,7 +89,7 @@ async function calendarioMensal(req, env, sessao) {
     const classes = ["dia", d.slice(0, 7) !== mes ? "fora" : "", dow === 0 || dow === 6 || feriado ? "nao-util" : "", recesso ? "recesso" : "", d === hoje ? "hoje" : ""].filter(Boolean).join(" ");
     celulas.push(html`<div class="${classes}" data-data="${d}">
       <div class="dia-topo">${feriado ? html`<span class="feriado-nome">${feriado}</span>` : recesso && dow !== 0 && dow !== 6 ? html`<span class="feriado-nome recesso-nome">Recesso forense</span>` : ""}<a class="dia-num" href="/sistema/agenda/dia/${d}">${String(Number(d.slice(8)))}</a></div>
-      <div class="dia-itens">${itens.slice(0, MAX_POR_DIA).map(etiqueta)}
+      <div class="dia-itens">${itens.slice(0, MAX_POR_DIA).map((it) => etiqueta(it, sessao.perfil === "admin"))}
         ${itens.length > MAX_POR_DIA ? html`<a class="ver-mais" href="/sistema/agenda/dia/${d}">ver mais ${String(itens.length - MAX_POR_DIA)}...</a>` : ""}</div>
     </div>`);
   }
@@ -127,7 +128,7 @@ async function agendaDoDia(req, env, sessao, data) {
     corpo: html`<p class="trilha"><a href="/sistema/agenda?mes=${a}-${m}">Agenda</a></p>
       <h1>${d}/${m}/${a}${feriados.get(data) ? html` <small class="subtitulo">· ${feriados.get(data)}</small>` : ""}</h1>
       <div class="titulo-acoes"><span></span><span><a class="botao-link" href="/sistema/prazos/novo?data=${data}">Novo agendamento</a></span></div>
-      <section class="cartao">${itens.length ? html`<div class="lista-etiquetas">${itens.map(etiqueta)}</div>` : html`<p>Nada marcado para este dia.</p>`}</section>
+      <section class="cartao">${itens.length ? html`<div class="lista-etiquetas">${itens.map((it) => etiqueta(it, sessao.perfil === "admin"))}</div>` : html`<p>Nada marcado para este dia.</p>`}</section>
       <script src="/assets/js/agenda-detalhe.js" defer></script>`,
   }));
 }

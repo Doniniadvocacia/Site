@@ -84,6 +84,7 @@ export async function visualizarPrazo(req, env, sessao, item, { erro = null, avi
     fechado: "Este item não está mais em aberto.", anexo: `Não foi possível anexar o comprovante: ${sp.get("m") || "erro no envio"}. O prazo continua em aberto.`, edicao: "Prazos e compromissos cadastrados não podem ser editados. Use cumprir, reagendar ou cancelar." };
   const aberto = item.situacao === "aberto";
   const travado = dataTravada(item);
+  const admin = sessao.perfil === "admin";
   const motivos = await obterLista(env, "motivo_cancelamento_prazo");
   const hoje = hojeBR();
   const acoes = aberto ? html`<section class="cartao acoes-prazo" id="acoes"><h2>Ações</h2><div class="acoes-prazo-grade">
@@ -93,7 +94,11 @@ export async function visualizarPrazo(req, env, sessao, item, { erro = null, avi
         <button type="submit">Marcar como cumprido</button></form>
       <form method="post" action="/sistema/prazos/${String(item.id)}/reagendar" class="acao-prazo">${campoCsrf(sessao)}
         <h3>${comp ? "Reagendar" : "Reagendar prazo interno"}</h3>
-        ${travado ? html`<p class="dica">Sessão de julgamento: a data é fixada pelo tribunal e não pode ser alterada.</p>`
+        ${admin ? html`<p class="dica">${comp ? "Escolha a nova data do compromisso." : "Como administrador, você pode ajustar as datas livremente, inclusive o prazo fatal."}${travado ? " Atenção: sessão de julgamento com data fixada pelo tribunal." : ""}</p>
+            <label>${comp ? "Nova data" : "Prazo interno"}<input type="date" name="data" required value="${item.prazo_interno || item.prazo_fatal || ""}"></label>
+            ${comp ? "" : html`<label>Prazo fatal<input type="date" name="fatal" value="${item.prazo_fatal || ""}"></label>`}
+            <button type="submit" class="botao-secundario">${comp ? "Reagendar" : "Ajustar datas"}</button>`
+        : travado ? html`<p class="dica">Sessão de julgamento: a data é fixada pelo tribunal e não pode ser alterada.</p>`
           : html`<p class="dica">${comp ? "Escolha a nova data do compromisso." : `Até o prazo fatal (${dataBR(item.prazo_fatal)}).`}</p>
             <label>Nova data<input type="date" name="data" required value="${item.prazo_interno || item.prazo_fatal || ""}"${comp ? "" : html` max="${item.prazo_fatal || ""}"`}></label>
             <button type="submit" class="botao-secundario">Reagendar</button>`}</form>
@@ -130,9 +135,18 @@ export async function acaoVisualizacao(req, env, sessao, id, acao) {
   if (pz.situacao !== "aberto") return volta("fechado");
   const t = agora();
   if (acao === "reagendar") {
-    if (dataTravada(pz)) return volta("travado");
+    const admin = sessao.perfil === "admin";
+    if (dataTravada(pz) && !admin) return volta("travado");
     const nova = dataValida(txt(f, "data"));
     if (!nova) return volta("data");
+    // Administradores ajustam as datas livremente (inclusive o prazo fatal); os demais ficam limitados ao fatal.
+    if (admin && pz.categoria !== "Compromisso") {
+      const fatal = dataValida(txt(f, "fatal")) || pz.prazo_fatal || nova;
+      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, prazo_fatal = ?, atualizado_em = ? WHERE id = ?").bind(nova, fatal, t, pid).run();
+      await auditar(env, req, sessao.usuario_id, "prazo_ajustado_admin",
+        `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}; fatal ${pz.prazo_fatal || "-"} → ${fatal}`);
+      return volta("reagendado");
+    }
     if (pz.categoria === "Compromisso") {
       await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, t, pid).run();
       await auditar(env, req, sessao.usuario_id, "compromisso_reagendado", `compromisso ${pid}: ${pz.prazo_interno || pz.prazo_fatal || "-"} → ${nova}`);

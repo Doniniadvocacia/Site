@@ -176,7 +176,13 @@ export async function prazos(req, env, sessao, id) {
       return json({ ok: true, mensagem: `"${pz.titulo}" reagendado para ${nova.split("-").reverse().join("/")}.`, noFatal: false });
     }
     if (!pz.prazo_fatal || nova > pz.prazo_fatal) {
-      return json({ ok: false, mensagem: `Não é possível passar do prazo fatal (${pz.prazo_fatal.split("-").reverse().join("/")}).` }, 409);
+      if (sessao.perfil === "admin") {
+        // Administrador: ajusta independentemente do fatal; o fatal passa para a nova data.
+        await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, agora(), pid).run();
+        await auditar(env, req, sessao.usuario_id, "prazo_ajustado_admin", `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}; fatal ${pz.prazo_fatal || "-"} → ${nova}`);
+        return json({ ok: true, mensagem: `"${pz.titulo}" reprogramado para ${nova.split("-").reverse().join("/")} (prazo fatal ajustado pelo administrador).`, noFatal: true });
+      }
+      return json({ ok: false, mensagem: `Não é possível passar do prazo fatal (${(pz.prazo_fatal || "").split("-").reverse().join("/")}).` }, 409);
     }
     await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, atualizado_em = ? WHERE id = ?").bind(nova, agora(), pid).run();
     await auditar(env, req, sessao.usuario_id, "prazo_reprogramado", `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}`);
