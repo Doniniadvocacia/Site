@@ -1,6 +1,7 @@
 // Prazos: lista, cadastro, edição, cálculo e cumprimento.
 import { salvarAnexo, excluirAnexo } from "../anexos.js";
 import { copiarParaPastaDoProcesso } from "../microsoft.js";
+import { sincronizarOutlook } from "../outlook.js";
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
@@ -51,6 +52,7 @@ export function formularioPrazo({ sessao, p = {}, apoio, acao, calculo = null, e
     <label>Audiência (data)<input type="date" name="data_audiencia" value="${p.data_audiencia || ""}"></label>
     <label>Audiência (hora)<input type="time" name="hora_audiencia" value="${p.hora_audiencia || ""}"></label>
     <label class="largo">Descrição<textarea name="descricao" rows="${String(Math.min(16, Math.max(3, String(p.descricao || "").split("\n").length + 1)))}" maxlength="20000">${p.descricao || ""}</textarea></label>
+    ${apoio.outlook && !p.id ? html`<label class="largo campo-check"><input type="checkbox" name="outlook" value="1"${p.outlook ? seguro(" checked") : ""}> Espelhar no Outlook</label>` : ""}
     <div class="largo botoes-form"><button type="submit" name="acao" value="salvar">${botaoSalvar}</button>${extraBotoes}</div>
     <script src="/assets/js/agendamento.js" defer></script>
   </form>`;
@@ -69,6 +71,7 @@ export async function lerPrazo(env, f) {
     hora: txt(f, "hora", 10), situacao: ["aberto", "cumprido", "cancelado"].includes(f.get("situacao")) ? f.get("situacao") : "aberto",
     data_cumprimento: dataValida(txt(f, "data_cumprimento")), data_audiencia: dataValida(txt(f, "data_audiencia")),
     hora_audiencia: txt(f, "hora_audiencia", 10), descricao: txt(f, "descricao", 20000),
+    outlook: f.get("outlook") === "1",
   };
   if (!p.dias && p.tipo && p.categoria !== "Compromisso") {
     const pad = (await prazosPadrao(env))[p.tipo];
@@ -108,9 +111,10 @@ export async function gravarPrazo(env, p, { id = null, usuarioId, publicacaoId =
     return id;
   }
   const r = await env.DB.prepare(`INSERT INTO prazos (processo_id, titulo, tipo, descricao, data_inicio, dias, contagem, prazo_fatal,
-    prazo_interno, hora, responsavel, situacao, data_cumprimento, data_audiencia, hora_audiencia, atualizado_em, categoria, criado_em, criado_por, publicacao_id)
-    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?16,?18,?19)`).bind(...v, usuarioId, publicacaoId).run();
+    prazo_interno, hora, responsavel, situacao, data_cumprimento, data_audiencia, hora_audiencia, atualizado_em, categoria, criado_em, criado_por, publicacao_id, outlook)
+    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?16,?18,?19,?20)`).bind(...v, usuarioId, publicacaoId, p.outlook ? 1 : 0).run();
   await avisarPrazo(env, p, r.meta.last_row_id, usuarioId, true);
+  if (p.outlook) await sincronizarOutlook(env, r.meta.last_row_id);
   return r.meta.last_row_id;
 }
 
@@ -172,20 +176,20 @@ export async function prazos(req, env, sessao, id) {
     if (dataTravada(pz)) return json({ ok: false, mensagem: "Sessão de julgamento tem data fixada e não pode ser reagendada." }, 409);
     if (pz.categoria === "Compromisso") {
       // Compromisso: reagenda livremente (a data do compromisso é a própria data fatal).
-      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, agora(), pid).run();
+      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, agora(), pid).run(); await sincronizarOutlook(env, pid);
       await auditar(env, req, sessao.usuario_id, "compromisso_reagendado", `compromisso ${pid}: ${pz.prazo_interno || pz.prazo_fatal || "-"} → ${nova}`);
       return json({ ok: true, mensagem: `"${pz.titulo}" reagendado para ${nova.split("-").reverse().join("/")}.`, noFatal: false });
     }
     if (!pz.prazo_fatal || nova > pz.prazo_fatal) {
       if (sessao.perfil === "admin") {
         // Administrador: ajusta independentemente do fatal; o fatal passa para a nova data.
-        await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, agora(), pid).run();
+        await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, agora(), pid).run(); await sincronizarOutlook(env, pid);
         await auditar(env, req, sessao.usuario_id, "prazo_ajustado_admin", `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}; fatal ${pz.prazo_fatal || "-"} → ${nova}`);
         return json({ ok: true, mensagem: `"${pz.titulo}" reprogramado para ${nova.split("-").reverse().join("/")} (prazo fatal ajustado pelo administrador).`, noFatal: true });
       }
       return json({ ok: false, mensagem: `Não é possível passar do prazo fatal (${(pz.prazo_fatal || "").split("-").reverse().join("/")}).` }, 409);
     }
-    await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, atualizado_em = ? WHERE id = ?").bind(nova, agora(), pid).run();
+    await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, atualizado_em = ? WHERE id = ?").bind(nova, agora(), pid).run(); await sincronizarOutlook(env, pid);
     await auditar(env, req, sessao.usuario_id, "prazo_reprogramado", `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}`);
     return json({ ok: true, mensagem: `"${pz.titulo}" reprogramado para ${nova.split("-").reverse().join("/")}.`, noFatal: nova === pz.prazo_fatal });
   }
@@ -215,6 +219,7 @@ export async function prazos(req, env, sessao, id) {
           await env.DB.prepare("INSERT INTO historico (processo_id, data, descricao, anexo_id, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(pz.processo_id, hoje, `${pz.categoria === "Compromisso" ? "Compromisso cumprido" : "Prazo cumprido"}: ${pz.titulo} — comprovante de protocolo anexado.`, anexoId, sessao.usuario_id, t).run();
         } else if (!r.meta.changes && anexoId) await excluirAnexo(env, anexoId);
+        if (r.meta.changes) await sincronizarOutlook(env, pid);
         await auditar(env, req, sessao.usuario_id, "prazo_cumprido", `prazo ${pid}${anexoId ? ` (comprovante ${anexoId})` : ""}`);
       }
     }

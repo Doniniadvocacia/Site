@@ -1,3 +1,4 @@
+import { outlookLiberado } from "../microsoft.js";
 // Utilidades compartilhadas pelas telas da etapa 2.
 import { html, seguro, h, dataBR, textoDeHtml } from "../html.js";
 import { iguais } from "../seguranca.js";
@@ -9,14 +10,16 @@ export const opcoes = (lista, selecionado, vazio = "—") =>
     `<option value="${h(v)}"${String(v) === String(selecionado ?? "") ? " selected" : ""}>${h(r)}</option>`).join(""));
 
 export async function listasApoio(env) {
-  const [{ results: procs }, { results: usuarios }, tipos, padroes] = await Promise.all([
+  const [{ results: procs }, { results: usuarios }, tipos, padroes, outlook] = await Promise.all([
     env.DB.prepare(`SELECT p.id, p.pasta, p.numero, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
                     ORDER BY CAST(p.pasta AS INTEGER), p.pasta`).all(),
     env.DB.prepare("SELECT nome FROM usuarios WHERE ativo = 1 AND perfil != 'cliente' ORDER BY nome").all(),
     obterListas(env, ["tipo_prazo", "tipo_compromisso"]),
     prazosPadrao(env),
+    outlookLiberado(env).catch(() => false),
   ]);
   return {
+    outlook,
     processos: procs.map((p) => [p.id, [p.pasta && `Pasta ${p.pasta}`, p.numero, p.cliente].filter(Boolean).join(" · ")]),
     responsaveis: usuarios.map((u) => [u.nome, u.nome]),
     tipos: { Prazo: tipos.tipo_prazo, Compromisso: tipos.tipo_compromisso },

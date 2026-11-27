@@ -7,7 +7,7 @@ import { lerConfig, gravarConfig } from "../asaas.js";
 import { LIMITE_ANEXO } from "../anexos.js";
 import {
   msConfigurado, urlAutorizacao, urlRetorno, concluirConexao, desconectar, lerAlvo, buscarSites, bibliotecas,
-  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos, migrarAnexos, situacaoMigracao,
+  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos, migrarAnexos, situacaoMigracao, outlookLiberado,
 } from "../microsoft.js";
 
 const tamanho = (b) => (!b ? "" : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
@@ -123,6 +123,14 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
           ${seguir ? html`<p class="dica">Criando em lotes de 20. Mantenha esta página aberta até terminar.</p>` : ""}`
           : html`<p>✓ Todos os processos já têm pasta no SharePoint.</p>`}
       </section>${await cartaoMigracao(env, sessao, msg, url)}${etapa}`;
+    }
+    if (alvo.conta) {
+      const liberado = await outlookLiberado(env);
+      etapa = html`<section class="cartao"><h2>Agenda do Outlook</h2>
+        ${liberado ? html`<p>✓ Liberada. Os agendamentos salvos com <strong>Espelhar no Outlook</strong> vão para a agenda de <strong>${alvo.conta.email || alvo.conta.nome}</strong> e acompanham reagendamentos, cumprimento e cancelamento.</p>`
+          : html`<p class="dica">Para espelhar prazos e compromissos na agenda do Outlook, a conta precisa autorizar o acesso à agenda. Antes, inclua a permissão delegada <strong>Calendars.ReadWrite</strong> no aplicativo do Entra e conceda o consentimento do administrador.</p>
+            <p><a class="botao-link" href="/sistema/microsoft/conectar">Reconectar conta Microsoft</a></p>`}
+      </section>${etapa}`;
     }
   } catch (e) { etapa = html`<p class="erro">Microsoft: ${e.message}</p>`; }
 

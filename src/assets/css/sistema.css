@@ -975,3 +975,7 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .topo-sharepoint { display: flex; justify-content: space-between; align-items: center; gap: .6rem 1rem; flex-wrap: wrap; margin-bottom: .4rem; }
 .envio-sharepoint { margin-top: .8rem; gap: .5rem; flex-wrap: wrap; }
 .campo-nome-pasta { min-width: 280px; }
+
+/* Espelhar no Outlook (formulário de agendamento) */
+.form-agendamento .campo-check { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-size: .9rem; color: var(--texto); cursor: pointer; }
+.form-agendamento .campo-check input { width: auto; height: auto; margin: 0; }

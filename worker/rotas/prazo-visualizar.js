@@ -1,6 +1,7 @@
 // Prazo/compromisso já cadastrado: modo visualização (sem edição dos campos).
 // Ações permitidas: cumprir, reagendar o prazo interno (até o fatal; compromissos para qualquer data, exceto sessão de
 // julgamento) e cancelar com motivo. Também fornece os dados do pop-up das etiquetas do calendário.
+import { sincronizarOutlook } from "../outlook.js";
 import { html, pagina, resposta, redirecionar, campoCsrf, dataBR, textoDeHtml } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
@@ -48,6 +49,7 @@ export function blocosDoItem({ tipo, item, proc }) {
     ["Cadastrado em", `${quando(item.criado_em)}${item.criado_por_nome ? ` por ${item.criado_por_nome}` : ""}`],
     ...(item.situacao === "cumprido" ? [["Cumprido em", dataBR(item.data_cumprimento)]] : []),
     ...(item.situacao === "cancelado" ? [["Cancelado em", quando(item.cancelado_em)], ["Motivo do cancelamento", item.motivo_cancelamento]] : []),
+    ...(item.outlook ? [["Outlook", item.outlook_erro ? `não espelhado (${item.outlook_erro})` : item.outlook_evento ? "Espelhado na agenda" : item.situacao === "cancelado" ? "Removido da agenda" : "Pendente"]] : []),
   ];
   return {
     comp,
@@ -142,18 +144,18 @@ export async function acaoVisualizacao(req, env, sessao, id, acao) {
     // Administradores ajustam as datas livremente (inclusive o prazo fatal); os demais ficam limitados ao fatal.
     if (admin && pz.categoria !== "Compromisso") {
       const fatal = dataValida(txt(f, "fatal")) || pz.prazo_fatal || nova;
-      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, prazo_fatal = ?, atualizado_em = ? WHERE id = ?").bind(nova, fatal, t, pid).run();
+      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, prazo_fatal = ?, atualizado_em = ? WHERE id = ?").bind(nova, fatal, t, pid).run(); await sincronizarOutlook(env, pid);
       await auditar(env, req, sessao.usuario_id, "prazo_ajustado_admin",
         `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}; fatal ${pz.prazo_fatal || "-"} → ${fatal}`);
       return volta("reagendado");
     }
     if (pz.categoria === "Compromisso") {
-      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, t, pid).run();
+      await env.DB.prepare("UPDATE prazos SET prazo_interno = ?1, prazo_fatal = ?1, atualizado_em = ?2 WHERE id = ?3").bind(nova, t, pid).run(); await sincronizarOutlook(env, pid);
       await auditar(env, req, sessao.usuario_id, "compromisso_reagendado", `compromisso ${pid}: ${pz.prazo_interno || pz.prazo_fatal || "-"} → ${nova}`);
       return volta("reagendado");
     }
     if (!pz.prazo_fatal || nova > pz.prazo_fatal) return volta("fatal");
-    await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, atualizado_em = ? WHERE id = ?").bind(nova, t, pid).run();
+    await env.DB.prepare("UPDATE prazos SET prazo_interno = ?, atualizado_em = ? WHERE id = ?").bind(nova, t, pid).run(); await sincronizarOutlook(env, pid);
     await auditar(env, req, sessao.usuario_id, "prazo_reprogramado", `prazo ${pid}: interno ${pz.prazo_interno || "-"} → ${nova}`);
     return volta("reagendado");
   }
@@ -163,7 +165,7 @@ export async function acaoVisualizacao(req, env, sessao, id, acao) {
     if (/^outro$/i.test(motivo) && !detalhe) return volta("outro");
     const texto = detalhe ? `${motivo} — ${detalhe}` : motivo;
     await env.DB.prepare("UPDATE prazos SET situacao = 'cancelado', motivo_cancelamento = ?, cancelado_em = ?, cancelado_por = ?, atualizado_em = ? WHERE id = ?")
-      .bind(texto, t, sessao.usuario_id, t, pid).run();
+      .bind(texto, t, sessao.usuario_id, t, pid).run(); await sincronizarOutlook(env, pid);
     await auditar(env, req, sessao.usuario_id, "prazo_cancelado", `prazo ${pid}: ${texto}`);
     return volta("cancelado");
   }

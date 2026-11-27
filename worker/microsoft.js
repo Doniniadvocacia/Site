@@ -8,7 +8,10 @@ import { lerConfig, gravarConfig } from "./asaas.js";
 
 const LOGIN = "https://login.microsoftonline.com";
 const GRAPH = "https://graph.microsoft.com/v1.0";
-export const ESCOPOS = "offline_access User.Read Files.ReadWrite.All Sites.ReadWrite.All";
+// Permissões pedidas no login. A renovação do token usa as que a Microsoft de fato concedeu (guardadas em ms_escopos),
+// para que uma conta conectada antes da agenda do Outlook continue funcionando até ser reconectada.
+const ESCOPOS_ANTIGOS = "offline_access User.Read Files.ReadWrite.All Sites.ReadWrite.All";
+export const ESCOPOS = `${ESCOPOS_ANTIGOS} Calendars.ReadWrite`;
 const LIMITE_SIMPLES = 4 * 1024 * 1024;     // até 4 MB: envio direto; acima, sessão de envio em partes
 const PARTE = 320 * 1024 * 10;              // 3,125 MB (múltiplo de 320 KB, exigido pela Microsoft)
 
@@ -23,9 +26,10 @@ export function urlAutorizacao(env, req, estado) {
 }
 
 async function pedirToken(env, corpo) {
+  const escopos = corpo.grant_type === "refresh_token" ? ((await lerConfig(env, "ms_escopos")) || ESCOPOS_ANTIGOS) : ESCOPOS;
   const r = await fetch(`${base(env)}/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: env.MS_CLIENT_ID, client_secret: env.MS_CLIENT_SECRET, scope: ESCOPOS, ...corpo }),
+    body: new URLSearchParams({ client_id: env.MS_CLIENT_ID, client_secret: env.MS_CLIENT_SECRET, scope: escopos, ...corpo }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.access_token) throw new Error(j.error_description?.split("\r\n")[0] || j.error || `Microsoft respondeu ${r.status}`);
@@ -36,6 +40,13 @@ async function guardarTokens(env, j) {
   await gravarConfig(env, "ms_access", await cifrar(env, j.access_token));
   await gravarConfig(env, "ms_expira", String(agora() + Number(j.expires_in || 3600) - 120));
   if (j.refresh_token) await gravarConfig(env, "ms_refresh", await cifrar(env, j.refresh_token));
+  if (j.scope) await gravarConfig(env, "ms_escopos", /offline_access/i.test(j.scope) ? j.scope : `offline_access ${j.scope}`);
+}
+
+// A agenda do Outlook está liberada quando a conta conectada concedeu Calendars.ReadWrite.
+export async function outlookLiberado(env) {
+  if (!msConfigurado(env) || !(await lerConfig(env, "ms_conta"))) return false;
+  return /Calendars\.ReadWrite/i.test((await lerConfig(env, "ms_escopos")) || "");
 }
 
 // Troca o código do retorno do login pelos tokens e registra quem conectou.
@@ -47,7 +58,7 @@ export async function concluirConexao(env, req, codigo, usuarioId) {
 }
 
 export async function desconectar(env, usuarioId) {
-  for (const k of ["ms_access", "ms_expira", "ms_refresh", "ms_conta", "ms_site", "ms_drive", "ms_base"]) await gravarConfig(env, k, null, usuarioId);
+  for (const k of ["ms_access", "ms_expira", "ms_refresh", "ms_conta", "ms_escopos", "ms_site", "ms_drive", "ms_base"]) await gravarConfig(env, k, null, usuarioId);
 }
 
 async function tokenAcesso(env) {
