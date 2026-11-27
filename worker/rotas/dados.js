@@ -1,26 +1,19 @@
 // Painel, clientes e processos (consulta, fichas e busca). Cadastro e edição ficam em cadastro.js.
-import { html, pagina, resposta, dataBR, moeda, textoDeHtml } from "../html.js";
+import { html, pagina, resposta, dataBR, textoDeHtml } from "../html.js";
 import { decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { hojeBR, somarDias } from "../calendario.js";
-import { urgencia, rotuloProcesso } from "./comum.js";
+import { hojeBR } from "../calendario.js";
+import { urgencia } from "./comum.js";
 import { icone } from "../icones.js";
 import { campoCsrf } from "../html.js";
-import { cartaoHistorico, mensagemDaUrl } from "./historico.js";
+import { mensagemDaUrl } from "./historico.js";
 import { cartaoFinanceiro } from "./financeiro.js";
 import { fichaProcesso } from "./ficha-processo.js";
-import { abasClientes, chips, etiquetasDe, blocoRelacionamento, followupsPainel, mensagem as mensagemCrm } from "./crm.js";
-import { obterListas } from "../listas.js";
+import { chips, blocoRelacionamento, followupsPainel, mensagem as mensagemCrm } from "./crm.js";
 import { pesquisaClientes, pesquisaProcessos } from "./pesquisa.js";
 
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const campo = (rotulo, valor) => (valor ? html`<div><dt>${rotulo}</dt><dd>${valor}</dd></div>` : "");
-// Cartão com ficha; some quando não há nenhum campo preenchido.
-const secao = (titulo, campos, extra = "") => {
-  const cheios = campos.filter((c) => c !== "");
-  if (!cheios.length && !extra) return "";
-  return html`<section class="cartao">${titulo ? html`<h2>${titulo}</h2>` : ""}${cheios.length ? html`<dl class="ficha">${cheios}</dl>` : ""}${extra}</section>`;
-};
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const INATIVO = "(LOWER(COALESCE(situacao, '')) LIKE '%arquiv%' OR LOWER(COALESCE(situacao, '')) LIKE '%encerr%' OR LOWER(COALESCE(situacao, '')) LIKE '%baixad%' OR LOWER(COALESCE(situacao, '')) LIKE '%finaliz%')";

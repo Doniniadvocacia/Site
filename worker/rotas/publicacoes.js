@@ -2,7 +2,7 @@
 import { html, pagina, resposta, redirecionar, campoCsrf, textoDeHtml } from "../html.js";
 import { agora } from "../seguranca.js";
 import { auditar } from "../sessao.js";
-import { opcoes, listasApoio, csrfOk, rotuloProcesso, dataBR, descricaoDaIntimacao } from "./comum.js";
+import { listasApoio, csrfOk, dataBR, descricaoDaIntimacao } from "./comum.js";
 import { formularioPrazo, lerPrazo, gravarPrazo } from "./prazos.js";
 import { iaConfigurada, analisarIntimacao, analisarPendentes, lerSugestao } from "../ia.js";
 import { calendarioDoBanco } from "../calendario.js";

@@ -52,12 +52,6 @@ export function gerarParcelas({ condicao, valor, entrada, parcelas, vencimento }
 }
 
 const rotuloParcela = (l) => (l.parcela === 0 ? "Entrada" : l.parcela ? `${l.parcela}/${l.parcelas}` : "");
-function situacao(l, hoje = hojeBR()) {
-  if (l.pago) return html`<span class="selo selo-pago">${l.tipo === "receita" ? "Recebido" : "Pago"}</span> <small>${dataBR(l.data_pagamento)}</small>`;
-  if (l.vencimento < hoje) return html`<span class="selo selo-vencido">Em atraso</span>`;
-  if (l.vencimento === hoje) return html`<span class="selo selo-hoje">Vence hoje</span>`;
-  return html`<span class="selo selo-semana">Em aberto</span>`;
-}
 
 // Lançamentos em cartões, na disposição do Diligo antigo:
 // tipo e ações | vencimento, cliente e categoria | descrição | valor e "Pago".

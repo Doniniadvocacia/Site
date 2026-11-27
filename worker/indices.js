@@ -35,7 +35,7 @@ async function buscarSerie(env, codigo, de, ate) {
     const lote = await r.json();
     if (!Array.isArray(lote)) throw new Error(`Resposta inesperada do Banco Central para a série ${codigo}`);
     for (const it of lote) {
-      const [d, m, a] = String(it.data || "").split("/");
+      const [, m, a] = String(it.data || "").split("/");
       const v = Number(String(it.valor).replace(",", "."));
       if (a && m && Number.isFinite(v)) itens.push([`${a}-${m}`, v]);
     }

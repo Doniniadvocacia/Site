@@ -205,6 +205,8 @@ export default {
     if (env.DB) ctx.waitUntil(capturarDjen(env, "agendada").then(() => analisarPendentes(env)).catch((e) => console.error(e)));
     if (env.DB && msConfigurado(env)) ctx.waitUntil(vincularPastasAutomaticas(env, { limite: 30 }).catch((e) => console.error(e)));
     if (env.DB) ctx.waitUntil(atualizarSePreciso(env).catch((e) => console.error("Índices:", e.message)));
+    // Limpeza: sessões vencidas (o banco guarda só o hash do token, mas não há motivo para mantê-las).
+    if (env.DB) ctx.waitUntil(env.DB.prepare("DELETE FROM sessoes WHERE expira_em < ?").bind(Math.floor(Date.now() / 1000)).run().catch((e) => console.error("Sessões:", e.message)));
     if (env.DB && asaasConfigurado(env)) ctx.waitUntil(sincronizar(env).catch((e) => console.error("Asaas:", e.message)));
   },
 };

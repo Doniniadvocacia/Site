@@ -3,13 +3,13 @@
 import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
+import { hojeBR } from "../calendario.js";
 import { obterListas } from "../listas.js";
 import { msConfigurado, vincularPastasAutomaticas } from "../microsoft.js";
 import { normalizarEtiquetas, etiquetasUsadas, datalistEtiquetas } from "./crm.js";
 import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnpj, formatarFone, formatarCep, enderecoTexto } from "./comum.js";
 
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ").map((u) => [u, u]);
-const lista = (...v) => v.map((x) => [x, x]);
 // Opções da lista, mantendo o valor atual do registro mesmo que tenha saído da lista.
 const comAtual = (valores, atual) => [...new Set([...(valores || []), ...(atual ? [atual] : [])])].map((x) => [x, x]);
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
@@ -73,7 +73,7 @@ export async function cadastroCliente(req, env, sessao, id) {
       <section class="cartao">${formularioCliente(sessao, c, acao, sugestoes)}</section>`,
   }));
   if (req.method === "GET") {
-    if (!existente) return tela({ tipo: "Pessoa Física", data_cadastro: new Date().toISOString().slice(0, 10) });
+    if (!existente) return tela({ tipo: "Pessoa Física", data_cadastro: hojeBR() });
     const c = { ...existente };
     const dec = await Promise.all(CAMPOS_CLIENTE_ENC.map((k) => decifrar(env, existente[`${k}_enc`])));
     CAMPOS_CLIENTE_ENC.forEach((k, i) => (c[k] = dec[i]));
@@ -215,7 +215,7 @@ export async function cadastroProcesso(req, env, sessao, id) {
     if (!existente) {
       const proxima = await env.DB.prepare("SELECT MAX(CAST(pasta AS INTEGER)) AS n FROM processos").first();
       const cli = Number(new URL(req.url).searchParams.get("cliente")) || null;
-      return tela({ cliente_id: cli, pasta: String((proxima?.n || 0) + 1).padStart(4, "0"), situacao: "Ativa", data_cadastro: new Date().toISOString().slice(0, 10), uf: "RS" });
+      return tela({ cliente_id: cli, pasta: String((proxima?.n || 0) + 1).padStart(4, "0"), situacao: "Ativa", data_cadastro: hojeBR(), uf: "RS" });
     }
     const [contato, observacoes, telefone, email] = await Promise.all([existente.contato_parte_contraria_enc, existente.observacoes_enc,
       existente.telefone_parte_contraria_enc, existente.email_parte_contraria_enc].map((v) => decifrar(env, v)));

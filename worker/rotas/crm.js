@@ -11,7 +11,6 @@ import { criarFiltro } from "./dados.js";
 import { notificar, idsPorNome } from "../notificacoes.js";
 
 export const ETAPAS = ["Novo contato", "Reunião agendada", "Proposta enviada", "Negociação"];
-const FINAIS = ["Contratado", "Perdido"];
 const lista = (v) => v.map((x) => [x, x]);
 const comAtual = (valores, atual) => lista([...new Set([...(valores || []), ...(atual ? [atual] : [])])]);
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
@@ -188,7 +187,7 @@ async function paginaFollowups(req, env, sessao) {
 async function paginaEncerrados(req, env, sessao) {
   const { results } = await env.DB.prepare(`SELECT l.id, l.nome, l.etapa, l.area, l.origem, l.motivo_perda, l.valor_estimado, l.encerrado_em, l.cliente_id
       FROM leads l WHERE l.etapa IN ('Contratado', 'Perdido') ORDER BY l.encerrado_em DESC LIMIT 300`).all();
-  const data = (s) => (s ? new Date(s * 1000).toISOString().slice(0, 10).split("-").reverse().join("/") : "");
+  const data = (s) => (s ? new Date((s - 3 * 3600) * 1000).toISOString().slice(0, 10).split("-").reverse().join("/") : "");
   const porOrigem = {};
   for (const l of results) { const o = l.origem || "Sem origem"; porOrigem[o] ??= { c: 0, p: 0 }; porOrigem[o][l.etapa === "Contratado" ? "c" : "p"]++; }
   return resposta(pagina({
@@ -318,7 +317,7 @@ export async function fichaLead(req, env, sessao, id) {
       <section class="cartao"><dl class="ficha">
         ${campo("Tipo", l.tipo)}${campo("Telefone", telefone)}${campo("E-mail", email)}${campo("Área de interesse", l.area)}
         ${campo("Origem", l.origem)}${campo("Indicado por", l.indicado_por)}${campo("Honorários estimados", l.valor_estimado ? moeda(l.valor_estimado) : "")}
-        ${campo("Responsável", l.responsavel)}${campo("Cadastrado em", new Date(l.criado_em * 1000).toISOString().slice(0, 10).split("-").reverse().join("/"))}
+        ${campo("Responsável", l.responsavel)}${campo("Cadastrado em", new Date((l.criado_em - 3 * 3600) * 1000).toISOString().slice(0, 10).split("-").reverse().join("/"))}
       </dl>${chips(l.etiquetas)}${resumo ? html`<h3>Resumo do caso</h3><p class="pre">${resumo}</p>` : ""}</section>
       ${await blocoRelacionamento(env, sessao, { leadId: l.id, voltar })}`,
   }));

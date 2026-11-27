@@ -224,7 +224,9 @@ export async function prazos(req, env, sessao, id) {
       }
     }
     if (voltarItem) return redirecionar(`/sistema/prazos/${pid}?msg=${ok ? "cumprido" : "sessao"}`);
-    return redirecionar(req.headers.get("Referer")?.includes("/sistema/") ? new URL(req.headers.get("Referer")).pathname + new URL(req.headers.get("Referer")).search : "/sistema/agenda?visao=prazos");
+    let destino = "/sistema/agenda?visao=prazos";
+    try { const r = new URL(req.headers.get("Referer") || ""); if (r.origin === new URL(req.url).origin && r.pathname.startsWith("/sistema/") && !r.pathname.startsWith("//")) destino = r.pathname + r.search; } catch {}
+    return redirecionar(destino);
   }
 
   // ---------- Novo / editar ----------

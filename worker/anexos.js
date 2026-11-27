@@ -79,13 +79,6 @@ export async function servirAnexo(env, sessao, id) {
 }
 
 // ---------- Cópia dos anexos do Wix ----------
-// Registra (sem baixar) um anexo do Wix; devolve o id. A cópia do arquivo é feita depois, em lotes.
-export async function registrarAnexoWix(env, origem, nome, contexto) {
-  if (!origem || !String(origem).startsWith("wix:document://")) return null;
-  await env.DB.prepare("INSERT INTO anexos (nome, contexto, origem_wix, criado_em) VALUES (?, ?, ?, ?) ON CONFLICT(origem_wix) DO NOTHING")
-    .bind(nomeSeguro(nome || origem.split("/").pop()), contexto, origem, agora()).run();
-  return (await env.DB.prepare("SELECT id FROM anexos WHERE origem_wix = ?").bind(origem).first())?.id ?? null;
-}
 
 const idArquivoWix = (origem) => {
   const partes = String(origem).replace("wix:document://v1/", "").split("/");

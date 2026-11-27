@@ -1,5 +1,5 @@
 // Gestão de usuários (somente administradores).
-import { html, pagina, resposta, campoCsrf, dataBR } from "../html.js";
+import { html, pagina, resposta, campoCsrf } from "../html.js";
 import { agora, hashSenha, tokenAleatorio, iguais } from "../seguranca.js";
 import { encerrarTodas, auditar } from "../sessao.js";
 import { obterLista } from "../listas.js";

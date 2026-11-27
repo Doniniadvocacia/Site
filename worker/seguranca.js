@@ -5,7 +5,13 @@ const dec = new TextDecoder();
 
 export const agora = () => Math.floor(Date.now() / 1000);
 
-const b64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+const b64 = (bytes) => {
+  // Em blocos: String.fromCharCode(...bytes) estoura a pilha com textos longos (dezenas de milhares de bytes).
+  const u = new Uint8Array(bytes);
+  let s = "";
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+};
 const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const hex = (bytes) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
