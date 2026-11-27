@@ -1,5 +1,5 @@
 // Telas da integração com o SharePoint: Configurações › Microsoft 365 (administradores) e a pasta do processo.
-import { html, pagina, resposta, redirecionar, campoCsrf, dataBR } from "../html.js";
+import { html, seguro, pagina, resposta, redirecionar, campoCsrf, dataBR } from "../html.js";
 import { agora, tokenAleatorio, iguais } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { csrfOk, txt } from "./comum.js";
@@ -7,7 +7,7 @@ import { lerConfig, gravarConfig } from "../asaas.js";
 import { LIMITE_ANEXO } from "../anexos.js";
 import {
   msConfigurado, urlAutorizacao, urlRetorno, concluirConexao, desconectar, lerAlvo, buscarSites, bibliotecas,
-  listarPasta, lerItem, criarPasta, enviarArquivo,
+  listarPasta, lerItem, criarPasta, enviarArquivo, nomePastaProcesso, vincularPastasAutomaticas, pendentesAutomaticos,
 } from "../microsoft.js";
 
 const tamanho = (b) => (!b ? "" : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
@@ -46,6 +46,12 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
     if (!ok) return volta("sessao");
     const acao = f.get("acao");
     try {
+      if (acao === "automatico") {
+        const r = await vincularPastasAutomaticas(env, { limite: 20 });
+        if (r.feitos) await auditar(env, req, sessao.usuario_id, "sharepoint_automatico", `${r.feitos} processo(s), ${r.criadas} pasta(s) criada(s)`);
+        const erro = r.erros[0] ? `&m=${encodeURIComponent(r.erros[0].slice(0, 200))}` : "";
+        return volta("auto", `&f=${r.feitos}&c=${r.criadas}&r=${r.restantes}${erro}${r.feitos && r.restantes && !r.erros.length ? "&seguir=1" : ""}`);
+      }
       if (acao === "desconectar") { await desconectar(env, sessao.usuario_id); await auditar(env, req, sessao.usuario_id, "microsoft_desconectado", ""); return volta("desconectado"); }
       if (acao === "site") { await gravarConfig(env, "ms_site", JSON.stringify({ id: txt(f, "id", 300), nome: txt(f, "nome", 200), url: txt(f, "url", 500) }), sessao.usuario_id); await gravarConfig(env, "ms_drive", null); await gravarConfig(env, "ms_base", null); return volta("site"); }
       if (acao === "biblioteca") { await gravarConfig(env, "ms_drive", JSON.stringify({ id: txt(f, "id", 300), nome: txt(f, "nome", 200) }), sessao.usuario_id); await gravarConfig(env, "ms_base", null); return volta("biblioteca"); }
@@ -63,7 +69,7 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
   const alvo = msConfigurado(env) ? await lerAlvo(env) : { conta: null };
   const msg = url.searchParams.get("msg");
   const avisos = { conectado: "Conta Microsoft conectada. Agora escolha o site do SharePoint.", desconectado: "Microsoft 365 desconectado.", site: "Site escolhido. Agora escolha a biblioteca.",
-    biblioteca: "Biblioteca escolhida. Agora escolha a pasta onde ficam as pastas dos processos.", pronto: "Pronto: a pasta raiz foi definida. Vincule as pastas na ficha de cada processo.", trocar: "Escolha novamente o site, a biblioteca e a pasta." };
+    biblioteca: "Biblioteca escolhida. Agora escolha a pasta onde ficam as pastas dos processos.", pronto: "Pronto: a pasta raiz foi definida. Agora crie as pastas dos processos abaixo.", trocar: "Escolha novamente o site, a biblioteca e a pasta." };
   const erros = { sessao: "Sessão expirada. Tente novamente.", estado: "A conexão expirou ou não confere. Clique em Conectar de novo.", sem_app: "Faltam os segredos MS_CLIENT_ID e MS_CLIENT_SECRET na Cloudflare.",
     erro: `Microsoft: ${url.searchParams.get("m") || "erro"}`, dados: "Não foi possível concluir." };
   let etapa = html``;
@@ -97,10 +103,25 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
         <form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="acao" value="criar"><input type="hidden" name="pai" value="${atual}">
           <input name="nome" value="Processos" maxlength="200" aria-label="Nome da nova pasta"><button type="submit" class="botao-secundario botao-pequeno">Criar pasta aqui</button></form></section>`;
     }
+    if (alvo.pronto) {
+      const restantes = await pendentesAutomaticos(env);
+      const seguir = msg === "auto" && url.searchParams.get("seguir") === "1" && restantes > 0;
+      etapa = html`<section class="cartao"><h2>Pastas dos processos</h2>
+        <p class="dica">Cada processo ganha uma pasta dentro de <strong>${alvo.pasta.nome}</strong>, com o nome <strong>nº da pasta - Cliente x Parte Contrária</strong>.
+          Se já existir ali uma pasta com esse nome, ou começando pelo nº da pasta (ex.: "35 - …" ou "Pasta 35 - …"), ela é aproveitada.
+          Processos novos ganham a pasta ao serem cadastrados; os que vêm da sincronização, a cada rodada automática.</p>
+        ${restantes ? html`<p><strong>${String(restantes)}</strong> processo(s) ainda sem pasta.</p>
+          <form method="post" ${seguir ? seguro('data-auto-continuar="1"') : ""}>${campoCsrf(sessao)}<input type="hidden" name="acao" value="automatico">
+            <button type="submit">${seguir ? "Continuando…" : "Criar as pastas que faltam"}</button></form>
+          ${seguir ? html`<p class="dica">Criando em lotes de 20. Mantenha esta página aberta até terminar.</p>` : ""}`
+          : html`<p>✓ Todos os processos já têm pasta no SharePoint.</p>`}
+      </section>${etapa}`;
+    }
   } catch (e) { etapa = html`<p class="erro">Microsoft: ${e.message}</p>`; }
 
+  const msgAuto = msg === "auto" ? `${url.searchParams.get("f") || 0} processo(s) vinculado(s), ${url.searchParams.get("c") || 0} pasta(s) criada(s).${url.searchParams.get("m") ? ` Erro: ${url.searchParams.get("m")}` : ""}` : null;
   return resposta(pagina({
-    titulo: "Microsoft 365", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
+    titulo: "Microsoft 365", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(msgAuto ? { aviso: msgAuto } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/configuracoes">Configurações</a></p><h1>Microsoft 365 · SharePoint</h1>
       <p class="dica">Liga o Diligo à biblioteca de documentos do escritório no SharePoint: cada processo pode ser vinculado à sua pasta, que passa a aparecer na ficha do processo, e os anexos enviados pelo histórico e os comprovantes de protocolo são copiados para lá.</p>
       ${!msConfigurado(env) ? html`<section class="cartao"><h2>Configuração inicial</h2>
@@ -124,13 +145,13 @@ export async function configuracaoMicrosoft(req, env, sessao, sub) {
           : html`<p>Conecte com uma conta do Microsoft 365 do escritório que tenha acesso à biblioteca dos processos. O Diligo usará essa conta para ler e gravar os arquivos.</p>
           <p><a class="botao-link" href="/sistema/microsoft/conectar">Conectar conta Microsoft</a></p>`}
       </section>${etapa}`}
-      <script src="/assets/js/confirmar.js" defer></script>`,
+      <script src="/assets/js/confirmar.js" defer></script><script src="/assets/js/sharepoint-auto.js" defer></script>`,
   }));
 }
 
 // ---------- Pasta do processo ----------
 export async function processoSharepoint(req, env, sessao, id, sub) {
-  const proc = await env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.sharepoint_drive, p.sharepoint_item, p.sharepoint_nome, p.sharepoint_url, c.nome AS cliente
+  const proc = await env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.sharepoint_drive, p.sharepoint_item, p.sharepoint_nome, p.sharepoint_url, c.nome AS cliente
     FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = ?`).bind(Number(id)).first();
   if (!proc) return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Processo não encontrado</h1>` }), 404);
   const volta = (msg, extra = "") => redirecionar(`/sistema/processos/${proc.id}?msg=${msg}${extra}#sharepoint`);
@@ -165,14 +186,14 @@ export async function processoSharepoint(req, env, sessao, id, sub) {
       if (!ok) return volta("sessao");
       try {
         let item;
-        if (f.get("acao") === "criar") item = await criarPasta(env, alvo.drive.id, txt(f, "pai", 300) || alvo.pasta.id, txt(f, "nome", 200) || `Pasta ${proc.pasta || proc.id}`);
+        if (f.get("acao") === "criar") item = await criarPasta(env, alvo.drive.id, txt(f, "pai", 300) || alvo.pasta.id, txt(f, "nome", 200) || nomePastaProcesso(proc));
         else if (f.get("acao") === "desvincular") {
-          await env.DB.prepare("UPDATE processos SET sharepoint_drive = NULL, sharepoint_item = NULL, sharepoint_nome = NULL, sharepoint_url = NULL WHERE id = ?").bind(proc.id).run();
+          await env.DB.prepare("UPDATE processos SET sharepoint_drive = NULL, sharepoint_item = NULL, sharepoint_nome = NULL, sharepoint_url = NULL, sharepoint_ignorar = 1 WHERE id = ?").bind(proc.id).run();
           await auditar(env, req, sessao.usuario_id, "sharepoint_desvinculado", `processo ${proc.id}`);
           return volta("sp_desvinculado");
         } else item = await lerItem(env, alvo.drive.id, txt(f, "item", 300));
         if (!item?.id || item.folder === undefined && f.get("acao") !== "criar") return volta("sp_erro", "&m=Escolha%20uma%20pasta");
-        await env.DB.prepare("UPDATE processos SET sharepoint_drive = ?, sharepoint_item = ?, sharepoint_nome = ?, sharepoint_url = ? WHERE id = ?")
+        await env.DB.prepare("UPDATE processos SET sharepoint_drive = ?, sharepoint_item = ?, sharepoint_nome = ?, sharepoint_url = ?, sharepoint_ignorar = 0 WHERE id = ?")
           .bind(alvo.drive.id, item.id, item.name, item.webUrl || null, proc.id).run();
         await auditar(env, req, sessao.usuario_id, "sharepoint_vinculado", `processo ${proc.id} → ${item.name}`);
         return volta("sp_vinculado");
@@ -187,7 +208,7 @@ export async function processoSharepoint(req, env, sessao, id, sub) {
       const pastas = filhos.filter((x) => x.folder && (!q || x.name.toLowerCase().includes(q)));
       const naRaiz = atual === alvo.pasta.id;
       const pai = !naRaiz ? item.parentReference?.id : null;
-      const sugestao = [`Pasta ${proc.pasta || proc.id}`, proc.cliente].filter(Boolean).join(" - ");
+      const sugestao = nomePastaProcesso(proc);
       corpo = html`<section class="cartao">
         <p class="dica">Pasta atual: <strong>${naRaiz ? alvo.pasta.nome : item.name}</strong>${naRaiz ? "" : html` · <a href="/sistema/processos/${String(proc.id)}/sharepoint/vincular">voltar à pasta raiz</a>`}${pai && !naRaiz ? html` · <a href="/sistema/processos/${String(proc.id)}/sharepoint/vincular?pasta=${encodeURIComponent(pai)}">subir um nível</a>` : ""}</p>
         <form method="get" class="busca"><input type="hidden" name="pasta" value="${atual}"><input name="q" value="${q}" placeholder="Filtrar pastas por nome (ex.: ${proc.pasta || "35"})" aria-label="Filtrar pastas"><button type="submit">Filtrar</button></form>

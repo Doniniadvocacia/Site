@@ -98,11 +98,11 @@ export async function buscarSites(env, q) {
 export const bibliotecas = async (env, siteId) => (await graph(env, `/sites/${encodeURIComponent(siteId)}/drives?$select=id,name,webUrl`)).value || [];
 
 const SELECAO = "$select=id,name,folder,file,size,lastModifiedDateTime,webUrl,parentReference&$top=200&$orderby=name";
-export async function listarPasta(env, driveId, itemId) {
+export async function listarPasta(env, driveId, itemId, paginas = 5) {
   const caminho = itemId && itemId !== "root" ? `/drives/${driveId}/items/${itemId}/children?${SELECAO}` : `/drives/${driveId}/root/children?${SELECAO}`;
   const itens = [];
   let url = caminho;
-  for (let i = 0; url && i < 5; i++) { const j = await graph(env, url); itens.push(...(j.value || [])); url = j["@odata.nextLink"] || null; }
+  for (let i = 0; url && i < paginas; i++) { const j = await graph(env, url); itens.push(...(j.value || [])); url = j["@odata.nextLink"] || null; }
   return itens;
 }
 export const lerItem = (env, driveId, itemId) => graph(env, itemId && itemId !== "root" ? `/drives/${driveId}/items/${itemId}?$select=id,name,webUrl,parentReference,folder` : `/drives/${driveId}/root?$select=id,name,webUrl,folder`);
@@ -144,4 +144,52 @@ export async function copiarParaPastaDoProcesso(env, processoId, arquivo) {
     await env.DB.prepare("INSERT INTO auditoria (usuario_id, acao, detalhe, criado_em) VALUES (NULL, 'sharepoint_erro', ?, ?)").bind(`processo ${processoId}: ${e.message}`.slice(0, 500), agora()).run().catch(() => {});
     return null;
   }
+}
+
+// ---------- Pastas automáticas: uma por processo, dentro da pasta raiz ----------
+// Nome: "nº da pasta - Cliente x Parte Contrária" (sem pasta, usa o número do processo).
+export function nomePastaProcesso(p) {
+  const partes = [p.cliente, p.parte_contraria].map((x) => String(x || "").trim()).filter(Boolean).join(" x ");
+  const numero = String(p.pasta || "").trim() || String(p.numero || "").trim() || `Processo ${p.id}`;
+  return nomeArquivo(partes ? `${numero} - ${partes}` : numero);
+}
+
+const SELECT_AUTO = `SELECT p.id, p.pasta, p.numero, p.parte_contraria, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id
+  WHERE p.sharepoint_item IS NULL AND p.sharepoint_ignorar = 0`;
+
+export async function pendentesAutomaticos(env) {
+  return (await env.DB.prepare("SELECT COUNT(*) AS n FROM processos WHERE sharepoint_item IS NULL AND sharepoint_ignorar = 0").first())?.n || 0;
+}
+
+// Cria (ou reaproveita) a pasta de até `limite` processos sem vínculo. Uma pasta já existente na raiz é aproveitada
+// quando tem exatamente o nome esperado ou começa com o nº da pasta ("35 - ..." ou "Pasta 35 - ...") e não está ligada a outro processo.
+export async function vincularPastasAutomaticas(env, { limite = 20, processoId = null } = {}) {
+  const alvo = await lerAlvo(env);
+  if (!alvo.pronto) return { feitos: 0, criadas: 0, erros: [], restantes: 0 };
+  const { results } = processoId
+    ? await env.DB.prepare(`${SELECT_AUTO} AND p.id = ?`).bind(processoId).all()
+    : await env.DB.prepare(`${SELECT_AUTO} ORDER BY p.id LIMIT ?`).bind(limite).all();
+  const r = { feitos: 0, criadas: 0, erros: [] };
+  if (results.length) {
+    const naRaiz = (await listarPasta(env, alvo.drive.id, alvo.pasta.id, 40)).filter((x) => x.folder);
+    const usadas = new Set((await env.DB.prepare("SELECT sharepoint_item FROM processos WHERE sharepoint_item IS NOT NULL").all()).results.map((x) => x.sharepoint_item));
+    for (const p of results) {
+      try {
+        const nome = nomePastaProcesso(p);
+        const pasta = String(p.pasta || "").trim().toLowerCase();
+        let item = naRaiz.find((x) => x.name.toLowerCase() === nome.toLowerCase() && !usadas.has(x.id))
+          || (pasta && naRaiz.find((x) => !usadas.has(x.id) && (x.name.toLowerCase().startsWith(`${pasta} - `) || x.name.toLowerCase().startsWith(`pasta ${pasta} - `))));
+        if (!item) { item = await criarPasta(env, alvo.drive.id, alvo.pasta.id, nome); naRaiz.push(item); r.criadas++; }
+        usadas.add(item.id);
+        await env.DB.prepare("UPDATE processos SET sharepoint_drive = ?, sharepoint_item = ?, sharepoint_nome = ?, sharepoint_url = ? WHERE id = ? AND sharepoint_item IS NULL")
+          .bind(alvo.drive.id, item.id, item.name, item.webUrl || null, p.id).run();
+        r.feitos++;
+      } catch (e) {
+        r.erros.push(`processo ${p.id}: ${e.message}`);
+        if (/401|403|token|autoriza/i.test(e.message)) break; // problema na conexão: não adianta seguir
+      }
+    }
+  }
+  r.restantes = await pendentesAutomaticos(env);
+  return r;
 }

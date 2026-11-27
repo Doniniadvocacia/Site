@@ -4,6 +4,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { obterListas } from "../listas.js";
+import { msConfigurado, vincularPastasAutomaticas } from "../microsoft.js";
 import { normalizarEtiquetas, etiquetasUsadas, datalistEtiquetas } from "./crm.js";
 import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjValido, formatarCpf, formatarCnpj, formatarFone, formatarCep, enderecoTexto } from "./comum.js";
 
@@ -243,6 +244,11 @@ export async function cadastroProcesso(req, env, sessao, id) {
     const r = await env.DB.prepare(`INSERT INTO processos (${colunas.join(", ")}, contato_parte_contraria_enc, observacoes_enc, telefone_parte_contraria_enc, email_parte_contraria_enc, criado_em, atualizado_em, editado_local)
       VALUES (${colunas.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?, 1)`).bind(...valores, contatoEnc, obsEnc, telEnc, emailEnc, t, t).run();
     novoId = r.meta.last_row_id;
+    // Pasta do processo no SharePoint (melhor esforço: se falhar, a rodada automática ou o botão em Configurações refaz).
+    if (msConfigurado(env)) {
+      try { const sp = await vincularPastasAutomaticas(env, { processoId: novoId }); if (sp.erros[0]) await auditar(env, req, sessao.usuario_id, "sharepoint_erro", sp.erros[0].slice(0, 300)); }
+      catch (e) { await auditar(env, req, sessao.usuario_id, "sharepoint_erro", `processo ${novoId}: ${String(e.message).slice(0, 250)}`); }
+    }
   }
   await auditar(env, req, sessao.usuario_id, existente ? "processo_alterado" : "processo_criado", `processo ${novoId}`);
   return redirecionar(`/sistema/processos/${novoId}?salvo=1`);
