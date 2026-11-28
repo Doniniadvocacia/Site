@@ -5,7 +5,7 @@ import { auditar } from "../sessao.js";
 import { listasApoio, csrfOk, dataBR, descricaoDaIntimacao } from "./comum.js";
 import { formularioPrazo, lerPrazo, gravarPrazo } from "./prazos.js";
 import { iaConfigurada, analisarIntimacao, analisarPendentes, lerSugestao } from "../ia.js";
-import { calendarioDoBanco } from "../calendario.js";
+import { calendarioDoBanco, hojeBR } from "../calendario.js";
 
 const SITUACAO = { pendente: "Pendente", com_prazo: "Prazo criado", sem_prazo: "Sem prazo", importada: "Importada do Wix" };
 const trecho = (s, n = 160) => { const t = textoDeHtml(s).replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n) + "…" : t; };
@@ -166,6 +166,7 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
     const resultado = sug ? (sug.gera_prazo ? "rejeitada" : "aprovada") : null;
     await env.DB.prepare("UPDATE publicacoes SET situacao = 'sem_prazo', triada_por = ?, triada_em = ?, processo_id = COALESCE(?, processo_id), ia_resultado = COALESCE(?, ia_resultado) WHERE id = ?")
       .bind(sessao.usuario_id, t, Number(f.get("processo_id")) || null, resultado, pub.id).run();
+    await andamentoDaIntimacao(env, pub.id, sessao.usuario_id, "Intimação arquivada sem prazo.");
     await auditar(env, req, sessao.usuario_id, "intimacao_arquivada", `publicação ${pub.id}`);
     return redirecionar("/sistema/publicacoes");
   }
@@ -178,9 +179,29 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
   const resultado = sug ? (igualSugestao ? "aprovada" : sug.gera_prazo ? "corrigida" : "rejeitada") : null;
   await env.DB.prepare("UPDATE publicacoes SET situacao = 'com_prazo', triada_por = ?, triada_em = ?, processo_id = COALESCE(?, processo_id), ia_resultado = COALESCE(?, ia_resultado) WHERE id = ?")
     .bind(sessao.usuario_id, t, p.processo_id, resultado, pub.id).run();
+  await andamentoDaIntimacao(env, pub.id, sessao.usuario_id, await desfechoPrazo(env, prazoId));
   await auditar(env, req, sessao.usuario_id, "intimacao_triada", `publicação ${pub.id} → prazo ${prazoId}`);
   return redirecionar("/sistema/publicacoes");
 }
+
+// Toda intimação triada vira andamento no histórico do processo — com prazo criado ou arquivada sem prazo.
+async function andamentoDaIntimacao(env, pubId, usuarioId, desfecho) {
+  const pub = await env.DB.prepare("SELECT * FROM publicacoes WHERE id = ?").bind(pubId).first();
+  if (!pub?.processo_id) return;
+  if (await env.DB.prepare("SELECT 1 FROM historico WHERE publicacao_id = ? LIMIT 1").bind(pub.id).first()) return;
+  const proc = await env.DB.prepare("SELECT cliente_id FROM processos WHERE id = ?").bind(pub.processo_id).first();
+  const sug = lerSugestao(pub);
+  const resumo = sug?.resumo ? `Resumo: ${sug.resumo}\n\n` : "";
+  const texto = `${desfecho}\n\n${resumo}${descricaoDaIntimacao(pub)}`.slice(0, 20000);
+  await env.DB.prepare("INSERT INTO historico (processo_id, cliente_id, data, descricao, criado_por, criado_em, publicacao_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(pub.processo_id, proc?.cliente_id || null, pub.data_publicacao || pub.data_disponibilizacao || hojeBR(), texto, usuarioId, agora(), pub.id).run();
+}
+const desfechoPrazo = async (env, prazoId) => {
+  const pz = await env.DB.prepare("SELECT titulo, categoria, prazo_fatal, prazo_interno FROM prazos WHERE id = ?").bind(prazoId).first();
+  if (!pz) return "Intimação triada.";
+  return pz.categoria === "Compromisso" ? `Intimação triada · compromisso agendado: ${pz.titulo} (${dataBR(pz.prazo_interno || pz.prazo_fatal)}).`
+    : `Intimação triada · prazo criado: ${pz.titulo} (fatal ${dataBR(pz.prazo_fatal)}).`;
+};
 
 // Ações da IA: analisar todas as pendentes, analisar uma de novo e aprovar uma sugestão com um clique.
 async function acaoIa(req, env, sessao, id, ctx, acao) {
@@ -221,6 +242,7 @@ async function acaoIa(req, env, sessao, id, ctx, acao) {
   if (!s.gera_prazo) {
     await env.DB.prepare("UPDATE publicacoes SET situacao = 'sem_prazo', triada_por = ?, triada_em = ?, ia_resultado = 'aprovada' WHERE id = ? AND situacao = 'pendente'")
       .bind(sessao.usuario_id, t, pub.id).run();
+    await andamentoDaIntimacao(env, pub.id, sessao.usuario_id, "Intimação arquivada sem prazo.");
     await auditar(env, req, sessao.usuario_id, "intimacao_arquivada", `publicação ${pub.id} (sugestão da IA aprovada)`);
     return redirecionar("/sistema/publicacoes?msg=arquivada");
   }
@@ -232,6 +254,7 @@ async function acaoIa(req, env, sessao, id, ctx, acao) {
     .bind(sessao.usuario_id, t, pub.id).run();
   if (!r.meta.changes) return redirecionar("/sistema/publicacoes");
   const prazoId = await gravarPrazo(env, p, { usuarioId: sessao.usuario_id, publicacaoId: pub.id });
+  await andamentoDaIntimacao(env, pub.id, sessao.usuario_id, await desfechoPrazo(env, prazoId));
   await auditar(env, req, sessao.usuario_id, "intimacao_triada", `publicação ${pub.id} → prazo ${prazoId} (sugestão da IA aprovada)`);
   return redirecionar("/sistema/publicacoes?msg=aprovada");
 }
