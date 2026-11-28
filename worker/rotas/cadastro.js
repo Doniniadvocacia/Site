@@ -4,6 +4,7 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, cifrar, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { hojeBR } from "../calendario.js";
+import { esquecerAniversariantes } from "../notificacoes.js";
 import { obterListas } from "../listas.js";
 import { msConfigurado, vincularPastasAutomaticas, garantirPastaCliente } from "../microsoft.js";
 import { normalizarEtiquetas, etiquetasUsadas, datalistEtiquetas } from "./crm.js";
@@ -131,6 +132,7 @@ export async function cadastroCliente(req, env, sessao, id) {
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "cliente_alterado" : "cliente_criado", `cliente ${novoId}`);
+  await esquecerAniversariantes(env); // a data de nascimento pode ter mudado
   // Cliente do escritório: já ganha a pasta no SharePoint (melhor esforço; o erro fica na auditoria).
   if (c.cliente && msConfigurado(env)) {
     try { const sp = await garantirPastaCliente(env, novoId); if (sp?.erro) await auditar(env, req, sessao.usuario_id, "sharepoint_erro", `cliente ${novoId}: ${sp.erro}`.slice(0, 300)); }

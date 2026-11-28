@@ -2,7 +2,7 @@
 // "Pendências" são calculadas na hora (prazos, compromissos, follow-ups, leads, intimações);
 // "Notificações" são avisos gravados para cada usuário (prazo atribuído, novas intimações, lead atribuído...).
 import { html, pagina, resposta, redirecionar, dataBR } from "./html.js";
-import { agora, iguais } from "./seguranca.js";
+import { agora, iguais, decifrar } from "./seguranca.js";
 import { hojeBR } from "./calendario.js";
 
 const LIMITE = 5; // itens exibidos por grupo; o total aparece no título do grupo
@@ -34,6 +34,40 @@ export async function notificar(env, { destinos, tipo, texto, link = null, autor
   } catch { return 0; } // notificação nunca impede a ação principal
   return ids.length;
 }
+
+// ---------- Aniversariantes do dia ----------
+// Clientes do escritório que fazem aniversário hoje (pessoa jurídica: aniversário de fundação). As datas de nascimento
+// ficam cifradas; a lista do dia é calculada uma vez e guardada só com nome e idade (a data em si não é gravada aberta).
+function diaMes(texto) {
+  const s = String(texto || "").trim();
+  let m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?$/);
+  if (m) return { d: Number(m[1]), m: Number(m[2]), a: m[3] ? Number(m[3].length === 2 ? (Number(m[3]) > 30 ? `19${m[3]}` : `20${m[3]}`) : m[3]) : null };
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return { d: Number(m[3]), m: Number(m[2]), a: Number(m[1]) };
+  return null;
+}
+export async function aniversariantesHoje(env) {
+  const hoje = hojeBR();
+  try {
+    const cache = JSON.parse((await env.DB.prepare("SELECT valor FROM configuracoes WHERE chave = 'aniversariantes'").first())?.valor || "null");
+    if (cache?.dia === hoje) return cache.itens;
+  } catch { /* recalcula */ }
+  const [ano, mes, dia] = hoje.split("-").map(Number);
+  const bissexto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
+  const { results } = await env.DB.prepare("SELECT id, nome, tipo, data_nascimento_enc FROM clientes WHERE cliente = 1 AND data_nascimento_enc IS NOT NULL").all();
+  const itens = [];
+  for (const c of results) {
+    const dm = diaMes(await decifrar(env, c.data_nascimento_enc).catch(() => ""));
+    if (!dm) continue;
+    const bate = (dm.d === dia && dm.m === mes) || (!bissexto && dm.d === 29 && dm.m === 2 && dia === 28 && mes === 2);
+    if (bate) itens.push({ id: c.id, nome: c.nome, pj: /jur[ií]dica/i.test(c.tipo || ""), idade: dm.a && dm.a < ano ? ano - dm.a : null });
+  }
+  itens.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  await env.DB.prepare("INSERT INTO configuracoes (chave, valor, atualizado_em) VALUES ('aniversariantes', ?1, ?2) ON CONFLICT(chave) DO UPDATE SET valor = ?1, atualizado_em = ?2")
+    .bind(JSON.stringify({ dia: hoje, itens }), agora()).run().catch(() => {});
+  return itens;
+}
+export const esquecerAniversariantes = (env) => env.DB.prepare("DELETE FROM configuracoes WHERE chave = 'aniversariantes'").run().catch(() => {});
 
 // ---------- Leitura ----------
 const escopo = (sessao, coluna) => (sessao.perfil === "admin" ? ["1 = 1", []] : [`(COALESCE(${coluna}, '') = '' OR ${coluna} = ?)`, [sessao.nome]]);
@@ -79,6 +113,8 @@ export async function carregarNotificacoes(env, sessao) {
   const fups = fupsTodos.filter((t) => !vistos.has(`followup:${t.id}`));
   const leads = leadsTodos.filter((l) => !vistos.has(`lead:${l.id}`));
   const intim = vistos.has(`intimacoes:${intimTodas[0].n}`) ? [{ n: 0 }] : intimTodas; // volta a aparecer se a quantidade mudar
+  const aniversariantes = (await aniversariantesHoje(env).catch(() => [])).map((a) => ({ ...a, visto: vistos.has(`aniversario:${a.id}`) }));
+  const aniversNovos = aniversariantes.filter((a) => !a.visto).length;
   const viaPendencia = (chave, destino) => `/sistema/notificacoes/pendencia?c=${encodeURIComponent(chave)}&ir=${encodeURIComponent(destino)}`;
   const quando = (d) => (d < hoje ? "Atrasado" : "Hoje");
   const grupos = [
@@ -94,9 +130,10 @@ export async function carregarNotificacoes(env, sessao) {
       texto: `${intim[0].n} intimação(ões) aguardando conferência`, link: viaPendencia(`intimacoes:${intim[0].n}`, "/sistema/publicacoes") }] : [] },
   ].filter((g) => g.total);
   const pendencias = grupos.reduce((s, g) => s + g.total, 0);
-  const chavesVisiveis = [...prazos.map((p) => `prazo:${p.id}`), ...comps.map(chaveComp), ...fups.map((t) => `followup:${t.id}`),
+  const chavesVisiveis = [...aniversariantes.filter((a) => !a.visto).map((a) => `aniversario:${a.id}`), ...prazos.map((p) => `prazo:${p.id}`), ...comps.map(chaveComp), ...fups.map((t) => `followup:${t.id}`),
     ...leads.map((l) => `lead:${l.id}`), ...(intim[0].n ? [`intimacoes:${intim[0].n}`] : [])];
-  return { grupos, pendencias, notificacoes: notifs, naoLidas: naoLidas[0].n, total: pendencias + naoLidas[0].n, chavesVisiveis };
+  return { grupos, pendencias, notificacoes: notifs, naoLidas: naoLidas[0].n, total: pendencias + naoLidas[0].n + aniversNovos, chavesVisiveis,
+    aniversariantes: aniversariantes.map((a) => ({ ...a, link: viaPendencia(`aniversario:${a.id}`, `/sistema/clientes/${a.id}`) })) };
 }
 
 // ---------- Sino (HTML da barra) ----------
@@ -113,7 +150,7 @@ export function sino(sessao) {
   if (!n) return "";
   const contagem = n.total > 99 ? "99+" : String(n.total);
   return html`<details class="menu-notificacoes">
-    <summary class="sino" aria-label="${n.total ? `Notificações: ${n.total} pendente(s)` : "Notificações"}" title="Notificações">${icoSino()}${n.total ? html`<span class="sino-contagem">${contagem}</span>` : ""}</summary>
+    <summary class="sino" aria-label="${n.total ? `Notificações: ${n.total} pendente(s)` : "Notificações"}" title="${n.aniversariantes?.length ? "Notificações · tem cliente fazendo aniversário hoje" : "Notificações"}">${icoSino()}${n.aniversariantes?.some((a) => !a.visto) ? html`<span class="sino-bolo" aria-hidden="true">🎂</span>` : ""}${n.total ? html`<span class="sino-contagem">${contagem}</span>` : ""}</summary>
     <div class="painel-notificacoes" role="dialog" aria-label="Notificações e pendências">
       <div class="painel-notificacoes-topo"><strong>Notificações${n.naoLidas ? html` <span class="contagem">${String(n.naoLidas)}</span>` : ""}</strong>
         ${n.notificacoes.length || n.chavesVisiveis.length ? html`<span class="acoes-notificacoes">
@@ -122,6 +159,11 @@ export function sino(sessao) {
           <form method="post" action="/sistema/notificacoes/limpar" class="form-linha" data-confirmar="Limpar as notificações e as pendências? Os itens que continuarem pendentes voltam a aparecer amanhã.">
             <input type="hidden" name="csrf" value="${sessao.csrf}"><button type="submit" class="link-botao">Limpar</button></form></span>` : ""}</div>
       <div class="painel-notificacoes-corpo">
+        ${n.aniversariantes?.length ? html`<section class="aniversariantes" aria-label="Aniversariantes de hoje">
+          <p class="aniversariantes-titulo">Aniversariantes de hoje</p>
+          <ul>${n.aniversariantes.map((a) => html`<li class="${a.visto ? "" : "nao-lida"}"><a href="${a.link}"><span class="bolo" aria-hidden="true">🎂</span>
+            <span class="notif-texto">${a.nome}</span><small>${a.pj ? `aniversário de fundação${a.idade ? ` · ${a.idade} anos` : ""}` : a.idade ? `${a.idade} anos` : "aniversário"}</small></a></li>`)}</ul>
+        </section>` : ""}
         ${n.notificacoes.length ? html`<ul class="lista-notificacoes">${n.notificacoes.map((x) => html`<li class="${x.lida ? "" : "nao-lida"}">
           <a href="/sistema/notificacoes/${String(x.id)}"><span class="notif-texto">${x.texto}</span><small>${tempo(x.criado_em)}</small></a></li>`)}</ul>`
           : html`<p class="notif-vazio">Nenhuma notificação.</p>`}
@@ -145,7 +187,7 @@ export async function notificacoes(req, env, sessao, id) {
     // Abrir uma pendência de prazo/compromisso pelo sino: some da lista hoje e segue para o item.
     const sp = new URL(req.url).searchParams;
     const chave = String(sp.get("c") || "");
-    if (/^(prazo|agenda|followup|lead|intimacoes):\d+$/.test(chave)) {
+    if (/^(prazo|agenda|followup|lead|intimacoes|aniversario):\d+$/.test(chave)) {
       await env.DB.batch([
         env.DB.prepare("INSERT OR IGNORE INTO pendencias_vistas (usuario_id, chave, dia) VALUES (?, ?, ?)").bind(sessao.usuario_id, chave, hojeBR()),
         env.DB.prepare("DELETE FROM pendencias_vistas WHERE dia < ?").bind(hojeBR()),
