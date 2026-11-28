@@ -25,6 +25,7 @@ import { editarCadastro } from "./rotas/conta.js";
 import { consultarCep } from "./rotas/cep.js";
 import { listas } from "./rotas/listas.js";
 import { favorecidos } from "./rotas/favorecidos.js";
+import { verificacao } from "./rotas/verificacao.js";
 import { opcoesBusca } from "./rotas/opcoes.js";
 import { carregarNotificacoes, sino, notificacoes } from "./notificacoes.js";
 import { relatorios } from "./rotas/relatorios.js";
@@ -74,6 +75,7 @@ function configuracoes(sessao) {
     ${item("/sistema/favorecidos", "Favorecidos", "Quem recebe pagamentos e repasses do escritório")}
     ${item("/sistema/asaas", "Asaas", "Cobranças, baixa automática de pagamentos e conciliação")}
     ${item("/sistema/microsoft", "Microsoft 365", "SharePoint: pastas dos processos e cópia dos anexos")}
+    ${item("/sistema/verificacao", "Verificação de cadastros", "Pessoas duplicadas, clientes sem processo e processos sem cliente")}
     ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
     ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
   </div>` }));
@@ -169,7 +171,7 @@ async function sistema(req, env, ctx) {
 
   const admin = sessao.perfil === "admin";
   // Configurações e tudo o que fica dentro delas: somente administradores.
-  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas|asaas|microsoft)(\/|$)/.test(caminho)) {
+  if (!admin && /^\/sistema\/(configuracoes|usuarios|importar|status|oabs|feriados|listas|asaas|microsoft|verificacao)(\/|$)/.test(caminho)) {
     return resposta(pagina({ titulo: "Acesso restrito", sessao, corpo: html`<h1>Acesso restrito</h1><p>Esta área é exclusiva para administradores.</p>` }), 403);
   }
   if ((m = caminho.match(/^\/sistema\/usuarios(?:\/(\d+))?$/)) && admin) return usuarios(req, env, sessao, m[1]);
@@ -180,6 +182,7 @@ async function sistema(req, env, ctx) {
   if (caminho === "/sistema/feriados" && admin) return feriados(req, env, sessao);
   if (caminho === "/sistema/listas" && admin) return listas(req, env, sessao);
   if (caminho === "/sistema/asaas" && admin) return configAsaas(req, env, sessao);
+  if (caminho === "/sistema/verificacao" && admin) return verificacao(req, env, sessao);
 
   return resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Página não encontrada</h1>` }), 404);
 }

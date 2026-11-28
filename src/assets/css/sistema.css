@@ -995,3 +995,12 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .linha-parte .campo-parte { flex: 1; margin: 0; }
 .botao-remover-parte { background: none; border: 1px solid var(--linha); color: var(--texto); width: 2.4rem; height: 2.4rem; border-radius: 6px; cursor: pointer; font-size: 1.1rem; padding: 0; }
 .outras-partes [data-adicionar-parte] { align-self: flex-start; }
+
+/* Verificação de cadastros */
+.lista-pares { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .8rem; }
+.par-duplicado { border: 1px solid var(--linha); border-radius: 8px; padding: .7rem .9rem; }
+.par-duplicado .motivos { margin: 0 0 .5rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--navy); }
+.par-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: .6rem; }
+.pessoa-par { display: flex; flex-direction: column; gap: .15rem; }
+.pessoa-par small { color: var(--texto); opacity: .85; }
+@media (max-width: 700px) { .par-colunas { grid-template-columns: 1fr; } }

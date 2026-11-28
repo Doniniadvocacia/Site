@@ -72,8 +72,12 @@ export async function importar(req, env, sessao) {
   try {
     const t = agora();
     const clientes = await lerColecao(env, "Clientes");
+    // Cadastros do Wix já unificados com outro aqui não são recriados.
+    const { results: unif } = await env.DB.prepare("SELECT wix_id, cliente_id FROM cadastros_unificados").all();
+    const absorvidos = new Map(unif.map((u) => [u.wix_id, u.cliente_id]));
     const stmts = [];
     for (const c of clientes) {
+      if (absorvidos.has(c._id)) continue;
       stmts.push(env.DB.prepare(
         `INSERT INTO clientes (wix_id, nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado,
            documento_enc, data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, criado_em, atualizado_em, vinculo, cliente)
@@ -91,6 +95,7 @@ export async function importar(req, env, sessao) {
     // Endereço estruturado (rua, bairro, CEP) para o formulário com busca por CEP.
     const end = [];
     for (const c of clientes) {
+      if (absorvidos.has(c._id)) continue;
       const dados = Object.fromEntries([["rua", txt(c.endereco)], ["bairro", txt(c.bairro)], ["cep", txt(c.cep)]].filter(([, v]) => v));
       if (!Object.keys(dados).length) continue;
       end.push(env.DB.prepare("UPDATE clientes SET endereco_dados_enc = ? WHERE wix_id = ? AND editado_local = 0").bind(await cifrar(env, JSON.stringify(dados)), c._id));
@@ -98,7 +103,7 @@ export async function importar(req, env, sessao) {
     for (let i = 0; i < end.length; i += 50) await env.DB.batch(end.slice(i, i + 50));
 
     const { results: mapa } = await env.DB.prepare("SELECT id, wix_id FROM clientes WHERE wix_id IS NOT NULL").all();
-    const idCliente = Object.fromEntries(mapa.map((m) => [m.wix_id, m.id]));
+    const idCliente = Object.fromEntries([...mapa.map((m) => [m.wix_id, m.id]), ...absorvidos]);
     const processos = await lerColecao(env, "Processos");
     const ps = [];
     for (const p of processos) {
