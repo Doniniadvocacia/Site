@@ -2,7 +2,7 @@
 // Busca por OAB, pelos processos marcados "monitorar processo" (número) e pelos clientes marcados "monitorar cliente"
 // (nome da parte), nos últimos dias; grava só o que é novo (sem repetir a mesma intimação) e deixa na fila de triagem.
 import { notificar, idsPorPerfil } from "./notificacoes.js";
-import { agora, sha256 } from "./seguranca.js";
+import { agora, sha256, tokenAleatorio } from "./seguranca.js";
 import { calendarioDoBanco, normalizarData, somarDias, hojeBR } from "./calendario.js";
 
 const API_PADRAO = "https://comunicaapi.pje.jus.br/api/v1/comunicacao";
@@ -13,6 +13,34 @@ const MAX_PAGINAS_NOME = 3;   // busca por nome: homônimos podem trazer muitos 
 const ALVOS_POR_RODADA = 40;  // processos + clientes por execução (os mais antigos primeiro, em rodízio)
 
 const soDigitos = (s) => String(s || "").replace(/\D/g, "");
+const normalizar = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// A busca por nome do DJEN é aproximada (traz "Brandão" para "Guilherme Brandão", ou "Ana Paula Pereira de Assis" para
+// "Ana Paula Pereira"). Só fica a intimação em que o nome cadastrado aparece EXATAMENTE como destinatário/parte; sem a
+// lista de destinatários, o nome completo precisa estar no texto, sem continuar com outro nome (ex.: "... de Assis").
+export function nomeBateExato(item, nome) {
+  const alvo = normalizar(nome);
+  if (!alvo) return false;
+  const pessoas = [item.destinatarios, item.partes, item.destinatario].flat().filter(Boolean)
+    .map((d) => normalizar(typeof d === "string" ? d : d.nome || d.nomeParte || d.nome_parte || ""))
+    .filter(Boolean);
+  if (pessoas.length) return pessoas.includes(alvo);
+  const texto = ` ${normalizar(item.texto || item.conteudo || "")} `;
+  const conectores = new Set(["de", "da", "do", "das", "dos", "e"]);
+  let i = texto.indexOf(` ${alvo} `);
+  while (i >= 0) {
+    const resto = texto.slice(i + alvo.length + 2).split(" ");
+    // Logo depois do nome não pode vir continuação de nome ("de Assis", "Junior"...). Palavras comuns do texto são aceitas.
+    const prox = resto[0] || "";
+    const continua = (conectores.has(prox) && /^[a-z]/.test(resto[1] || "") && !CONTEXTO.has(resto[1])) || SUFIXOS.has(prox);
+    if (!continua) return true;
+    i = texto.indexOf(` ${alvo} `, i + 1);
+  }
+  return false;
+}
+const SUFIXOS = new Set(["junior", "jr", "filho", "filha", "neto", "neta", "sobrinho", "segundo", "terceiro"]);
+// Palavras que costumam vir depois de "nome de ..." no texto jurídico e não são sobrenome.
+const CONTEXTO = new Set(["acordo", "acao", "advogado", "advogada", "prazo", "dias", "intimacao", "sentenca", "decisao", "despacho", "processo", "valor", "fls", "folhas", "outros", "outras", "outro", "outra", "seus", "sua", "seu"]);
 const primeiro = (o, ...chaves) => { for (const k of chaves) if (o[k] !== undefined && o[k] !== null && o[k] !== "") return o[k]; return null; };
 
 async function buscarDjen(api, filtro, inicio, fim, maxPaginas = MAX_PAGINAS) {
@@ -64,7 +92,7 @@ export async function capturarDjen(env, origem = "agendada") {
   const alvos = [
     ...oabs.map((o) => ({ rotulo: `${o.numero}/${o.uf}`, filtro: { numeroOab: o.numero, ufOab: o.uf } })),
     ...procsRodada.map((p) => ({ rotulo: `Processo ${p.numero}`, filtro: { numeroProcesso: soDigitos(p.numero) }, marcar: ["processos", p.id] })),
-    ...clisRodada.map((c) => ({ rotulo: `Cliente: ${c.nome}`, filtro: { nomeParte: c.nome }, paginas: MAX_PAGINAS_NOME, marcar: ["clientes", c.id] })),
+    ...clisRodada.map((c) => ({ rotulo: `Cliente: ${c.nome}`, filtro: { nomeParte: c.nome.trim() }, paginas: MAX_PAGINAS_NOME, marcar: ["clientes", c.id], nomeExato: c.nome.trim() })),
   ];
   if (!alvos.length) return [{ oab: "-", erro: "Nenhuma OAB, processo ou cliente marcado para monitorar." }];
 
@@ -75,9 +103,11 @@ export async function capturarDjen(env, origem = "agendada") {
   const porNumero = new Map(procs.map((p) => [soDigitos(p.numero), p.id]));
   const resumo = [];
 
-  for (const { rotulo, filtro, paginas, marcar } of alvos) {
+  const execucao = `${origem}-${agora()}-${tokenAleatorio(4)}`;
+  for (const { rotulo, filtro, paginas, marcar, nomeExato: nome } of alvos) {
     try {
-      const itens = await buscarDjen(env.DJEN_API || API_PADRAO, filtro, inicio, fim, paginas);
+      const brutos = await buscarDjen(env.DJEN_API || API_PADRAO, filtro, inicio, fim, paginas);
+      const itens = nome ? brutos.filter((it) => nomeBateExato(it, nome)) : brutos;
       let novas = 0;
       for (const it of itens) {
         const djenId = primeiro(it, "id", "idComunicacao");
@@ -87,21 +117,21 @@ export async function capturarDjen(env, origem = "agendada") {
         const hash = primeiro(it, "hash") || (await sha256(`${djenId}|${numeroProc}|${disp}|${texto.slice(0, 500)}`));
         const r = await env.DB.prepare(
           `INSERT INTO publicacoes (djen_id, hash, data_disponibilizacao, data_publicacao, tribunal, orgao, tipo, numero_processo,
-             processo_id, texto, link, oab, situacao, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?)
+             processo_id, texto, link, oab, situacao, criado_em, execucao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?, ?)
            ON CONFLICT DO NOTHING`
         ).bind(djenId ? String(djenId) : null, hash, disp, disp ? cal.publicacaoDjen(disp) : null,
           primeiro(it, "siglaTribunal", "tribunal"), primeiro(it, "nomeOrgao", "orgao"), primeiro(it, "tipoComunicacao", "tipoDocumento", "tipo"),
-          numeroProc, porNumero.get(soDigitos(numeroProc)) ?? null, texto, primeiro(it, "link"), rotulo, agora()).run();
+          numeroProc, porNumero.get(soDigitos(numeroProc)) ?? null, texto, primeiro(it, "link"), rotulo, agora(), execucao).run();
         if (r.meta.changes) novas++;
       }
-      await env.DB.prepare("INSERT INTO capturas (origem, oab, encontradas, novas, criado_em) VALUES (?, ?, ?, ?, ?)")
-        .bind(origem, rotulo, itens.length, novas, agora()).run();
+      await env.DB.prepare("INSERT INTO capturas (origem, oab, encontradas, novas, criado_em, execucao) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(origem, rotulo, itens.length, novas, agora(), execucao).run();
       if (marcar) await env.DB.prepare(`UPDATE ${marcar[0]} SET monitorado_em = ? WHERE id = ?`).bind(agora(), marcar[1]).run();
       resumo.push({ oab: rotulo, encontradas: itens.length, novas });
     } catch (e) {
-      await env.DB.prepare("INSERT INTO capturas (origem, oab, erro, criado_em) VALUES (?, ?, ?, ?)")
-        .bind(origem, rotulo, e.message.slice(0, 500), agora()).run();
+      await env.DB.prepare("INSERT INTO capturas (origem, oab, erro, criado_em, execucao) VALUES (?, ?, ?, ?, ?)")
+        .bind(origem, rotulo, e.message.slice(0, 500), agora(), execucao).run();
       resumo.push({ oab: rotulo, erro: e.message });
       if (/403/.test(e.message)) break; // bloqueio de rede: os demais alvos falhariam igual
     }

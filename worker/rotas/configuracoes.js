@@ -9,6 +9,26 @@ import { csrfOk, txt, dataValida, dataBR } from "./comum.js";
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
 const quando = (t) => new Date(t * 1000).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
+// Última execução da captura e as intimações que ela trouxe e ainda estão pendentes (para desfazer uma captura).
+async function ultimaCaptura(env) {
+  const { results } = await env.DB.prepare("SELECT id, origem, criado_em, execucao FROM capturas ORDER BY id DESC LIMIT 400").all();
+  if (!results.length) return null;
+  const topo = results[0];
+  if (topo.execucao) {
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS n FROM publicacoes WHERE execucao = ? AND situacao = 'pendente'").bind(topo.execucao).first()).n;
+    return { quando: topo.criado_em, origem: topo.origem, n, onde: "execucao = ?", args: [topo.execucao] };
+  }
+  // Capturas anteriores à marcação por execução: a execução é o bloco de registros seguidos (mesma origem, intervalos curtos).
+  let i = 0;
+  while (i + 1 < results.length && results[i + 1].origem === topo.origem && results[i].criado_em - results[i + 1].criado_em <= 600) i++;
+  const inicio = results[i].criado_em, anterior = results[i + 1]?.criado_em || 0;
+  const desde = Math.max(anterior, inicio - 1800);
+  const onde = "execucao IS NULL AND criado_em > ? AND criado_em <= ?";
+  const args = [desde, topo.criado_em + 5];
+  const n = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM publicacoes WHERE ${onde} AND situacao = 'pendente'`).bind(...args).first()).n;
+  return { quando: topo.criado_em, origem: topo.origem, n, onde, args };
+}
+
 export async function oabs(req, env, sessao) {
   let aviso = null, erro = null;
   if (req.method === "POST") {
@@ -27,6 +47,14 @@ export async function oabs(req, env, sessao) {
     } else if (f.get("acao") === "alternar") {
       await env.DB.prepare("UPDATE oabs SET ativo = 1 - ativo WHERE id = ?").bind(Number(f.get("id"))).run();
       aviso = "Monitoramento atualizado.";
+    } else if (f.get("acao") === "excluir_ultima") {
+      const u = await ultimaCaptura(env);
+      if (!u?.n) aviso = "Nenhuma intimação pendente da última verificação para excluir.";
+      else {
+        const r = await env.DB.prepare(`DELETE FROM publicacoes WHERE ${u.onde} AND situacao = 'pendente'`).bind(...u.args).run();
+        await auditar(env, req, sessao.usuario_id, "intimacoes_excluidas", `${r.meta.changes} intimação(ões) pendente(s) da verificação de ${quando(u.quando)}`);
+        aviso = `${r.meta.changes} intimação(ões) da última verificação excluída(s).`;
+      }
     } else if (f.get("acao") === "buscar") {
       const r = await capturarDjen(env, "manual");
       await auditar(env, req, sessao.usuario_id, "djen_captura_manual", JSON.stringify(r).slice(0, 400));
@@ -40,6 +68,7 @@ export async function oabs(req, env, sessao) {
     env.DB.prepare("SELECT * FROM capturas ORDER BY id DESC LIMIT 30").all(),
     env.DB.prepare("SELECT (SELECT COUNT(*) FROM processos WHERE monitorar = 1) AS p, (SELECT COUNT(*) FROM clientes WHERE monitorar = 1) AS c").first(),
   ]);
+  const ultima = await ultimaCaptura(env);
   return resposta(pagina({
     titulo: "OABs e DJEN", sessao, aviso, erro,
     corpo: html`
@@ -64,11 +93,17 @@ export async function oabs(req, env, sessao) {
           <button type="submit" name="acao" value="adicionar">Adicionar</button>
         </form>
       </section>
+      ${ultima ? html`<section class="cartao"><h2>Última verificação</h2>
+        <p>${quando(ultima.quando)} · ${({ acesso: "automática (ao abrir o sistema)" })[ultima.origem] || ultima.origem} · <strong>${String(ultima.n)}</strong> intimação(ões) recebida(s) ainda pendente(s) na triagem.</p>
+        ${ultima.n ? html`<form method="post" data-confirmar="${`Excluir as ${ultima.n} intimação(ões) pendente(s) recebida(s) na última verificação? As que já foram triadas não são afetadas.`}">${campoCsrf(sessao)}
+          <button type="submit" name="acao" value="excluir_ultima" class="botao-perigo">Excluir as intimações desta verificação</button></form>` : ""}
+      </section>` : ""}
       <section class="cartao"><div class="titulo-acoes"><h2>Capturas recentes</h2>
         <form method="post">${campoCsrf(sessao)}<button type="submit" name="acao" value="buscar">Buscar agora</button></form></div>
         ${capturas.length ? html`<ul class="lista-simples">${capturas.map((c) => html`<li><span>${quando(c.criado_em)} · ${({ acesso: "automática (ao abrir o sistema)" })[c.origem] || c.origem} · ${c.oab}</span>
           <span>${c.erro ? html`<span class="alerta-texto">${c.erro}</span>` : `${c.encontradas} encontrada(s), ${c.novas} nova(s)`}</span></li>`)}</ul>` : html`<p>Nenhuma captura ainda.</p>`}
-      </section>`,
+      </section>
+      <script src="/assets/js/confirmar.js" defer></script>`,
   }));
 }
 
