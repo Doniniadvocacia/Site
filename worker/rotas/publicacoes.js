@@ -12,7 +12,7 @@ const trecho = (s, n = 160) => { const t = textoDeHtml(s).replace(/\s+/g, " ").t
 
 const CONFIANCA = { alta: "Confiança alta", media: "Confiança média", baixa: "Confiança baixa" };
 const seloConfianca = (s) => html`<span class="${`selo selo-confianca ${s.confianca}`}">${CONFIANCA[s.confianca] || ""}</span>`;
-const MENSAGENS = { excluida: "Intimação excluída. Ela não volta nas próximas capturas.", nao_excluivel: "Esta intimação já gerou prazo ou foi triada e não pode ser excluída.", analise: "Análise das intimações iniciada. As sugestões aparecem em instantes (atualize a página).", aprovada: "Sugestão aprovada.",
+const MENSAGENS = { processo_criado: "Processo cadastrado e vinculado a esta intimação. Agora conclua a triagem.", excluida: "Intimação excluída. Ela não volta nas próximas capturas.", nao_excluivel: "Esta intimação já gerou prazo ou foi triada e não pode ser excluída.", analise: "Análise das intimações iniciada. As sugestões aparecem em instantes (atualize a página).", aprovada: "Sugestão aprovada.",
   arquivada: "Intimação arquivada sem prazo.", revisar: "Esta sugestão precisa de revisão antes de aprovar: confira os campos e salve.", reanalisada: "Intimação analisada novamente." };
 
 // Monta os campos do formulário de prazo a partir da sugestão da IA.
@@ -83,7 +83,7 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
           <tbody>${results.map((p) => html`<tr>
             <td class="nowrap"><a href="/sistema/publicacoes/${String(p.id)}">${dataBR(p.data_disponibilizacao)}</a></td>
             <td>${p.tribunal}${p.tipo ? html`<br><small>${p.tipo}</small>` : ""}</td>
-            <td>${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}">${p.pasta ? `Pasta ${p.pasta}` : p.numero_processo}</a>` : html`${p.numero_processo || "—"}<br><small class="alerta-texto">não vinculado</small>`}</td>
+            <td>${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}">${p.pasta ? `Pasta ${p.pasta}` : p.numero_processo}</a>` : html`${p.numero_processo || "—"}<br><small class="alerta-texto">não vinculado</small> · <a class="link-pequeno" href="/sistema/processos/novo?intimacao=${String(p.id)}">cadastrar processo</a>`}</td>
             <td><a href="/sistema/publicacoes/${String(p.id)}" class="link-discreto">${trecho(p.texto)}</a></td>
             ${ia || visao !== "pendentes" ? html`<td class="coluna-ia">${colunaIa(p)}</td>` : ""}
             <td>${SITUACAO[p.situacao]}${p.situacao === "pendente" && !(ia && lerSugestao(p)) ? html`<div class="acoes-sugestao">${html`<form method="post" action="/sistema/publicacoes/${String(p.id)}/excluir" data-confirmar="Excluir esta intimação? Ela sai da triagem e não volta nas próximas capturas.">${campoCsrf(sessao)}<button type="submit" class="botao-mini botao-perigo-discreto">Excluir</button></form>`}</div>` : ""}</td>
@@ -146,7 +146,8 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
       ${prazosPub.length ? html`<section class="cartao"><h2>Prazos desta intimação</h2><ul class="lista-simples">${prazosPub.map((x) => html`<li><a href="/sistema/prazos/${String(x.id)}">${x.titulo}</a><span>${dataBR(x.prazo_fatal)} · ${x.situacao}</span></li>`)}</ul></section>` : ""}
       <section class="cartao">
         <h2>${pub.situacao === "pendente" ? "Triagem" : "Criar outro prazo"}</h2>
-        ${!pub.processo_id ? html`<p class="alerta-texto">O número do processo não foi encontrado no cadastro. Escolha o processo abaixo, se ele existir.</p>` : ""}
+        ${!pub.processo_id ? html`<div class="aviso-organizar"><p class="alerta-texto">O número do processo não foi encontrado no cadastro. Escolha o processo abaixo, se ele existir, ou cadastre-o agora.</p>
+          <a class="botao-link botao-pequeno" href="/sistema/processos/novo?intimacao=${String(pub.id)}">Cadastrar processo a partir desta intimação</a></div>` : ""}
         ${formularioPrazo({
           sessao, apoio, calculo: calculo || (p ? null : calcSug), acao: `/sistema/publicacoes/${String(pub.id)}`,
           p: p || base || { processo_id: pub.processo_id, data_inicio: pub.data_publicacao, contagem: "uteis", antecedencia: 2, situacao: "aberto", titulo: "", tipo: "Manifestação", descricao: descricaoDaIntimacao(pub) },

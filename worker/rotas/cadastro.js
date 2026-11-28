@@ -151,6 +151,18 @@ const TEXTOS_PROC = {
 const DATAS_PROC = ["data_distribuicao", "data_cadastro", "data_citacao", "data_transito", "data_encerramento",
   "data_decisao_primeira", "data_decisao_segunda", "data_decisao_superior", "data_decisao_final"];
 
+// Dados que a intimação já traz para o cadastro do processo: número, órgão julgador, UF e competência (pela sigla do tribunal).
+function dadosDaIntimacao(pub) {
+  const sigla = String(pub.tribunal || "").toUpperCase();
+  const TRT = { 1: "RJ", 2: "SP", 3: "MG", 4: "RS", 5: "BA", 6: "PE", 7: "CE", 8: "PA", 9: "PR", 10: "DF", 11: "AM", 12: "SC", 13: "PB", 14: "RO", 15: "SP", 16: "MA", 17: "ES", 18: "GO", 19: "AL", 20: "SE", 21: "RN", 22: "PI", 23: "MT", 24: "MS" };
+  let uf = null, competencia = null;
+  let m;
+  if ((m = sigla.match(/^TJ([A-Z]{2})$/))) { uf = m[1]; competencia = "Estadual"; }
+  else if ((m = sigla.match(/^TRT(\d{1,2})$/))) { uf = TRT[Number(m[1])] || null; competencia = "Trabalhista"; }
+  else if (/^TRF\d$/.test(sigla)) competencia = "Federal";
+  return { numero: pub.numero_processo || "", vara: pub.orgao || "", ...(uf ? { uf } : {}), ...(competencia ? { competencia } : {}) };
+}
+
 // Campo de parte com busca no cadastro de pessoas; aceita nome livre (vira cadastro novo ao salvar).
 const campoParte = ({ rotulo, nome, id, texto, classe = "" }) => html`<label class="${`campo-parte ${classe}`}">${rotulo}
   <span class="campo-busca-caixa"><input type="text" name="${nome}" class="parte-texto" maxlength="200" value="${texto || ""}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Digite o nome"></span>
@@ -180,7 +192,7 @@ function formularioProcesso(sessao, p, acao, apoio) {
   const s = (nome, rotulo, lista, vazio = "—") => html`<label>${rotulo}<select name="${nome}">${opcoes([...new Set([...lista, ...(p[nome] ? [p[nome]] : [])])].map((v) => [v, v]), p[nome], vazio)}</select></label>`;
   const grupo = (titulo, corpo, extra = "") => html`<fieldset class="largo grade-form grupo-form ${extra}"><legend>${titulo}</legend>${corpo}</fieldset>`;
   return html`<form method="post" action="${acao}" class="formulario grade-form">
-    ${campoCsrf(sessao)}
+    ${campoCsrf(sessao)}${p.intimacao ? html`<input type="hidden" name="intimacao" value="${String(p.intimacao)}">` : ""}
     ${grupo("Dados da Pasta", html`
       ${t("pasta", "Pasta")}
       ${t("advogado_responsavel", "Adv. responsável", { list: "l-advogado" })}
@@ -251,8 +263,8 @@ export async function cadastroProcesso(req, env, sessao, id) {
   };
 
   const titulo = existente ? (existente.numero || `Pasta ${existente.pasta}`) : "Novo processo";
-  const tela = (p, erro) => resposta(pagina({
-    titulo: id ? `Editar ${titulo}` : titulo, sessao, erro,
+  const tela = (p, erro, aviso = null) => resposta(pagina({
+    titulo: id ? `Editar ${titulo}` : titulo, sessao, erro, ...(aviso ? { aviso } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/processos">Processos</a>${id ? html` › <a href="/sistema/processos/${id}">${titulo}</a>` : ""}</p>
       <h1>${id ? "Editar processo" : "Novo processo"}</h1>
       <section class="cartao">${formularioProcesso(sessao, p, acao, apoio)}</section>`,
@@ -260,8 +272,13 @@ export async function cadastroProcesso(req, env, sessao, id) {
   if (req.method === "GET") {
     if (!existente) {
       const proxima = await env.DB.prepare("SELECT MAX(CAST(pasta AS INTEGER)) AS n FROM processos").first();
-      const cli = Number(new URL(req.url).searchParams.get("cliente")) || null;
-      return tela({ cliente_id: cli, pasta: String((proxima?.n || 0) + 1).padStart(4, "0"), situacao: "Ativa", data_cadastro: hojeBR(), uf: "RS" });
+      const sp = new URL(req.url).searchParams;
+      const cli = Number(sp.get("cliente")) || null;
+      const base = { cliente_id: cli, pasta: String((proxima?.n || 0) + 1).padStart(4, "0"), situacao: "Ativa", data_cadastro: hojeBR(), uf: "RS" };
+      // A partir de uma intimação sem processo: já vem com o número, o órgão, a UF e a competência da intimação.
+      const pub = Number(sp.get("intimacao")) ? await env.DB.prepare("SELECT id, numero_processo, tribunal, orgao, data_disponibilizacao FROM publicacoes WHERE id = ?").bind(Number(sp.get("intimacao"))).first() : null;
+      if (pub) Object.assign(base, dadosDaIntimacao(pub), { intimacao: pub.id });
+      return tela(base, null, pub ? "Dados da intimação preenchidos. Escolha o cliente, confira os campos e salve: a intimação será vinculada a este processo." : null);
     }
     const [contato, observacoes, telefone, email] = await Promise.all([existente.contato_parte_contraria_enc, existente.observacoes_enc,
       existente.telefone_parte_contraria_enc, existente.email_parte_contraria_enc].map((v) => decifrar(env, v)));
@@ -269,7 +286,7 @@ export async function cadastroProcesso(req, env, sessao, id) {
     return tela({ ...existente, contato, observacoes, telefone, email, outras });
   }
   const { f, ok } = await csrfOk(req, sessao);
-  const p = { id: existente?.id, cliente_id: Number(f.get("cliente_id")) || null, contato: txt(f, "contato", 400), observacoes: txt(f, "observacoes", 4000),
+  const p = { id: existente?.id, intimacao: existente ? null : Number(f.get("intimacao")) || null, cliente_id: Number(f.get("cliente_id")) || null, contato: txt(f, "contato", 400), observacoes: txt(f, "observacoes", 4000),
     telefone: txt(f, "telefone", 40), email: txt(f, "email", 200) };
   for (const [k, max] of Object.entries(TEXTOS_PROC)) p[k] = txt(f, k, max);
   for (const k of DATAS_PROC) p[k] = dataValida(txt(f, k));
@@ -316,5 +333,13 @@ export async function cadastroProcesso(req, env, sessao, id) {
     ...outras.map((o, i) => env.DB.prepare("INSERT INTO processo_partes (processo_id, pessoa_id, nome, ordem) VALUES (?, ?, ?, ?)").bind(novoId, o.id, o.nome, i)),
   ]);
   await auditar(env, req, sessao.usuario_id, existente ? "processo_alterado" : "processo_criado", `processo ${novoId}${novasPessoas ? ` (${novasPessoas} parte(s) cadastrada(s))` : ""}`);
+  // Intimações ainda sem processo com o mesmo número passam a apontar para ele (inclusive a que originou o cadastro).
+  if (p.numero || p.intimacao) {
+    const { results: soltas } = await env.DB.prepare("SELECT id, numero_processo FROM publicacoes WHERE processo_id IS NULL").all();
+    const d = soDigitos(p.numero);
+    const ids = soltas.filter((x) => x.id === p.intimacao || (d && soDigitos(x.numero_processo) === d)).map((x) => x.id);
+    if (ids.length) await env.DB.batch(ids.map((i) => env.DB.prepare("UPDATE publicacoes SET processo_id = ? WHERE id = ? AND processo_id IS NULL").bind(novoId, i)));
+  }
+  if (p.intimacao) return redirecionar(`/sistema/publicacoes/${p.intimacao}?msg=processo_criado`);
   return redirecionar(`/sistema/processos/${novoId}?salvo=1`);
 }
