@@ -1004,3 +1004,4 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .pessoa-par { display: flex; flex-direction: column; gap: .15rem; }
 .pessoa-par small { color: var(--texto); opacity: .85; }
 @media (max-width: 700px) { .par-colunas { grid-template-columns: 1fr; } }
+.acoes-vinculo { display: flex; gap: .35rem; flex-wrap: wrap; }

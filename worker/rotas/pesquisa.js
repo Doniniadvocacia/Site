@@ -93,7 +93,8 @@ async function dadosClientes(env, p) {
             COUNT(pr.id) AS processos,
             SUM(CASE WHEN pr.id IS NULL THEN 0 WHEN LOWER(COALESCE(pr.situacao, '')) LIKE '%arquiv%' OR LOWER(COALESCE(pr.situacao, '')) LIKE '%encerr%'
                       OR LOWER(COALESCE(pr.situacao, '')) LIKE '%baixad%' OR LOWER(COALESCE(pr.situacao, '')) LIKE '%finaliz%' THEN 0 ELSE 1 END) AS ativos
-       FROM clientes c LEFT JOIN processos pr ON pr.cliente_id = c.id GROUP BY c.id`).all();
+       FROM clientes c LEFT JOIN processos pr ON pr.cliente_id = c.id OR pr.parte_contraria_id = c.id
+         OR pr.id IN (SELECT pp.processo_id FROM processo_partes pp WHERE pp.pessoa_id = c.id) GROUP BY c.id`).all();
   const { f } = p;
   let lista = results.filter((c) =>
     bateTexto(f.q, c.nome, c.etiquetas) &&
