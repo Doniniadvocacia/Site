@@ -233,7 +233,7 @@ export async function clientes(req, env, sessao, id) {
         ${campo("Origem", c.origem)}${lead ? html`<div><dt>Prospecção</dt><dd><a href="/sistema/crm/leads/${String(lead.id)}">ver histórico no funil</a></dd></div>` : ""}
       </dl>${chips(c.etiquetas)}${observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : ""}</section>
       <section class="cartao"><div class="titulo-acoes"><h2>Processos</h2><a class="botao-link" href="/sistema/processos/novo?cliente=${String(c.id)}">Novo processo</a></div>
-        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a> <span class="outra-parte">${p.papel === "Cliente" ? (p.parte_contraria ? `× ${p.parte_contraria}` : "") : (p.cliente_nome ? html`Cliente: <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : "")}</span>
+        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a> <span class="outra-parte">${p.papel === "Cliente" ? (p.parte_contraria ? html`<span class="selo rotulo-outra">Parte contrária</span> ${p.parte_contraria}` : "") : (p.cliente_nome ? html`<span class="selo rotulo-outra">Cliente</span> <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : "")}</span>
           <span><span class="${p.papel === "Cliente" ? "selo selo-pago" : "selo"}">${p.papel}</span> ${p.tipo_acao || ""} ${p.situacao ? `· ${p.situacao}` : ""}</span></li>`)}</ul>` : html`<p>Nenhum processo vinculado.</p>`}
       </section>
       ${fin}

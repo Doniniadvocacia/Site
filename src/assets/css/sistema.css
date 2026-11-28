@@ -1006,3 +1006,4 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 @media (max-width: 700px) { .par-colunas { grid-template-columns: 1fr; } }
 .acoes-vinculo { display: flex; gap: .35rem; flex-wrap: wrap; }
 .lista-simples li .outra-parte { flex: 1; color: var(--texto); font-size: .88rem; }
+.lista-simples li .outra-parte .rotulo-outra { margin-left: 0; margin-right: .35rem; font-size: .68rem; }
