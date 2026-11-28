@@ -47,7 +47,7 @@ const CLIENTES = {
     { k: "cadastro", r: "Cadastro", data: true },
   ],
   ordens: [["nome", "Nome"], ["cidade", "Cidade"], ["processos", "Mais processos"], ["cadastro", "Cadastro mais recente"]],
-  filtros: ["q", "vinculo", "documento", "tipo", "cidade", "uf", "origem", "etiqueta", "procs", "de", "ate"],
+  filtros: ["q", "vinculo", "monitorados", "documento", "tipo", "cidade", "uf", "origem", "etiqueta", "procs", "de", "ate"],
 };
 const PROCESSOS = {
   chave: "processos", titulo: "Processos", singular: "processo", rotuloRel: "Relatório de processos",
@@ -68,7 +68,7 @@ const PROCESSOS = {
     { k: "resultado", r: "Resultado" },
   ],
   ordens: [["pasta", "Pasta"], ["cliente", "Cliente"], ["distribuicao", "Distribuição mais recente"], ["valor", "Maior valor da causa"]],
-  filtros: ["q", "cliente", "parte", "tipo_acao", "situacao", "status", "fase", "instancia", "comarca", "uf", "responsavel", "resultado", "de", "ate"],
+  filtros: ["q", "monitorados", "cliente", "parte", "tipo_acao", "situacao", "status", "fase", "instancia", "comarca", "uf", "responsavel", "resultado", "de", "ate"],
 };
 
 function lerFiltros(def, sp) {
@@ -88,7 +88,7 @@ function lerFiltros(def, sp) {
 // ---------- Dados ----------
 async function dadosClientes(env, p) {
   const { results } = await env.DB.prepare(
-    `SELECT c.id, c.nome, c.cliente, c.vinculo, c.tipo, c.cidade, c.estado, c.profissao, c.origem, c.etiquetas, c.data_cadastro,
+    `SELECT c.id, c.nome, c.cliente, c.vinculo, c.monitorar, c.tipo, c.cidade, c.estado, c.profissao, c.origem, c.etiquetas, c.data_cadastro,
             c.documento_enc, c.email_enc, c.telefone_enc,
             COUNT(pr.id) AS processos,
             SUM(CASE WHEN pr.id IS NULL THEN 0 WHEN LOWER(COALESCE(pr.situacao, '')) LIKE '%arquiv%' OR LOWER(COALESCE(pr.situacao, '')) LIKE '%encerr%'
@@ -98,6 +98,7 @@ async function dadosClientes(env, p) {
   let lista = results.filter((c) =>
     bateTexto(f.q, c.nome, c.etiquetas) &&
     (!f.vinculo || igual(c.vinculo, f.vinculo)) &&
+    (!f.monitorados || c.monitorar === 1) &&
     (!f.tipo || igual(c.tipo, f.tipo)) &&
     (!f.cidade || normalizar(c.cidade).includes(normalizar(f.cidade))) &&
     (!f.uf || igual(c.estado, f.uf)) &&
@@ -122,13 +123,14 @@ async function dadosClientes(env, p) {
 
 async function dadosProcessos(env, p) {
   const { results } = await env.DB.prepare(
-    `SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.tipo_acao, p.situacao, p.fase, p.instancia, p.comarca, p.uf, p.vara, p.numero_vara,
+    `SELECT p.id, p.pasta, p.numero, p.parte_contraria, p.monitorar, p.tipo_acao, p.situacao, p.fase, p.instancia, p.comarca, p.uf, p.vara, p.numero_vara,
             p.advogado_responsavel, p.valor_causa, p.data_distribuicao, COALESCE(NULLIF(p.resultado_atual, ''), p.resultado) AS resultado, c.nome AS cliente,
             (SELECT GROUP_CONCAT(pp.nome, ' ') FROM processo_partes pp WHERE pp.processo_id = p.id) AS outras_partes
        FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id`).all();
   const { f } = p;
   const lista = results.filter((x) =>
     bateTexto(f.q, x.numero, x.pasta, x.cliente, x.parte_contraria, x.outras_partes) &&
+    (!f.monitorados || x.monitorar === 1) &&
     (!f.cliente || bateTexto(f.cliente, x.cliente)) &&
     (!f.parte || bateTexto(f.parte, x.parte_contraria, x.outras_partes)) &&
     (!f.tipo_acao || igual(x.tipo_acao, f.tipo_acao)) &&
@@ -184,6 +186,7 @@ function painelFiltros(def, p, op) {
   const campos = def === CLIENTES ? html`
       ${campoTexto("Nome ou etiqueta", "q", f.q, { largo: true, ph: "Digite parte do nome", foco: !p.pesquisar })}
       ${campoSelect("Vínculo", "vinculo", op.vinculos, f.vinculo, "Todos")}
+      ${campoSelect("Monitorado no DJEN", "monitorados", [["1", "Sim"]], f.monitorados, "Indiferente")}
       ${campoTexto("CPF/CNPJ", "documento", f.documento, { ph: "Só os números" })}
       ${campoSelect("Tipo", "tipo", op.tipos, f.tipo)}
       ${campoTexto("Cidade", "cidade", f.cidade)}
@@ -194,6 +197,7 @@ function painelFiltros(def, p, op) {
       ${campoData("Cadastro de", "de", f.de)}${campoData("Cadastro até", "ate", f.ate)}`
     : html`
       ${campoTexto("Número, pasta ou parte", "q", f.q, { largo: true, ph: "Número do processo, pasta ou nome", foco: !p.pesquisar })}
+      ${campoSelect("Monitorado no DJEN", "monitorados", [["1", "Sim"]], f.monitorados, "Indiferente")}
       ${campoTexto("Cliente", "cliente", f.cliente)}
       ${campoTexto("Parte contrária", "parte", f.parte)}
       ${campoSelect("Ação", "tipo_acao", op.tipos, f.tipo_acao, "Todas")}
@@ -254,9 +258,9 @@ function tabelaResultados(def, p, linhas) {
 
 function descreverFiltros(def, p) {
   const nomes = { q: def === CLIENTES ? "Nome/etiqueta" : "Busca", documento: "CPF/CNPJ", tipo: "Tipo", cidade: "Cidade", uf: "UF", origem: "Origem", etiqueta: "Etiqueta",
-    vinculo: "Vínculo", procs: "Processos", cliente: "Cliente", parte: "Parte contrária", tipo_acao: "Ação", situacao: "Situação", status: "Status", fase: "Fase", instancia: "Instância",
+    vinculo: "Vínculo", monitorados: "Monitorado no DJEN", procs: "Processos", cliente: "Cliente", parte: "Parte contrária", tipo_acao: "Ação", situacao: "Situação", status: "Status", fase: "Fase", instancia: "Instância",
     comarca: "Comarca", responsavel: "Responsável", resultado: "Resultado" };
-  const rotulos = { procs: { ativos: "com processos ativos", inativos: "só encerrados", sem: "sem processos" }, status: { ativos: "ativos", inativos: "encerrados/arquivados" } };
+  const rotulos = { monitorados: { 1: "sim" }, procs: { ativos: "com processos ativos", inativos: "só encerrados", sem: "sem processos" }, status: { ativos: "ativos", inativos: "encerrados/arquivados" } };
   const partes = def.filtros.filter((k) => p.f[k] && k !== "de" && k !== "ate").map((k) => `${nomes[k]}: ${rotulos[k]?.[p.f[k]] || p.f[k]}`);
   const periodo = def === CLIENTES ? "Cadastro" : "Distribuição";
   if (p.f.de || p.f.ate) partes.push(`${periodo}: ${p.f.de ? dataBR(p.f.de) : "…"} a ${p.f.ate ? dataBR(p.f.ate) : "…"}`);

@@ -30,6 +30,7 @@ function formularioCliente(sessao, c, acao, sugestoes) {
   return html`<form method="post" action="${acao}" class="formulario grade-form">
     ${campoCsrf(sessao)}
     <label class="largo">Nome<input name="nome" required maxlength="200" value="${c.nome || ""}"></label>
+    <label class="campo-check"><input type="checkbox" name="monitorar" value="1"${c.monitorar ? html` checked` : ""}> Monitorar cliente no DJEN</label>
     <label>Vínculo<select name="vinculo" required>${opcoes(comAtual(sugestoes.vinculos, c.vinculo), c.vinculo || "Cliente", "Selecione")}</select></label>
     <label>Tipo<select name="tipo">${opcoes(comAtual(sugestoes.tipos, c.tipo), c.tipo)}</select></label>
     <label>CPF/CNPJ<input name="documento" maxlength="18" value="${c.documento || ""}" inputmode="numeric" data-mascara="documento"></label>
@@ -93,6 +94,7 @@ export async function cadastroCliente(req, env, sessao, id) {
     data_cadastro: dataValida(txt(f, "data_cadastro")),
     origem: txt(f, "origem", 100), etiquetas: normalizarEtiquetas(txt(f, "etiquetas", 400)),
     vinculo: txt(f, "vinculo", 60) || "Cliente",
+    monitorar: f.get("monitorar") === "1" ? 1 : 0,
   };
   c.cliente = ehCliente(c.vinculo) ? 1 : 0;
   CAMPOS_CLIENTE_ENC.forEach((k) => (c[k] = txt(f, k, k === "observacoes" ? 4000 : 400)));
@@ -121,11 +123,11 @@ export async function cadastroCliente(req, env, sessao, id) {
   if (existente) {
     await env.DB.prepare(`UPDATE clientes SET nome=?1, tipo=?2, posicao=?3, genero=?4, estado_civil=?5, profissao=?6, cidade=?7, estado=?8,
       documento_enc=?9, data_nascimento_enc=?10, email_enc=?11, telefone_enc=?12, endereco_enc=?13, observacoes_enc=?14, data_cadastro=?15,
-      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20, cliente=?21, vinculo=?22 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas, c.cliente, c.vinculo).run();
+      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20, cliente=?21, vinculo=?22, monitorar=?23 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas, c.cliente, c.vinculo, c.monitorar).run();
   } else {
     const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado, documento_enc,
-      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas, cliente, vinculo)
-      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19,?20,?21)`).bind(...v, endDadosEnc, c.origem, c.etiquetas, c.cliente, c.vinculo).run();
+      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas, cliente, vinculo, monitorar)
+      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19,?20,?21,?22)`).bind(...v, endDadosEnc, c.origem, c.etiquetas, c.cliente, c.vinculo, c.monitorar).run();
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "cliente_alterado" : "cliente_criado", `cliente ${novoId}`);
@@ -196,6 +198,7 @@ function formularioProcesso(sessao, p, acao, apoio) {
       ${s("situacao", "Status da pasta", apoio.situacoes)}`)}
     ${grupo("Dados do Processo", html`
       <label class="duplo">Número do processo (CNJ)<input name="numero" maxlength="40" value="${p.numero || ""}" placeholder="0000000-00.0000.0.00.0000"></label>
+      <label class="duplo campo-check"><input type="checkbox" name="monitorar" value="1"${p.monitorar ? html` checked` : ""}> Monitorar processo no DJEN</label>
       ${d("data_distribuicao", "Data de distribuição")}
       ${s("instancia", "Instância", apoio.instancias)}
       ${s("fase", "Fase processual", apoio.fases)}
@@ -270,11 +273,13 @@ export async function cadastroProcesso(req, env, sessao, id) {
   for (const k of DATAS_PROC) p[k] = dataValida(txt(f, k));
   p.valor_causa = numeroBR(f.get("valor_causa"));
   p.parte_contraria_id = Number(f.get("parte_contraria_id")) || null;
+  p.monitorar = f.get("monitorar") === "1" ? 1 : 0;
   const nomesOutras = f.getAll("outra_parte"), idsOutras = f.getAll("outra_parte_id");
   p.outras = nomesOutras.map((n, i) => ({ nome: String(n || "").trim().slice(0, 200), id: Number(idsOutras[i]) || null })).filter((o) => o.nome);
   if (!ok) return tela(p, "Sessão expirada. Tente novamente.");
   if (!p.cliente_id || (!p.numero && !p.pasta)) return tela(p, "Informe o cliente e o número do processo ou a pasta.");
   if (Number.isNaN(p.valor_causa)) return tela(p, "Valor da causa inválido. Use o formato 15.000,50.");
+  if (p.monitorar && !p.numero) return tela(p, "Para monitorar o processo no DJEN, informe o número do processo.");
   const dup = p.numero ? await env.DB.prepare("SELECT id FROM processos WHERE numero = ? AND id != ?").bind(p.numero, existente?.id || 0).first() : null;
   if (dup) return tela(p, "Já existe um processo com esse número.");
   // Partes: só depois das validações, para não criar cadastros de pessoa à toa.
@@ -286,7 +291,7 @@ export async function cadastroProcesso(req, env, sessao, id) {
     if (r && r.id !== p.parte_contraria_id && !outras.some((x) => x.id === r.id)) outras.push(r);
   }
   const novasPessoas = [principal, ...outras].filter((x) => x?.novo).length;
-  const colunas = ["cliente_id", "parte_contraria_id", ...Object.keys(TEXTOS_PROC), ...DATAS_PROC, "valor_causa"];
+  const colunas = ["cliente_id", "parte_contraria_id", "monitorar", ...Object.keys(TEXTOS_PROC), ...DATAS_PROC, "valor_causa"];
   const valores = colunas.map((k) => p[k] ?? null);
   const [contatoEnc, obsEnc, telEnc, emailEnc] = await Promise.all([p.contato, p.observacoes, p.telefone, p.email].map((v) => cifrar(env, v)));
   const t = agora();

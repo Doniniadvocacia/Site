@@ -89,7 +89,7 @@ export async function fichaProcesso(req, env, sessao, id) {
     corpo: html`
       <p class="trilha"><a href="/sistema/processos">Processos</a></p>
       <div class="titulo-acoes"><div><h1>${p.pasta ? `Pasta ${p.pasta}` : "Processo"}</h1>
-        <p class="subtitulo">${p.numero || "sem número"}${p.cliente_id ? html` · <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : ""}${p.parte_contraria ? ` × ${p.parte_contraria}` : ""}</p></div>
+        <p class="subtitulo">${p.numero || "sem número"}${p.cliente_id ? html` · <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : ""}${p.parte_contraria ? ` × ${p.parte_contraria}` : ""}${p.monitorar ? html` <span class="selo" title="Intimações deste processo são buscadas no DJEN pelo número">Monitorado no DJEN</span>` : ""}</p></div>
         <span class="botoes-titulo"><a class="botao-link botao-secundario" href="/sistema/calculos?processo=${String(p.id)}">Cálculos</a>
         <a class="botao-link botao-secundario" href="/sistema/processos/${String(p.id)}/editar">Editar</a></span></div>
 

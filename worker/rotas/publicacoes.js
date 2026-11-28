@@ -132,7 +132,7 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
           <div><dt>Publicada em</dt><dd>${dataBR(pub.data_publicacao)}</dd></div>
           <div><dt>Processo</dt><dd>${pub.numero_processo || "—"}</dd></div>
           <div><dt>Órgão</dt><dd>${pub.orgao || "—"}</dd></div>
-          <div><dt>OAB</dt><dd>${pub.oab || "—"}</dd></div>
+          <div><dt>Capturada por</dt><dd>${/^\d/.test(pub.oab || "") ? `OAB ${pub.oab}` : pub.oab || "—"}</dd></div>
           <div><dt>Situação</dt><dd>${SITUACAO[pub.situacao]}${pub.triador ? ` · por ${pub.triador}` : ""}</dd></div>
         </dl>
         ${pub.link && /^https:\/\//.test(pub.link) ? html`<p><a href="${pub.link}" rel="noopener noreferrer" target="_blank">Ver no DJEN ↗</a></p>` : ""}

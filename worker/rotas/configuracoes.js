@@ -35,20 +35,27 @@ export async function oabs(req, env, sessao) {
       erro = falhas.length ? falhas.map((x) => `${x.oab}: ${x.erro}`).join(" · ") : null;
     }
   }
-  const [{ results: lista }, { results: capturas }] = await Promise.all([
+  const [{ results: lista }, { results: capturas }, mon] = await Promise.all([
     env.DB.prepare("SELECT * FROM oabs ORDER BY uf, numero").all(),
-    env.DB.prepare("SELECT * FROM capturas ORDER BY id DESC LIMIT 15").all(),
+    env.DB.prepare("SELECT * FROM capturas ORDER BY id DESC LIMIT 30").all(),
+    env.DB.prepare("SELECT (SELECT COUNT(*) FROM processos WHERE monitorar = 1) AS p, (SELECT COUNT(*) FROM clientes WHERE monitorar = 1) AS c").first(),
   ]);
   return resposta(pagina({
     titulo: "OABs e DJEN", sessao, aviso, erro,
     corpo: html`
-      <h1>OABs monitoradas no DJEN</h1>
+      <h1>Monitoramento no DJEN</h1>
       <p class="dica">A captura roda automaticamente às 7h e às 13h (horário de Brasília), revisando os últimos 10 dias. Intimações novas vão para a fila de triagem.</p>
       <div class="tabela-rolagem"><table>
         <thead><tr><th>OAB</th><th>Advogado</th><th>Monitoramento</th><th></th></tr></thead>
         <tbody>${lista.map((o) => html`<tr class="${o.ativo ? "" : "inativo"}"><td>${o.numero}/${o.uf}</td><td>${o.advogado}</td><td>${o.ativo ? "Ativo" : "Pausado"}</td>
           <td><form method="post" class="form-linha">${campoCsrf(sessao)}<input type="hidden" name="id" value="${String(o.id)}"><button class="botao-pequeno" name="acao" value="alternar">${o.ativo ? "Pausar" : "Reativar"}</button></form></td></tr>`)}</tbody>
       </table></div>
+      <section class="cartao"><h2>Processos e clientes monitorados</h2>
+        <p>Além das OABs, a captura procura <strong>${String(mon?.p || 0)}</strong> processo(s) pelo número e <strong>${String(mon?.c || 0)}</strong> cliente(s) pelo nome da parte.
+          Para incluir, marque <em>Monitorar processo no DJEN</em> no cadastro do processo ou <em>Monitorar cliente no DJEN</em> no cadastro da pessoa.</p>
+        <p class="dica">A busca por nome pode trazer homônimos; confira na triagem. Cada rodada consulta até 40 processos/clientes, em rodízio (os consultados há mais tempo primeiro).</p>
+        <p><a href="/sistema/processos?monitorados=1">Ver processos monitorados</a> · <a href="/sistema/clientes?monitorados=1">Ver clientes monitorados</a></p>
+      </section>
       <section class="cartao"><h2>Adicionar OAB</h2>
         <form method="post" class="formulario em-linha">${campoCsrf(sessao)}
           <label>Número<input name="numero" required inputmode="numeric" maxlength="10"></label>
