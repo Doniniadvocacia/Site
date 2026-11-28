@@ -45,9 +45,10 @@ export const DEFINICOES = [
   { chave: "motivo_encerramento", nome: "Motivos de encerramento", grupo: "Processos", padrao: [
     "Acordo Favorável Quitado", "Acordo Desfavorável Quitado", "Procedência da Ação", "Parcial Procedência da Ação", "Improcedência da Ação",
     "Extinto S/ Resolução do Mérito", "Desistência da Ação", "Revogação Procuração", "Pagamento Condenação"] },
-  { chave: "tipo_cadastro", nome: "Tipos de cliente", grupo: "Clientes", padrao: ["Pessoa Física", "Pessoa Jurídica"] },
-  { chave: "genero", nome: "Gêneros", grupo: "Clientes", padrao: ["Masculino", "Feminino", "Outro"] },
-  { chave: "estado_civil", nome: "Estados civis", grupo: "Clientes", padrao: ["Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Viúvo(a)"] },
+  { chave: "vinculo_pessoa", nome: "Vínculos da pessoa", grupo: "Pessoas", ordenada: true, fixos: ["Cliente"], padrao: ["Cliente", "Parte Adversa"] },
+  { chave: "tipo_cadastro", nome: "Tipos de pessoa", grupo: "Pessoas", padrao: ["Pessoa Física", "Pessoa Jurídica"] },
+  { chave: "genero", nome: "Gêneros", grupo: "Pessoas", padrao: ["Masculino", "Feminino", "Outro"] },
+  { chave: "estado_civil", nome: "Estados civis", grupo: "Pessoas", padrao: ["Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Viúvo(a)"] },
   { chave: "categoria_financeira", nome: "Tipos de lançamento", grupo: "Financeiro", padrao: [
     "Alimentação", "Alvará Judicial", "Aluguel", "Anuidade OAB", "Cartão de Crédito", "Certidão", "Combustível",
     "Complementação Custas Iniciais", "Complementação Custas Preparo Apelação", "Complementação Preparo Agravo de Instrumento",

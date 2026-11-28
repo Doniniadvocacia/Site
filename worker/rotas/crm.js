@@ -371,8 +371,8 @@ export async function acaoLead(req, env, sessao, id, acao) {
   if (acao === "converter") {
     if (!ETAPAS.includes(l.etapa)) return volta("dados");
     // Cria o cliente com o que já se sabe; contatos continuam cifrados. Interações e follow-ups passam a aparecer na ficha do cliente.
-    const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, email_enc, telefone_enc, observacoes_enc, origem, etiquetas, data_cadastro, criado_em, atualizado_em, editado_local)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, 1)`).bind(l.nome, l.tipo, l.email_enc, l.telefone_enc, l.resumo_enc,
+    const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, email_enc, telefone_enc, observacoes_enc, origem, etiquetas, data_cadastro, criado_em, atualizado_em, editado_local, vinculo, cliente)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, 1, 'Cliente', 1)`).bind(l.nome, l.tipo, l.email_enc, l.telefone_enc, l.resumo_enc,
       l.origem, l.etiquetas, hojeBR(), t).run();
     const cid = r.meta.last_row_id;
     await env.DB.batch([

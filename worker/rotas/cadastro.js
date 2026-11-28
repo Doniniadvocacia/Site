@@ -11,6 +11,8 @@ import { opcoes, csrfOk, txt, dataValida, numeroBR, soDigitos, cpfValido, cnpjVa
 
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ").map((u) => [u, u]);
 // Opções da lista, mantendo o valor atual do registro mesmo que tenha saído da lista.
+// Vínculo "Cliente" é o que marca a pessoa como cliente do escritório (pasta no SharePoint e campo Cliente dos processos).
+export const ehCliente = (v) => String(v || "").trim().toLowerCase() === "cliente";
 const comAtual = (valores, atual) => [...new Set([...(valores || []), ...(atual ? [atual] : [])])].map((x) => [x, x]);
 const naoEncontrado = (sessao) => resposta(pagina({ titulo: "Não encontrado", sessao, corpo: html`<h1>Registro não encontrado</h1>` }), 404);
 const datalist = (id, valores) => html`<datalist id="${id}">${valores.map((v) => html`<option value="${v}">`)}</datalist>`;
@@ -28,7 +30,7 @@ function formularioCliente(sessao, c, acao, sugestoes) {
   return html`<form method="post" action="${acao}" class="formulario grade-form">
     ${campoCsrf(sessao)}
     <label class="largo">Nome<input name="nome" required maxlength="200" value="${c.nome || ""}"></label>
-    <label class="largo campo-check"><input type="checkbox" name="cliente" value="1"${c.cliente === 0 ? "" : html` checked`}> Cliente do escritório</label>
+    <label>Vínculo<select name="vinculo" required>${opcoes(comAtual(sugestoes.vinculos, c.vinculo), c.vinculo || "Cliente", "Selecione")}</select></label>
     <label>Tipo<select name="tipo">${opcoes(comAtual(sugestoes.tipos, c.tipo), c.tipo)}</select></label>
     <label>CPF/CNPJ<input name="documento" maxlength="18" value="${c.documento || ""}" inputmode="numeric" data-mascara="documento"></label>
     <label>Nascimento/fundação<input name="data_nascimento" maxlength="20" value="${c.data_nascimento || ""}" placeholder="dd/mm/aaaa"></label>
@@ -63,8 +65,8 @@ export async function cadastroCliente(req, env, sessao, id) {
   const existente = id ? await env.DB.prepare("SELECT * FROM clientes WHERE id = ?").bind(Number(id)).first() : null;
   if (id && !existente) return naoEncontrado(sessao);
   const acao = id ? `/sistema/clientes/${id}/editar` : "/sistema/clientes/novo";
-  const [ls, etiquetas] = await Promise.all([obterListas(env, ["tipo_cadastro", "genero", "estado_civil", "posicao_cliente", "origem_cliente"]), etiquetasUsadas(env)]);
-  const sugestoes = { posicoes: ls.posicao_cliente, tipos: ls.tipo_cadastro, generos: ls.genero, estadosCivis: ls.estado_civil, origens: ls.origem_cliente, etiquetas };
+  const [ls, etiquetas] = await Promise.all([obterListas(env, ["tipo_cadastro", "genero", "estado_civil", "posicao_cliente", "origem_cliente", "vinculo_pessoa"]), etiquetasUsadas(env)]);
+  const sugestoes = { posicoes: ls.posicao_cliente, tipos: ls.tipo_cadastro, generos: ls.genero, estadosCivis: ls.estado_civil, origens: ls.origem_cliente, vinculos: ls.vinculo_pessoa, etiquetas };
   const convertido = new URL(req.url).searchParams.get("convertido") === "1";
   const tela = (c, erro) => resposta(pagina({
     titulo: id ? `Editar ${existente.nome}` : "Nova pessoa", sessao, erro,
@@ -74,7 +76,7 @@ export async function cadastroCliente(req, env, sessao, id) {
       <section class="cartao">${formularioCliente(sessao, c, acao, sugestoes)}</section>`,
   }));
   if (req.method === "GET") {
-    if (!existente) return tela({ tipo: "Pessoa Física", data_cadastro: hojeBR() });
+    if (!existente) return tela({ tipo: "Pessoa Física", vinculo: "Cliente", data_cadastro: hojeBR() });
     const c = { ...existente };
     const dec = await Promise.all(CAMPOS_CLIENTE_ENC.map((k) => decifrar(env, existente[`${k}_enc`])));
     CAMPOS_CLIENTE_ENC.forEach((k, i) => (c[k] = dec[i]));
@@ -90,8 +92,9 @@ export async function cadastroCliente(req, env, sessao, id) {
     estado_civil: txt(f, "estado_civil", 40), profissao: txt(f, "profissao", 100), cidade: txt(f, "cidade", 100), estado: txt(f, "estado", 2),
     data_cadastro: dataValida(txt(f, "data_cadastro")),
     origem: txt(f, "origem", 100), etiquetas: normalizarEtiquetas(txt(f, "etiquetas", 400)),
-    cliente: f.get("cliente") === "1" ? 1 : 0,
+    vinculo: txt(f, "vinculo", 60) || "Cliente",
   };
+  c.cliente = ehCliente(c.vinculo) ? 1 : 0;
   CAMPOS_CLIENTE_ENC.forEach((k) => (c[k] = txt(f, k, k === "observacoes" ? 4000 : 400)));
   Object.assign(c, { cep: txt(f, "cep", 9), rua: txt(f, "rua", 150), numero: txt(f, "numero", 15), complemento: txt(f, "complemento", 80), bairro: txt(f, "bairro", 80) });
   if (!ok) return tela(c, "Sessão expirada. Tente novamente.");
@@ -118,11 +121,11 @@ export async function cadastroCliente(req, env, sessao, id) {
   if (existente) {
     await env.DB.prepare(`UPDATE clientes SET nome=?1, tipo=?2, posicao=?3, genero=?4, estado_civil=?5, profissao=?6, cidade=?7, estado=?8,
       documento_enc=?9, data_nascimento_enc=?10, email_enc=?11, telefone_enc=?12, endereco_enc=?13, observacoes_enc=?14, data_cadastro=?15,
-      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20, cliente=?21 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas, c.cliente).run();
+      atualizado_em=?16, editado_local=1, endereco_dados_enc=?18, origem=?19, etiquetas=?20, cliente=?21, vinculo=?22 WHERE id=?17`).bind(...v, existente.id, endDadosEnc, c.origem, c.etiquetas, c.cliente, c.vinculo).run();
   } else {
     const r = await env.DB.prepare(`INSERT INTO clientes (nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado, documento_enc,
-      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas, cliente)
-      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19,?20)`).bind(...v, endDadosEnc, c.origem, c.etiquetas, c.cliente).run();
+      data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, atualizado_em, criado_em, editado_local, endereco_dados_enc, origem, etiquetas, cliente, vinculo)
+      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?16,1,?17,?18,?19,?20,?21)`).bind(...v, endDadosEnc, c.origem, c.etiquetas, c.cliente, c.vinculo).run();
     novoId = r.meta.last_row_id;
   }
   await auditar(env, req, sessao.usuario_id, existente ? "cliente_alterado" : "cliente_criado", `cliente ${novoId}`);
@@ -144,6 +147,29 @@ const TEXTOS_PROC = {
 const DATAS_PROC = ["data_distribuicao", "data_cadastro", "data_citacao", "data_transito", "data_encerramento",
   "data_decisao_primeira", "data_decisao_segunda", "data_decisao_superior", "data_decisao_final"];
 
+// Campo de parte com busca no cadastro de pessoas; aceita nome livre (vira cadastro novo ao salvar).
+const campoParte = ({ rotulo, nome, id, texto, classe = "" }) => html`<label class="${`campo-parte ${classe}`}">${rotulo}
+  <span class="campo-busca-caixa"><input type="text" name="${nome}" class="parte-texto" maxlength="200" value="${texto || ""}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Digite o nome"></span>
+  <input type="hidden" name="${`${nome}_id`}" class="parte-id" value="${id ? String(id) : ""}">
+  <ul class="sugestoes parte-opcoes" role="listbox" hidden></ul></label>`;
+const linhaParte = (o) => html`<div class="linha-parte">${campoParte({ rotulo: "", nome: "outra_parte", id: o.id, texto: o.nome })}<button type="button" class="botao-remover-parte" data-remover-parte aria-label="Remover parte" title="Remover">×</button></div>`;
+
+// Liga um nome de parte ao cadastro de pessoas: usa o escolhido na lista; senão, um cadastro com o mesmo nome; senão, cria.
+async function resolverPessoa(env, id, nome) {
+  nome = String(nome || "").trim().replace(/\s+/g, " ").slice(0, 200);
+  if (!nome) return null;
+  if (id) {
+    const c = await env.DB.prepare("SELECT id, nome FROM clientes WHERE id = ?").bind(Number(id)).first();
+    if (c && c.nome.trim().toLowerCase() === nome.toLowerCase()) return { id: c.id, nome: c.nome, novo: false };
+  }
+  const igual = await env.DB.prepare("SELECT id, nome FROM clientes WHERE TRIM(nome) = ? COLLATE NOCASE ORDER BY id LIMIT 1").bind(nome).first();
+  if (igual) return { id: igual.id, nome: igual.nome, novo: false };
+  const t = agora();
+  const r = await env.DB.prepare("INSERT INTO clientes (nome, vinculo, cliente, data_cadastro, criado_em, atualizado_em, editado_local) VALUES (?, 'Parte Adversa', 0, ?, ?, ?, 1)")
+    .bind(nome, hojeBR(), t, t).run();
+  return { id: r.meta.last_row_id, nome, novo: true };
+}
+
 function formularioProcesso(sessao, p, acao, apoio) {
   const t = (nome, rotulo, extra = {}) => html`<label class="${extra.largo ? "largo" : ""}">${rotulo}<input name="${nome}" maxlength="${String(TEXTOS_PROC[nome] || 200)}" value="${p[nome] || ""}"${extra.list ? html` list="${extra.list}"` : ""}${extra.placeholder ? html` placeholder="${extra.placeholder}"` : ""}></label>`;
   const d = (nome, rotulo) => html`<label>${rotulo}<input type="date" name="${nome}" value="${p[nome] || ""}"></label>`;
@@ -157,7 +183,14 @@ function formularioProcesso(sessao, p, acao, apoio) {
       <label class="duplo">Cliente<select name="cliente_id">${opcoes(apoio.clientes, p.cliente_id, "Selecione o cliente")}</select></label>
       ${s("posicao_cliente", "Posição do cliente", apoio.posicoes)}
       ${s("ajg_deferida", "AJG deferida", ["Sim", "Não", "Pendente"])}
-      <label class="duplo">Parte contrária<input name="parte_contraria" maxlength="200" value="${p.parte_contraria || ""}"></label>
+      ${campoParte({ rotulo: "Parte contrária principal", nome: "parte_contraria", id: p.parte_contraria_id, texto: p.parte_contraria, classe: "duplo" })}
+      <div class="largo outras-partes" data-outras-partes>
+        <span class="rotulo-grupo">Outras partes contrárias <small>(não aparecem na capa do processo)</small></span>
+        <div class="lista-partes">${(p.outras || []).map((o) => linhaParte(o))}</div>
+        <button type="button" class="botao-secundario botao-pequeno" data-adicionar-parte>+ Adicionar parte contrária</button>
+        <template data-modelo-parte>${linhaParte({})}</template>
+        <p class="dica">Digite o nome e escolha na lista. Um nome que ainda não está cadastrado gera, ao salvar, um novo cadastro de pessoa (vínculo "Parte Adversa").</p>
+      </div>
       ${d("data_cadastro", "Data de cadastro")}
       ${s("tipo_acao", "Tipo de ação", apoio.acoes)}
       ${s("situacao", "Status da pasta", apoio.situacoes)}`)}
@@ -192,7 +225,8 @@ function formularioProcesso(sessao, p, acao, apoio) {
     <div class="largo botoes-form"><button type="submit">Salvar</button><a class="botao-link botao-secundario" href="${p.id ? `/sistema/processos/${p.id}` : "/sistema/processos"}">Cancelar</a></div>
     ${datalist("l-advogado", apoio.advogados)}${datalist("l-orgao", apoio.orgaos)}${datalist("l-comarca", apoio.comarcas)}
   </form>
-  <p class="dica">Telefone, e-mail da parte contrária e observações são gravados cifrados.</p>`;
+  <p class="dica">Telefone, e-mail da parte contrária e observações são gravados cifrados.</p>
+  <script src="/assets/js/partes.js" defer></script>`;
 }
 
 export async function cadastroProcesso(req, env, sessao, id) {
@@ -226,7 +260,8 @@ export async function cadastroProcesso(req, env, sessao, id) {
     }
     const [contato, observacoes, telefone, email] = await Promise.all([existente.contato_parte_contraria_enc, existente.observacoes_enc,
       existente.telefone_parte_contraria_enc, existente.email_parte_contraria_enc].map((v) => decifrar(env, v)));
-    return tela({ ...existente, contato, observacoes, telefone, email });
+    const { results: outras } = await env.DB.prepare("SELECT pessoa_id AS id, nome FROM processo_partes WHERE processo_id = ? ORDER BY ordem, id").bind(existente.id).all();
+    return tela({ ...existente, contato, observacoes, telefone, email, outras });
   }
   const { f, ok } = await csrfOk(req, sessao);
   const p = { id: existente?.id, cliente_id: Number(f.get("cliente_id")) || null, contato: txt(f, "contato", 400), observacoes: txt(f, "observacoes", 4000),
@@ -234,12 +269,24 @@ export async function cadastroProcesso(req, env, sessao, id) {
   for (const [k, max] of Object.entries(TEXTOS_PROC)) p[k] = txt(f, k, max);
   for (const k of DATAS_PROC) p[k] = dataValida(txt(f, k));
   p.valor_causa = numeroBR(f.get("valor_causa"));
+  p.parte_contraria_id = Number(f.get("parte_contraria_id")) || null;
+  const nomesOutras = f.getAll("outra_parte"), idsOutras = f.getAll("outra_parte_id");
+  p.outras = nomesOutras.map((n, i) => ({ nome: String(n || "").trim().slice(0, 200), id: Number(idsOutras[i]) || null })).filter((o) => o.nome);
   if (!ok) return tela(p, "Sessão expirada. Tente novamente.");
   if (!p.cliente_id || (!p.numero && !p.pasta)) return tela(p, "Informe o cliente e o número do processo ou a pasta.");
   if (Number.isNaN(p.valor_causa)) return tela(p, "Valor da causa inválido. Use o formato 15.000,50.");
   const dup = p.numero ? await env.DB.prepare("SELECT id FROM processos WHERE numero = ? AND id != ?").bind(p.numero, existente?.id || 0).first() : null;
   if (dup) return tela(p, "Já existe um processo com esse número.");
-  const colunas = ["cliente_id", ...Object.keys(TEXTOS_PROC), ...DATAS_PROC, "valor_causa"];
+  // Partes: só depois das validações, para não criar cadastros de pessoa à toa.
+  const principal = await resolverPessoa(env, p.parte_contraria_id, p.parte_contraria);
+  p.parte_contraria = principal?.nome || null; p.parte_contraria_id = principal?.id || null;
+  const outras = [];
+  for (const o of p.outras) {
+    const r = await resolverPessoa(env, o.id, o.nome);
+    if (r && r.id !== p.parte_contraria_id && !outras.some((x) => x.id === r.id)) outras.push(r);
+  }
+  const novasPessoas = [principal, ...outras].filter((x) => x?.novo).length;
+  const colunas = ["cliente_id", "parte_contraria_id", ...Object.keys(TEXTOS_PROC), ...DATAS_PROC, "valor_causa"];
   const valores = colunas.map((k) => p[k] ?? null);
   const [contatoEnc, obsEnc, telEnc, emailEnc] = await Promise.all([p.contato, p.observacoes, p.telefone, p.email].map((v) => cifrar(env, v)));
   const t = agora();
@@ -257,6 +304,10 @@ export async function cadastroProcesso(req, env, sessao, id) {
       catch (e) { await auditar(env, req, sessao.usuario_id, "sharepoint_erro", `processo ${novoId}: ${String(e.message).slice(0, 250)}`); }
     }
   }
-  await auditar(env, req, sessao.usuario_id, existente ? "processo_alterado" : "processo_criado", `processo ${novoId}`);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM processo_partes WHERE processo_id = ?").bind(novoId),
+    ...outras.map((o, i) => env.DB.prepare("INSERT INTO processo_partes (processo_id, pessoa_id, nome, ordem) VALUES (?, ?, ?, ?)").bind(novoId, o.id, o.nome, i)),
+  ]);
+  await auditar(env, req, sessao.usuario_id, existente ? "processo_alterado" : "processo_criado", `processo ${novoId}${novasPessoas ? ` (${novasPessoas} parte(s) cadastrada(s))` : ""}`);
   return redirecionar(`/sistema/processos/${novoId}?salvo=1`);
 }

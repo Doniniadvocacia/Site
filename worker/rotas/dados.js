@@ -220,7 +220,7 @@ export async function clientes(req, env, sessao, id) {
     titulo: c.nome, sessao, ...mensagemDaUrl(req), ...mensagemCrm(req),
     corpo: html`
       <p class="trilha"><a href="/sistema/clientes">Pessoas</a></p>
-      <div class="titulo-acoes"><h1>${c.nome} <span class="${c.cliente ? "selo selo-pago" : "selo"}">${c.cliente ? "Cliente do escritório" : "Não é cliente"}</span></h1><a class="botao-link botao-secundario" href="/sistema/clientes/${String(c.id)}/editar">Editar</a></div>
+      <div class="titulo-acoes"><h1>${c.nome} <span class="${c.cliente ? "selo selo-pago" : "selo"}">${c.vinculo || (c.cliente ? "Cliente" : "—")}</span></h1><a class="botao-link botao-secundario" href="/sistema/clientes/${String(c.id)}/editar">Editar</a></div>
       <section class="cartao"><dl class="ficha">
         ${campo("Tipo", c.tipo)}${campo("CPF/CNPJ", documento)}${campo("Nascimento", nascimento)}
         ${campo("E-mail", email)}${campo("Telefone", telefone)}${campo("Endereço", endereco)}

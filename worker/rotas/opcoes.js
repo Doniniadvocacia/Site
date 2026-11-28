@@ -3,11 +3,17 @@ import { criarFiltro } from "./dados.js";
 
 export async function opcoesBusca(req, env) {
   const sp = new URL(req.url).searchParams;
-  const tipo = sp.get("tipo") === "processo" ? "processo" : "cliente";
+  const tipo = ["processo", "pessoa"].includes(sp.get("tipo")) ? sp.get("tipo") : "cliente";
   const q = (sp.get("q") || "").trim().slice(0, 100);
   const clienteId = Number(sp.get("cliente")) || null;
   const json = (corpo) => new Response(JSON.stringify(corpo), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
   const bate = criarFiltro(q);
+  if (tipo === "pessoa") {
+    if (q.length < 2) return json({ itens: [] });
+    const { results } = await env.DB.prepare("SELECT id, nome, vinculo, cidade, estado FROM clientes ORDER BY nome COLLATE NOCASE").all();
+    return json({ itens: results.filter((c) => bate(c.nome)).slice(0, 12)
+      .map((c) => ({ id: c.id, titulo: c.nome, detalhe: [c.vinculo, [c.cidade, c.estado].filter(Boolean).join("/")].filter(Boolean).join(" · ") })) });
+  }
   if (tipo === "cliente") {
     if (q.length < 2) return json({ itens: [] });
     const { results } = await env.DB.prepare(`SELECT c.id, c.nome, c.cidade, c.estado, GROUP_CONCAT(p.pasta, ' ') AS pastas, GROUP_CONCAT(p.numero, ' ') AS numeros,

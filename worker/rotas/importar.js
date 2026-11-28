@@ -76,8 +76,8 @@ export async function importar(req, env, sessao) {
     for (const c of clientes) {
       stmts.push(env.DB.prepare(
         `INSERT INTO clientes (wix_id, nome, tipo, posicao, genero, estado_civil, profissao, cidade, estado,
-           documento_enc, data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, criado_em, atualizado_em)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17)
+           documento_enc, data_nascimento_enc, email_enc, telefone_enc, endereco_enc, observacoes_enc, data_cadastro, criado_em, atualizado_em, vinculo, cliente)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17, 'Cliente', 1)
          ON CONFLICT(wix_id) DO UPDATE SET nome=?2, tipo=?3, posicao=?4, genero=?5, estado_civil=?6, profissao=?7, cidade=?8, estado=?9,
            documento_enc=?10, data_nascimento_enc=?11, email_enc=?12, telefone_enc=?13, endereco_enc=?14, observacoes_enc=?15,
            data_cadastro=?16, atualizado_em=?17 WHERE clientes.editado_local = 0`

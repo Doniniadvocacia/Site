@@ -8,7 +8,7 @@ const APLICACOES = [["receita", "Receita"], ["despesa", "Despesa"], ["ambos", "R
 const opAplicacao = (atual) => APLICACOES.map(([v, r]) => html`<option value="${v}"${v === (atual || "despesa") ? html` selected` : ""}>${r}</option>`);
 const lerAplicacao = (f) => (APLICACOES.some(([v]) => v === f.get("aplicacao")) ? f.get("aplicacao") : "despesa");
 const MSG = { aplicacao: ["aviso", "Classificação atualizada."], padrao: ["aviso", "Prazo padrão atualizado."], incluido: ["aviso", "Item incluído."], excluido: ["aviso", "Item excluído da lista. Registros que já usam esse valor não são alterados."],
-  duplicado: ["erro", "Esse item já existe na lista."], vazio: ["erro", "Digite o item a incluir."], sessao: ["erro", "Sessão expirada. Tente novamente."] };
+  duplicado: ["erro", "Esse item já existe na lista."], fixo: ["erro", "Esse item é usado pelo sistema (pasta no SharePoint e campo Cliente dos processos) e não pode ser excluído."], vazio: ["erro", "Digite o item a incluir."], sessao: ["erro", "Sessão expirada. Tente novamente."] };
 
 // Dias (1 a 365, vazio = sem padrão) e contagem do prazo padrão.
 function lerPadrao(f) {
@@ -54,6 +54,7 @@ export async function listas(req, env, sessao) {
     }
     if (f.get("acao") === "excluir") {
       const valor = txt(f, "valor", 120);
+      if (DEF[chave]?.fixos?.includes(valor)) return volta("fixo");
       await env.DB.prepare("DELETE FROM listas WHERE lista = ? AND valor = ?").bind(chave, valor).run();
       await auditar(env, req, sessao.usuario_id, "lista_item_excluido", `${chave}: ${valor}`);
       return volta("excluido");

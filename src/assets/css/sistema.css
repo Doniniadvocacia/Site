@@ -983,3 +983,15 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .aviso-organizar p { margin: .3rem 0 .6rem; }
 .grade-form .campo-check { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-size: .9rem; color: var(--texto); cursor: pointer; }
 .grade-form .campo-check input { width: auto; height: auto; margin: 0; }
+
+/* Partes contrárias (cadastro do processo) */
+.campo-parte { position: relative; }
+.campo-parte .parte-opcoes { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; }
+.campo-parte.selecionado .parte-texto { border-color: var(--ok); }
+.outras-partes { display: flex; flex-direction: column; gap: .45rem; }
+.outras-partes .rotulo-grupo { font-size: .85rem; color: var(--texto); }
+.outras-partes .lista-partes { display: flex; flex-direction: column; gap: .45rem; }
+.linha-parte { display: flex; align-items: flex-start; gap: .4rem; max-width: 40rem; }
+.linha-parte .campo-parte { flex: 1; margin: 0; }
+.botao-remover-parte { background: none; border: 1px solid var(--linha); color: var(--texto); width: 2.4rem; height: 2.4rem; border-radius: 6px; cursor: pointer; font-size: 1.1rem; padding: 0; }
+.outras-partes [data-adicionar-parte] { align-self: flex-start; }
