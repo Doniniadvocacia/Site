@@ -8,7 +8,7 @@ import { copiarAnexosWix, anexosDisponiveis, nomeSeguro } from "../anexos.js";
 
 const SITE_ID_PADRAO = "4ce0a7a8-3fa0-495f-a643-664a08144c36";
 
-async function lerColecao(env, colecao) {
+export async function lerColecao(env, colecao) {
   const itens = [];
   for (let offset = 0; ; offset += 1000) {
     const r = await fetch(`${env.WIX_API_BASE || "https://www.wixapis.com"}/wix-data/v2/items/query`, {

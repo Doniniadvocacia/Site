@@ -271,6 +271,23 @@ export async function garantirPastaCliente(env, clienteId) {
   } catch (e) { return { erro: e.message }; }
 }
 
+// Processo trocado de cliente: leva a pasta dele para a pasta do novo cliente (melhor esforço).
+export async function moverPastaDoProcesso(env, processoId) {
+  const alvo = await lerAlvo(env);
+  if (!alvo.pronto) return null;
+  const p = await env.DB.prepare(`${SELECT_PROC} WHERE p.id = ?`).bind(processoId).first();
+  if (!p?.sharepoint_item) return null;
+  try {
+    const ctx = await contexto(env, alvo);
+    const cli = await pastaDoCliente(env, ctx, p);
+    const atual = await lerItem(env, alvo.drive.id, p.sharepoint_item);
+    if (atual?.parentReference?.id === cli.id) return { item: atual.id };
+    const item = await moverPasta(env, ctx, p.sharepoint_item, cli.id);
+    await env.DB.prepare("UPDATE processos SET sharepoint_nome = ?, sharepoint_url = ? WHERE id = ?").bind(item.name, item.webUrl || null, p.id).run();
+    return { item: item.id };
+  } catch (e) { return { erro: e.message }; }
+}
+
 // Pastas de processo vinculadas que ainda estão soltas na raiz (organização anterior, sem a pasta do cliente).
 async function soltasNaRaiz(env, alvo) {
   const raiz = new Set((await listarPasta(env, alvo.drive.id, alvo.pasta.id, 40)).filter((x) => x.folder).map((x) => x.id));

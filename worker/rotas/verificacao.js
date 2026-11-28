@@ -4,6 +4,8 @@ import { html, pagina, resposta, redirecionar, campoCsrf } from "../html.js";
 import { agora, decifrar } from "../seguranca.js";
 import { auditar } from "../sessao.js";
 import { csrfOk } from "./comum.js";
+import { lerColecao } from "./importar.js";
+import { msConfigurado, moverPastaDoProcesso } from "../microsoft.js";
 
 const normalizar = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 const digitos = (s) => String(s || "").replace(/\D/g, "");
@@ -91,6 +93,47 @@ export async function unificar(env, principalId, dupId) {
   return { principal: p, duplicado: d };
 }
 
+// Compara o cliente de cada processo com o nome do cliente registrado nos andamentos e lançamentos do Wix
+// (que guardam o nome em texto). Divergência: o nome mais citado não é o do cliente vinculado.
+async function divergenciasWix(env, pessoas) {
+  const [hist, fin] = await Promise.all([lerColecao(env, "Historico"), lerColecao(env, "Financeiro")]);
+  const { results: procs } = await env.DB.prepare("SELECT p.id, p.pasta, p.numero, p.cliente_id, c.nome AS cliente FROM processos p LEFT JOIN clientes c ON c.id = p.cliente_id").all();
+  const porNumero = new Map(procs.filter((x) => x.numero).map((x) => [digitos(x.numero), x]));
+  const porPasta = new Map(procs.filter((x) => x.pasta).map((x) => [String(x.pasta).trim(), x]));
+  const porNome = new Map(pessoas.map((c) => [normalizar(c.nome).replace(/\s+/g, " "), c]));
+  const citacoes = new Map();
+  for (const it of [...hist, ...fin]) {
+    const nome = String(typeof it.cliente === "string" ? it.cliente : "").trim();
+    if (!nome) continue;
+    const proc = (it.numeroProcesso && porNumero.get(digitos(it.numeroProcesso))) || (it.pasta && porPasta.get(String(it.pasta).trim()));
+    if (!proc) continue;
+    const m = citacoes.get(proc.id) || citacoes.set(proc.id, { proc, nomes: new Map() }).get(proc.id);
+    const k = normalizar(nome).replace(/\s+/g, " ");
+    m.nomes.set(k, { nome, n: (m.nomes.get(k)?.n || 0) + 1 });
+  }
+  const lista = [];
+  for (const { proc, nomes } of citacoes.values()) {
+    const [k, top] = [...nomes.entries()].sort((a, b) => b[1].n - a[1].n)[0];
+    if (k === normalizar(proc.cliente).replace(/\s+/g, " ")) continue;
+    lista.push({ proc, citado: top.nome, vezes: top.n, sugerido: porNome.get(k) || null });
+  }
+  return lista.sort((a, b) => String(a.proc.pasta || "").localeCompare(String(b.proc.pasta || ""), "pt-BR", { numeric: true }));
+}
+
+async function corrigirVinculo(env, processoId, pessoaId) {
+  const c = await env.DB.prepare("SELECT id, nome FROM clientes WHERE id = ?").bind(pessoaId).first();
+  const p = await env.DB.prepare("SELECT id, pasta, cliente_id FROM processos WHERE id = ?").bind(processoId).first();
+  if (!c || !p) throw new Error("Processo ou pessoa não encontrados.");
+  await env.DB.batch([
+    env.DB.prepare("UPDATE processos SET cliente_id = ?, editado_local = 1, atualizado_em = ? WHERE id = ?").bind(c.id, agora(), p.id),
+    env.DB.prepare("UPDATE historico SET cliente_id = ? WHERE processo_id = ?").bind(c.id, p.id),
+    env.DB.prepare("UPDATE financeiro SET cliente_id = ? WHERE processo_id = ? AND (cliente_id IS NULL OR cliente_id = ?)").bind(c.id, p.id, p.cliente_id || 0),
+    env.DB.prepare("UPDATE clientes SET cliente = 1, vinculo = 'Cliente' WHERE id = ? AND cliente = 0").bind(c.id),
+  ]);
+  const sp = msConfigurado(env) ? await moverPastaDoProcesso(env, p.id).catch((e) => ({ erro: e.message })) : null;
+  return { p, c, sp };
+}
+
 const mascararDoc = (s) => (s ? String(s).replace(/\d(?=(?:\D*\d){4})/g, "•") : "");
 
 export async function verificacao(req, env, sessao) {
@@ -106,6 +149,19 @@ export async function verificacao(req, env, sessao) {
         return volta("unificado", `&p=${r.principal.id}`);
       } catch (e) { return volta("erro", `&m=${encodeURIComponent(e.message.slice(0, 150))}`); }
     }
+    if (f.get("acao") === "corrigir" || f.get("acao") === "corrigir_todos") {
+      const pares = f.get("acao") === "corrigir" ? [[Number(f.get("processo")), Number(f.get("pessoa"))]]
+        : f.getAll("par").map((v) => v.split(":").map(Number));
+      let feitos = 0, erroSp = "";
+      for (const [pid, cid] of pares.filter(([x, y]) => x && y)) {
+        try {
+          const r = await corrigirVinculo(env, pid, cid); feitos++;
+          if (r.sp?.erro) erroSp = r.sp.erro;
+          await auditar(env, req, sessao.usuario_id, "vinculo_corrigido", `processo ${r.p.id} (pasta ${r.p.pasta || "-"}): cliente ${r.p.cliente_id || "-"} → ${r.c.id} (${r.c.nome})`);
+        } catch (e) { return volta("erro", `&m=${encodeURIComponent(e.message.slice(0, 150))}`); }
+      }
+      return volta("corrigido", `&n=${feitos}${erroSp ? `&m=${encodeURIComponent(`SharePoint: ${erroSp.slice(0, 120)}`)}` : ""}&wix=1`);
+    }
     if (f.get("acao") === "distintos" && a && b) {
       await env.DB.prepare("INSERT OR IGNORE INTO cadastros_distintos (a, b) VALUES (?, ?)").bind(Math.min(a, b), Math.max(a, b)).run();
       return volta("distintos");
@@ -120,7 +176,12 @@ export async function verificacao(req, env, sessao) {
   const semProcesso = pessoas.filter((p) => p.cliente && !p.n_proc);
   const { results: semCliente } = await env.DB.prepare("SELECT id, pasta, numero, parte_contraria FROM processos WHERE cliente_id IS NULL OR cliente_id NOT IN (SELECT id FROM clientes) ORDER BY CAST(pasta AS INTEGER), pasta").all();
   const msg = url.searchParams.get("msg");
-  const avisos = { unificado: "Cadastros unificados. Tudo o que estava no duplicado agora está no cadastro principal.", distintos: "Par marcado como pessoas diferentes; não será sugerido de novo." };
+  let divergencias = null, erroWix = null;
+  if (url.searchParams.get("wix") === "1") {
+    if (!env.WIX_API_KEY) erroWix = "Falta a chave do Wix (WIX_API_KEY) para comparar com o sistema antigo.";
+    else { try { divergencias = await divergenciasWix(env, pessoas); } catch (e) { erroWix = e.message; } }
+  }
+  const avisos = { corrigido: `${url.searchParams.get("n") || 0} vínculo(s) corrigido(s).${url.searchParams.get("m") ? ` ${url.searchParams.get("m")}` : ""}`, unificado: "Cadastros unificados. Tudo o que estava no duplicado agora está no cadastro principal.", distintos: "Par marcado como pessoas diferentes; não será sugerido de novo." };
   const erros = { sessao: "Sessão expirada. Tente novamente.", erro: `Não foi possível concluir.${url.searchParams.get("m") ? ` ${url.searchParams.get("m")}` : ""}` };
 
   const resumoPessoa = (c) => html`<div class="pessoa-par">
@@ -135,6 +196,27 @@ export async function verificacao(req, env, sessao) {
   return resposta(pagina({
     titulo: "Verificação de cadastros", sessao, ...(avisos[msg] ? { aviso: avisos[msg] } : {}), ...(erros[msg] ? { erro: erros[msg] } : {}),
     corpo: html`<p class="trilha"><a href="/sistema/configuracoes">Configurações</a></p><h1>Verificação de cadastros</h1>
+      <section class="cartao"><h2>Vínculos processo × cliente (comparação com o Wix)</h2>
+        <p class="dica">No sistema antigo, os andamentos e lançamentos guardam o nome do cliente por escrito. A comparação aponta os processos em que esse nome é diferente do cliente vinculado
+          (ex.: processo ligado a um cliente, mas todos os andamentos dizem que é de outro). Ao corrigir, o processo, seus andamentos e lançamentos passam para o cliente certo,
+          a pasta no SharePoint vai para a pasta dele e a importação do Wix não desfaz a correção.</p>
+        ${divergencias === null && !erroWix ? html`<p><a class="botao-link" href="/sistema/verificacao?wix=1">Comparar com o Wix</a></p>` : ""}
+        ${erroWix ? html`<p class="erro">${erroWix}</p>` : ""}
+        ${divergencias && !divergencias.length ? html`<p>✓ Nenhuma divergência: o cliente de cada processo confere com os registros do sistema antigo.</p>` : ""}
+        ${divergencias?.length ? html`<div class="tabela-rolagem"><table>
+            <thead><tr><th>Processo</th><th>Cliente vinculado</th><th>Cliente nos registros do Wix</th><th></th></tr></thead>
+            <tbody>${divergencias.map((d) => html`<tr>
+              <td><a href="/sistema/processos/${String(d.proc.id)}">${d.proc.pasta ? `Pasta ${d.proc.pasta}` : ""} ${d.proc.numero || ""}</a></td>
+              <td>${d.proc.cliente || "—"}</td>
+              <td>${d.citado} <small>(${String(d.vezes)} registro(s))</small>${d.sugerido ? "" : html`<br><small>não há cadastro com esse nome</small>`}</td>
+              <td>${d.sugerido ? html`<form method="post" data-confirmar="${`Passar o processo ${d.proc.pasta ? `da pasta ${d.proc.pasta}` : ""} para “${d.sugerido.nome}”?`}">${campoCsrf(sessao)}
+                  <input type="hidden" name="processo" value="${String(d.proc.id)}"><input type="hidden" name="pessoa" value="${String(d.sugerido.id)}">
+                  <button type="submit" name="acao" value="corrigir" class="botao-pequeno">Corrigir</button></form>`
+                : html`<a class="botao-link botao-secundario botao-pequeno" href="/sistema/processos/${String(d.proc.id)}/editar">Editar processo</a>`}</td></tr>`)}</tbody></table></div>
+          ${divergencias.some((d) => d.sugerido) ? html`<form method="post" data-confirmar="Corrigir todos os vínculos sugeridos de uma vez?">${campoCsrf(sessao)}
+              ${divergencias.filter((d) => d.sugerido).map((d) => html`<input type="hidden" name="par" value="${`${d.proc.id}:${d.sugerido.id}`}">`)}
+              <button type="submit" name="acao" value="corrigir_todos">Corrigir todos (${String(divergencias.filter((d) => d.sugerido).length)})</button></form>` : ""}` : ""}
+      </section>
       <section class="cartao"><h2>Possíveis cadastros duplicados (${String(lista.length)})</h2>
         <p class="dica">Pessoas com o mesmo CPF/CNPJ, nome, e-mail ou telefone, ou com uma palavra pouco comum em comum no nome (ex.: razão social e nome fantasia).
           Ao unificar, escolha o cadastro que fica: processos, lançamentos, histórico, agenda e CRM do outro passam para ele, os campos vazios são completados e o outro é apagado.
