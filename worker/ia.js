@@ -10,7 +10,10 @@ const MODELO_PADRAO = "claude-sonnet-5-5";
 const MAX_TENTATIVAS = 3;
 const MAX_TEXTO = 30000;
 
-export const iaConfigurada = (env) => !!env.ANTHROPIC_API_KEY;
+// PAUSA DE EMERGÊNCIA (pedida pelo usuário em 27/11/2026): nenhuma análise de intimação por IA é iniciada,
+// nem automática (captura, abertura da triagem) nem manual. Para reativar, voltar para false e publicar.
+export const IA_PAUSADA = true;
+export const iaConfigurada = (env) => !IA_PAUSADA && !!env.ANTHROPIC_API_KEY;
 
 const ESQUEMA = {
   type: "object",
@@ -152,6 +155,7 @@ async function chamarApi(env, pergunta) {
 
 // Analisa uma intimação e grava a sugestão. Retorna a sugestão (ou lança erro, já registrado na intimação).
 export async function analisarIntimacao(env, id) {
+  if (IA_PAUSADA) return null;
   const pub = await env.DB.prepare("SELECT * FROM publicacoes WHERE id = ?").bind(Number(id)).first();
   if (!pub) throw new Error("Intimação não encontrada.");
   const ctx = await contexto(env, pub);
@@ -170,6 +174,7 @@ export async function analisarIntimacao(env, id) {
 
 // Analisa as intimações pendentes ainda sem sugestão (e repete as que falharam, até 3 tentativas, com intervalo de 30 min).
 export async function analisarPendentes(env, limite = 15) {
+  if (IA_PAUSADA) return { analisadas: 0, pausada: true };
   if (!iaConfigurada(env)) return { analisadas: 0, erros: 0 };
   const { results } = await env.DB.prepare(`SELECT id FROM publicacoes WHERE situacao = 'pendente'
       AND (ia_status IS NULL OR (ia_status = 'erro' AND ia_tentativas < ? AND ia_em < ?)) ORDER BY id LIMIT ?`)
