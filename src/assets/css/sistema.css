@@ -1021,3 +1021,8 @@ a.cartao-resumo.cartao-asaas:hover { border-color: var(--dourado); }
 .aniversariantes li.nao-lida .notif-texto { font-weight: 600; }
 .aniversariantes .bolo { font-size: 1.05rem; }
 .aniversariantes small { margin-left: auto; color: var(--suave); white-space: nowrap; }
+/* Excluir intimação: no mesmo formato do "Revisar", em vermelho */
+.botao-mini.botao-perigo-discreto { background: none; border: none; color: var(--erro); text-decoration: underline; padding: .3rem .5rem; cursor: pointer; font-size: .82rem; }
+.botao-mini.botao-perigo-discreto:hover { color: #8f1d1d; }
+.acoes-sugestao { align-items: center; flex-wrap: wrap; }
+.form-excluir-intimacao { margin-top: .6rem; }

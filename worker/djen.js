@@ -101,6 +101,9 @@ export async function capturarDjen(env, origem = "agendada") {
   const inicio = somarDias(fim, -JANELA_DIAS);
   const { results: procs } = await env.DB.prepare("SELECT id, numero FROM processos WHERE numero IS NOT NULL").all();
   const porNumero = new Map(procs.map((p) => [soDigitos(p.numero), p.id]));
+  // Intimações excluídas na triagem não voltam.
+  const { results: excl } = await env.DB.prepare("SELECT hash, djen_id FROM publicacoes_excluidas").all();
+  const hashesExcl = new Set(excl.map((x) => x.hash)), idsExcl = new Set(excl.map((x) => x.djen_id).filter(Boolean));
   const resumo = [];
 
   const execucao = `${origem}-${agora()}-${tokenAleatorio(4)}`;
@@ -115,6 +118,7 @@ export async function capturarDjen(env, origem = "agendada") {
         const numeroProc = primeiro(it, "numeroprocessocommascara", "numeroProcessoComMascara", "numero_processo", "numeroProcesso") || "";
         const disp = normalizarData(primeiro(it, "data_disponibilizacao", "dataDisponibilizacao", "datadisponibilizacao"));
         const hash = primeiro(it, "hash") || (await sha256(`${djenId}|${numeroProc}|${disp}|${texto.slice(0, 500)}`));
+        if (hashesExcl.has(hash) || (djenId && idsExcl.has(String(djenId)))) continue;
         const r = await env.DB.prepare(
           `INSERT INTO publicacoes (djen_id, hash, data_disponibilizacao, data_publicacao, tribunal, orgao, tipo, numero_processo,
              processo_id, texto, link, oab, situacao, criado_em, execucao)

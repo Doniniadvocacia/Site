@@ -164,7 +164,7 @@ async function sistema(req, env, ctx) {
   if ((m = caminho.match(/^\/sistema\/processos\/(\d+)\/sharepoint\/(lista|vincular|enviar)$/))) return processoSharepoint(req, env, sessao, m[1], m[2]);
   if ((m = caminho.match(/^\/sistema\/calculos(?:\/(novo|indices|\d+))?(?:\/(editar|excluir))?$/))) return calculos(req, env, sessao, m[1], m[2]);
   if (caminho === "/sistema/publicacoes/analisar") return publicacoes(req, env, sessao, null, ctx, "analisar");
-  if ((m = caminho.match(/^\/sistema\/publicacoes\/(\d+)\/(analisar|aprovar)$/))) return publicacoes(req, env, sessao, m[1], ctx, m[2]);
+  if ((m = caminho.match(/^\/sistema\/publicacoes\/(\d+)\/(analisar|aprovar|excluir)$/))) return publicacoes(req, env, sessao, m[1], ctx, m[2]);
   if ((m = caminho.match(/^\/sistema\/publicacoes(?:\/(\d+))?$/))) return publicacoes(req, env, sessao, m[1], ctx);
   if (caminho === "/sistema/agenda/detalhe") return detalheJson(req, env);
   if ((m = caminho.match(/^\/sistema\/agenda(?:\/(novo|\d+(?:\/mover)?|dia\/\d{4}-\d{2}-\d{2}))?$/))) return agenda(req, env, sessao, m[1]);

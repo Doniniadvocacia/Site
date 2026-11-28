@@ -12,7 +12,7 @@ const trecho = (s, n = 160) => { const t = textoDeHtml(s).replace(/\s+/g, " ").t
 
 const CONFIANCA = { alta: "Confiança alta", media: "Confiança média", baixa: "Confiança baixa" };
 const seloConfianca = (s) => html`<span class="${`selo selo-confianca ${s.confianca}`}">${CONFIANCA[s.confianca] || ""}</span>`;
-const MENSAGENS = { analise: "Análise das intimações iniciada. As sugestões aparecem em instantes (atualize a página).", aprovada: "Sugestão aprovada.",
+const MENSAGENS = { excluida: "Intimação excluída. Ela não volta nas próximas capturas.", nao_excluivel: "Esta intimação já gerou prazo ou foi triada e não pode ser excluída.", analise: "Análise das intimações iniciada. As sugestões aparecem em instantes (atualize a página).", aprovada: "Sugestão aprovada.",
   arquivada: "Intimação arquivada sem prazo.", revisar: "Esta sugestão precisa de revisão antes de aprovar: confira os campos e salve.", reanalisada: "Intimação analisada novamente." };
 
 // Monta os campos do formulário de prazo a partir da sugestão da IA.
@@ -65,7 +65,8 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
         ${seloConfianca(s)}
         <span class="acoes-sugestao">${aprovavel(p, s) ? html`<form method="post" action="/sistema/publicacoes/${String(p.id)}/aprovar">${campoCsrf(sessao)}
           <button type="submit" class="botao-mini">${s.gera_prazo ? "Aprovar" : "Arquivar"}</button></form>` : ""}
-          <a class="botao-mini botao-secundario" href="/sistema/publicacoes/${String(p.id)}">Revisar</a></span></div>`;
+          <a class="botao-mini botao-secundario" href="/sistema/publicacoes/${String(p.id)}">Revisar</a>
+          ${p.situacao === "pendente" ? html`<form method="post" action="/sistema/publicacoes/${String(p.id)}/excluir" data-confirmar="Excluir esta intimação? Ela sai da triagem e não volta nas próximas capturas.">${campoCsrf(sessao)}<button type="submit" class="botao-mini botao-perigo-discreto">Excluir</button></form>` : ""}</span></div>`;
     };
     const aba = (v, r) => html`<a href="/sistema/publicacoes?visao=${v}" class="${visao === v ? "ativa" : ""}">${r}</a>`;
     const msg = MENSAGENS[url.searchParams.get("msg")];
@@ -85,9 +86,10 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
             <td>${p.processo_id ? html`<a href="/sistema/processos/${String(p.processo_id)}">${p.pasta ? `Pasta ${p.pasta}` : p.numero_processo}</a>` : html`${p.numero_processo || "—"}<br><small class="alerta-texto">não vinculado</small>`}</td>
             <td><a href="/sistema/publicacoes/${String(p.id)}" class="link-discreto">${trecho(p.texto)}</a></td>
             ${ia || visao !== "pendentes" ? html`<td class="coluna-ia">${colunaIa(p)}</td>` : ""}
-            <td>${SITUACAO[p.situacao]}</td>
+            <td>${SITUACAO[p.situacao]}${p.situacao === "pendente" && !(ia && lerSugestao(p)) ? html`<div class="acoes-sugestao">${html`<form method="post" action="/sistema/publicacoes/${String(p.id)}/excluir" data-confirmar="Excluir esta intimação? Ela sai da triagem e não volta nas próximas capturas.">${campoCsrf(sessao)}<button type="submit" class="botao-mini botao-perigo-discreto">Excluir</button></form>`}</div>` : ""}</td>
           </tr>`)}</tbody>
-        </table></div>` : html`<section class="cartao"><p>${visao === "pendentes" ? "Nenhuma intimação aguardando triagem." : "Nenhuma intimação registrada."}</p></section>`}`,
+        </table></div>` : html`<section class="cartao"><p>${visao === "pendentes" ? "Nenhuma intimação aguardando triagem." : "Nenhuma intimação registrada."}</p></section>`}
+        <script src="/assets/js/confirmar.js" defer></script>`,
     }));
   }
 
@@ -136,6 +138,8 @@ export async function publicacoes(req, env, sessao, id, ctx = null, acaoExtra = 
           <div><dt>Situação</dt><dd>${SITUACAO[pub.situacao]}${pub.triador ? ` · por ${pub.triador}` : ""}</dd></div>
         </dl>
         ${pub.link && /^https:\/\//.test(pub.link) ? html`<p><a href="${pub.link}" rel="noopener noreferrer" target="_blank">Ver no DJEN ↗</a></p>` : ""}
+        ${pub.situacao === "pendente" && !prazosPub.length ? html`<form method="post" action="/sistema/publicacoes/${String(pub.id)}/excluir" class="form-excluir-intimacao" data-confirmar="Excluir esta intimação? Ela sai da triagem e não volta nas próximas capturas.">${campoCsrf(sessao)}
+          <button type="submit" class="botao-perigo botao-pequeno">Excluir intimação</button></form>` : ""}
         <h3>Teor</h3><div class="teor">${textoDeHtml(pub.texto) || "(sem texto)"}</div>
       </section>
       ${cartaoIa}
@@ -182,6 +186,18 @@ async function acaoIa(req, env, sessao, id, ctx, acao) {
   if (req.method !== "POST") return redirecionar(id ? `/sistema/publicacoes/${id}` : "/sistema/publicacoes");
   const { ok } = await csrfOk(req, sessao);
   if (!ok) return redirecionar(id ? `/sistema/publicacoes/${id}` : "/sistema/publicacoes");
+  if (acao === "excluir" && id) {
+    const pub = await env.DB.prepare("SELECT id, hash, djen_id, situacao, numero_processo FROM publicacoes WHERE id = ?").bind(Number(id)).first();
+    if (!pub) return redirecionar("/sistema/publicacoes");
+    const temPrazo = await env.DB.prepare("SELECT 1 FROM prazos WHERE publicacao_id = ? LIMIT 1").bind(pub.id).first();
+    if (pub.situacao !== "pendente" || temPrazo) return redirecionar(`/sistema/publicacoes/${pub.id}?msg=nao_excluivel`);
+    await env.DB.batch([
+      env.DB.prepare("INSERT OR IGNORE INTO publicacoes_excluidas (hash, djen_id, excluida_por, excluida_em) VALUES (?, ?, ?, ?)").bind(pub.hash || `id:${pub.id}`, pub.djen_id || null, sessao.usuario_id, agora()),
+      env.DB.prepare("DELETE FROM publicacoes WHERE id = ?").bind(pub.id),
+    ]);
+    await auditar(env, req, sessao.usuario_id, "intimacao_excluida", `intimação ${pub.id} (${pub.numero_processo || "sem número"})`);
+    return redirecionar("/sistema/publicacoes?msg=excluida");
+  }
   if (acao === "analisar" && !id) {
     if (iaConfigurada(env)) {
       // Repete também as que falharam (zera o contador de tentativas).
