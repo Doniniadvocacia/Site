@@ -76,7 +76,6 @@ function configuracoes(sessao) {
     ${item("/sistema/asaas", "Asaas", "Cobranças, baixa automática de pagamentos e conciliação")}
     ${item("/sistema/microsoft", "Microsoft 365", "SharePoint: pastas dos processos e cópia dos anexos")}
     ${item("/sistema/verificacao", "Verificação de cadastros", "Pessoas duplicadas, clientes sem processo e processos sem cliente")}
-    ${item("/sistema/importar", "Importar do Wix", "Atualizar a cópia dos dados do sistema antigo")}
     ${item("/sistema/status", "Diagnóstico", "Banco, segredos e configuração")}
   </div>` }));
 }
