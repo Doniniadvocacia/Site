@@ -10,9 +10,9 @@ const MODELO_PADRAO = "claude-sonnet-5-5";
 const MAX_TENTATIVAS = 3;
 const MAX_TEXTO = 30000;
 
-// PAUSA DE EMERGÊNCIA (pedida pelo usuário em 27/11/2026): nenhuma análise de intimação por IA é iniciada,
+// Chave de pausa de emergência: com true, nenhuma análise de intimação por IA é iniciada,
 // nem automática (captura, abertura da triagem) nem manual. Para reativar, voltar para false e publicar.
-export const IA_PAUSADA = true;
+export const IA_PAUSADA = false;
 export const iaConfigurada = (env) => !IA_PAUSADA && !!env.ANTHROPIC_API_KEY;
 
 const ESQUEMA = {
