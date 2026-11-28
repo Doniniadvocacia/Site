@@ -211,10 +211,11 @@ export async function clientes(req, env, sessao, id) {
   const [documento, nascimento, email, telefone, endereco, observacoes] = await Promise.all(
     ["documento_enc", "data_nascimento_enc", "email_enc", "telefone_enc", "endereco_enc", "observacoes_enc"].map((k) => decifrar(env, c[k]))
   );
-  const { results: procs } = await env.DB.prepare(`SELECT id, pasta, numero, tipo_acao, situacao,
-      CASE WHEN cliente_id = ?1 THEN 'Cliente' ELSE 'Parte contrária' END AS papel
-    FROM processos WHERE cliente_id = ?1 OR parte_contraria_id = ?1 OR id IN (SELECT processo_id FROM processo_partes WHERE pessoa_id = ?1)
-    ORDER BY (cliente_id = ?1) DESC, CAST(pasta AS INTEGER), pasta`).bind(c.id).all();
+  const { results: procs } = await env.DB.prepare(`SELECT p.id, p.pasta, p.numero, p.tipo_acao, p.situacao, p.cliente_id, p.parte_contraria, cl.nome AS cliente_nome,
+      CASE WHEN p.cliente_id = ?1 THEN 'Cliente' ELSE 'Parte contrária' END AS papel
+    FROM processos p LEFT JOIN clientes cl ON cl.id = p.cliente_id
+    WHERE p.cliente_id = ?1 OR p.parte_contraria_id = ?1 OR p.id IN (SELECT processo_id FROM processo_partes WHERE pessoa_id = ?1)
+    ORDER BY (p.cliente_id = ?1) DESC, CAST(p.pasta AS INTEGER), p.pasta`).bind(c.id).all();
   await auditar(env, req, sessao.usuario_id, "cliente_visualizado", `cliente ${c.id}`);
   const fin = await cartaoFinanceiro(env, sessao, { clienteId: c.id });
   const lead = await env.DB.prepare("SELECT id FROM leads WHERE cliente_id = ? ORDER BY id DESC LIMIT 1").bind(c.id).first();
@@ -232,7 +233,8 @@ export async function clientes(req, env, sessao, id) {
         ${campo("Origem", c.origem)}${lead ? html`<div><dt>Prospecção</dt><dd><a href="/sistema/crm/leads/${String(lead.id)}">ver histórico no funil</a></dd></div>` : ""}
       </dl>${chips(c.etiquetas)}${observacoes ? html`<h3>Observações</h3><p class="pre">${observacoes}</p>` : ""}</section>
       <section class="cartao"><div class="titulo-acoes"><h2>Processos</h2><a class="botao-link" href="/sistema/processos/novo?cliente=${String(c.id)}">Novo processo</a></div>
-        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a> <span><span class="${p.papel === "Cliente" ? "selo selo-pago" : "selo"}">${p.papel}</span> ${p.tipo_acao || ""} ${p.situacao ? `· ${p.situacao}` : ""}</span></li>`)}</ul>` : html`<p>Nenhum processo vinculado.</p>`}
+        ${procs.length ? html`<ul class="lista-simples">${procs.map((p) => html`<li><a href="/sistema/processos/${String(p.id)}">${p.pasta ? `Pasta ${p.pasta} · ` : ""}${p.numero || "sem número"}</a> <span class="outra-parte">${p.papel === "Cliente" ? (p.parte_contraria ? `× ${p.parte_contraria}` : "") : (p.cliente_nome ? html`Cliente: <a href="/sistema/clientes/${String(p.cliente_id)}">${p.cliente_nome}</a>` : "")}</span>
+          <span><span class="${p.papel === "Cliente" ? "selo selo-pago" : "selo"}">${p.papel}</span> ${p.tipo_acao || ""} ${p.situacao ? `· ${p.situacao}` : ""}</span></li>`)}</ul>` : html`<p>Nenhum processo vinculado.</p>`}
       </section>
       ${fin}
       ${relacionamento}`,
